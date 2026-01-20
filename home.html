@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Map with Search</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="map"></div>
+    
+    <!-- Search Bar -->
+    <div class="search-container">
+        <div class="search-box">
+            <input type="text" class="search-input" id="searchInput" placeholder="Search for places, landmarks...">
+            <button class="search-btn" id="searchBtn">🔍</button>
+        </div>
+        <div class="search-results" id="searchResults"></div>
+    </div>
+    
+    <!-- Custom Layer Control -->
+    <div class="custom-layer-control">
+        <div class="layer-toggle-btn" id="layerToggle">
+            🗺️
+        </div>
+        <div class="layer-dropdown" id="layerDropdown">
+            <div class="layer-option active" data-layer="road">
+                <div class="layer-icon" id="icon-road"></div>
+                <div class="layer-name">Road Map</div>
+            </div>
+            <div class="layer-option" data-layer="satellite-google">
+                <div class="layer-icon" id="icon-satellite-google"></div>
+                <div class="layer-name">Satellite (Google)</div>
+            </div>
+            <div class="layer-option" data-layer="satellite-esri">
+                <div class="layer-icon" id="icon-satellite-esri"></div>
+                <div class="layer-name">Satellite (Esri)</div>
+            </div>
+            <div class="layer-option" data-layer="hybrid-google">
+                <div class="layer-icon" id="icon-hybrid-google"></div>
+                <div class="layer-name">Hybrid (Google)</div>
+            </div>
+            <div class="layer-option" data-layer="hybrid-esri">
+                <div class="layer-icon" id="icon-hybrid-esri"></div>
+                <div class="layer-name">Hybrid (Esri)</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Measure Tool -->
+    <div class="measure-tool">
+        <button class="measure-btn" id="measureBtn" title="Measure Distance">📏</button>
+        <div class="measure-info" id="measureInfo">
+            <strong>Distance:</strong>
+            <div class="measure-distance" id="measureDistance">0 m</div>
+            <button class="measure-clear" id="measureClear">Clear</button>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    
+    <!-- Custom Scripts -->
+    <script src="map.js"></script>
+    <script src="measure.js"></script>
+</body>
+</html>
