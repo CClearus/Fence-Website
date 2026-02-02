@@ -14,51 +14,187 @@
 <body>
     <div id="map"></div>
     
+    <!-- Left Sidebar Toggle -->
+    <div class="sidebar-toggle" id="sidebarToggle">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+        </svg>
+    </div>
+    
+    <!-- Left Sidebar Panel -->
+    <!-- Left Sidebar Panel -->
+<div class="left-sidebar" id="leftSidebar">
+    <div class="sidebar-content">
+        <h3>เลือกประเภทรั้ว</h3>
+        <div class="fence-types">
+    <div class="fence-option active" data-fence="townhouse">
+        <div class="fence-icon">
+            <img src="path/to/your/townhouse-fence.png" alt="รั้วทาวน์เฮ้าส์">
+        </div>
+        <div class="fence-name">รั้วทาวน์เฮ้าส์</div>
+    </div>
+    <div class="fence-option" data-fence="commercial">
+        <div class="fence-icon">
+            <img src="path/to/your/commercial-fence.png" alt="รั้วตึกเชิงพาณิชย์">
+        </div>
+        <div class="fence-name">รั้วตึกเชิงพาณิชย์</div>
+    </div>
+    <div class="fence-option" data-fence="building">
+        <div class="fence-icon">
+            <img src="path/to/your/building-fence.png" alt="รั้วอาคาร">
+        </div>
+        <div class="fence-name">รั้วอาคาร</div>
+    </div>
+    <div class="fence-option" data-fence="house">
+        <div class="fence-icon">
+            <img src="path/to/your/house-fence.png" alt="รั้วบ้าน">
+        </div>
+        <div class="fence-name">รั้วบ้าน</div>
+    </div>
+</div>
+        
+        <h3>เลือกเสา - คาน</h3>
+        <div class="dropdown-container">
+            <select class="dropdown-select" id="beamSelect">
+                <option value="">2 ชั้น</option>
+                <option value="option1">3 ชั้น</option>
+                <option value="option2">4 ชั้น</option>
+            </select>
+        </div>
+        
+        <h3>ระยะห่างระหว่างเสา</h3>
+        <div class="dropdown-container">
+            <select class="dropdown-select" id="spacingSelect">
+                <option value="">เมตร</option>
+                <option value="2m">2.0 เมตร</option>
+                <option value="2.5m">2.5 เมตร</option>
+            </select>
+        </div>
+        
+        <div class="info-section">
+            <div class="info-row">
+                <span class="info-label">จำนวนเสายังไม่มี</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">จำนวนคานยังไม่มี</span>
+            </div>
+        </div>
+        
+        <button class="calculate-btn">คำนวนวัสดุ</button>
+        
+        <div class="total-section">
+            <div class="total-row">
+                <span class="total-label">ราคาโดยประมาณ</span>
+                <span class="total-value">บาท</span>
+            </div>
+        </div>
+        
+        <button class="submit-btn">สร้างเปลี่ยน</button>
+    </div>
+</div>
+    
     <!-- Search Bar -->
-    <div class="search-container">
+    <div class="search-container" id="searchContainer">
         <div class="search-box">
-            <input type="text" class="search-input" id="searchInput" placeholder="Search for places, landmarks...">
-            <button class="search-btn" id="searchBtn">🔍</button>
+            <input type="text" class="search-input" id="searchInput" placeholder="ค้นหาสถานที่">
+            <button class="search-btn" id="searchBtn">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/>
+        <path d="m21 21-4.35-4.35"/>
+    </svg>
+</button>
         </div>
         <div class="search-results" id="searchResults"></div>
     </div>
     
-    <!-- Custom Layer Control -->
-    <div class="custom-layer-control">
-        <div class="layer-toggle-btn" id="layerToggle">
-            🗺️
-        </div>
-        <div class="layer-dropdown" id="layerDropdown">
-            <div class="layer-option active" data-layer="road">
-                <div class="layer-icon" id="icon-road"></div>
-                <div class="layer-name">Road Map</div>
+    <!-- Top Right Controls -->
+    <div class="top-right-controls">
+        <!-- Toggle Labels Button -->
+        <button class="control-btn small-btn" id="toggleLabelsBtn" title="Toggle Labels">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+            </svg>
+        </button>
+        
+        <!-- Layer Control Button -->
+        <div class="custom-layer-control">
+            <div class="layer-toggle-btn" id="layerToggle">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                    <polyline points="2 17 12 22 22 17"/>
+                    <polyline points="2 12 12 17 22 12"/>
+                </svg>
             </div>
-            <div class="layer-option" data-layer="satellite-google">
-                <div class="layer-icon" id="icon-satellite-google"></div>
-                <div class="layer-name">Satellite (Google)</div>
-            </div>
-            <div class="layer-option" data-layer="satellite-esri">
-                <div class="layer-icon" id="icon-satellite-esri"></div>
-                <div class="layer-name">Satellite (Esri)</div>
-            </div>
-            <div class="layer-option" data-layer="hybrid-google">
-                <div class="layer-icon" id="icon-hybrid-google"></div>
-                <div class="layer-name">Hybrid (Google)</div>
-            </div>
-            <div class="layer-option" data-layer="hybrid-esri">
-                <div class="layer-icon" id="icon-hybrid-esri"></div>
-                <div class="layer-name">Hybrid (Esri)</div>
+            <div class="layer-dropdown" id="layerDropdown">
+                <div class="layer-option active" data-layer="road">
+                    <div class="layer-icon" id="icon-road"></div>
+                    <div class="layer-name">แผนที่ถนน<br>Road Map</div>
+                </div>
+                <div class="layer-option" data-layer="satellite-google">
+                    <div class="layer-icon" id="icon-satellite-google"></div>
+                    <div class="layer-name">ภาพถ่ายดาวเทียม<br>Satellite</div>
+                </div>
+                <div class="layer-option" data-layer="satellite-esri">
+                    <div class="layer-icon" id="icon-satellite-esri"></div>
+                    <div class="layer-name">Satellite (Esri)</div>
+                </div>
+                <div class="layer-option" data-layer="hybrid-google">
+                    <div class="layer-icon" id="icon-hybrid-google"></div>
+                    <div class="layer-name">แผนที่แบบผสม<br>Hybrid</div>
+                </div>
+                <div class="layer-option" data-layer="hybrid-esri">
+                    <div class="layer-icon" id="icon-hybrid-esri"></div>
+                    <div class="layer-name">Hybrid (Esri)</div>
+                </div>
             </div>
         </div>
     </div>
     
-    <!-- Measure Tool -->
-    <div class="measure-tool">
-        <button class="measure-btn" id="measureBtn" title="Measure Distance">📏</button>
-        <div class="measure-info" id="measureInfo">
-            <strong>Distance:</strong>
-            <div class="measure-distance" id="measureDistance">0 m</div>
-            <button class="measure-clear" id="measureClear">Clear</button>
+    <!-- Bottom Right Measure Tools -->
+    <!-- Bottom Right Measure Tools -->
+<div class="measure-tool">
+    <div class="measure-buttons">
+        <button class="measure-btn" id="measureBtn" title="Measure Distance">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+        </button>
+        <button class="eraser-btn" id="eraserBtn" title="Eraser Mode">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 20H7L3 16 14 5l7 7-1 8z"/>
+                <path d="M14 5l7 7"/>
+            </svg>
+        </button>
+        <button class="clear-all-btn" id="clearAllBtn" title="Clear All Lines">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+        </button>
+    </div>
+    <div class="measure-info" id="measureInfo">
+        <strong>Current Distance:</strong>
+        <div class="measure-distance" id="measureDistance">0 m</div>
+    </div>
+</div>
+    
+    <!-- Right Sidebar Toggle -->
+    <div class="right-sidebar-toggle" id="rightSidebarToggle">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6"/>
+        </svg>
+    </div>
+    
+    <!-- Right Sidebar - Line Info Box -->
+    <div class="line-info-box" id="lineInfoBox">
+<div class="line-info-header">
+    <strong>Lines Summary</strong>
+</div>
+        <div class="line-info-content" id="lineInfoContent">
+            <div class="line-info-empty">No lines drawn yet</div>
         </div>
     </div>
 
@@ -68,5 +204,9 @@
     <!-- Custom Scripts -->
     <script src="map.js"></script>
     <script src="measure.js"></script>
+    
+    <script>
+
+    </script>
 </body>
 </html>

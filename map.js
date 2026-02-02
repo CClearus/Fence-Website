@@ -208,3 +208,51 @@ function flyToLocation(lat, lng, name) {
     
     searchMarker.bindPopup(`<strong>${name.split(',')[0]}</strong><br>${name}`).openPopup();
 }
+
+// ============================================
+// SIDEBAR TOGGLES AND BUTTON HANDLERS
+// ============================================
+
+// Wait for DOM to be ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Left Sidebar Toggle
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const leftSidebar = document.getElementById('leftSidebar');
+    const searchContainer = document.getElementById('searchContainer');
+
+    if (sidebarToggle && leftSidebar && searchContainer) {
+        sidebarToggle.addEventListener('click', function() {
+            leftSidebar.classList.toggle('active');
+            sidebarToggle.classList.toggle('active');
+            searchContainer.classList.toggle('shifted');
+        });
+    }
+
+    // Right Sidebar Toggle
+    const rightSidebarToggle = document.getElementById('rightSidebarToggle');
+    const lineInfoBox = document.getElementById('lineInfoBox');
+
+    if (rightSidebarToggle && lineInfoBox) {
+        rightSidebarToggle.addEventListener('click', function() {
+            lineInfoBox.classList.toggle('active');
+            rightSidebarToggle.classList.toggle('active');
+        });
+    }
+
+    // Fence option selection
+    const fenceOptions = document.querySelectorAll('.fence-option');
+    fenceOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            fenceOptions.forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+
+    // Clear All Button
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    if (clearAllBtn && typeof clearMeasure === 'function') {
+        clearAllBtn.addEventListener('click', function() {
+            clearMeasure();
+        });
+    }
+});
