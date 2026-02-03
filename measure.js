@@ -20,7 +20,6 @@ const measureBtn = document.getElementById('measureBtn');
 const eraserBtn = document.getElementById('eraserBtn');
 const toggleLabelsBtn = document.getElementById('toggleLabelsBtn');
 const measureInfo = document.getElementById('measureInfo');
-const measureDistance = document.getElementById('measureDistance');
 const lineInfoContent = document.getElementById('lineInfoContent');
 const lineInfoClose = document.getElementById('lineInfoClose'); // This may be null
 
@@ -48,7 +47,6 @@ measureBtn.addEventListener('click', function () {
     if (measureActive) {
         this.classList.add('active');
         map.getContainer().style.cursor = 'crosshair';
-        measureInfo.classList.add('active');
 
         // Disable eraser mode
         if (eraserActive) {
@@ -58,7 +56,6 @@ measureBtn.addEventListener('click', function () {
     } else {
         this.classList.remove('active');
         map.getContainer().style.cursor = '';
-        measureInfo.classList.remove('active');
         finishCurrentLine();
     }
 });
@@ -287,7 +284,6 @@ function clearMeasure() {
 
     clearTempLabels();
 
-    measureDistance.textContent = '0 m';
     updateLineInfoBox();
 }
 
@@ -575,46 +571,49 @@ function getSnapPoint(startPoint, currentPoint) {
 
 // Update line info box
 // Update line info box
-    function updateLineInfoBox() {
-        if (allLines.length === 0) {
-            lineInfoContent.innerHTML = '<div class="line-info-empty">No lines drawn yet</div>';
-            return;
+function updateLineInfoBox() {
+    const stack = document.getElementById('lineSummaryStack');
+    const measureInfo = document.getElementById('measureInfo');
+    stack.innerHTML = '';
+
+    if (allLines.length === 0) {
+        measureInfo.classList.remove('active');
+        return;
+    }
+
+    measureInfo.classList.add('active');
+
+    allLines.forEach((lineData, index) => {
+        let totalMeters = calculateTotalDistance(lineData.points);
+        let points = lineData.closed ? lineData.points.length - 1 : lineData.points.length;
+        let segments = lineData.closed ? lineData.points.length - 1 : lineData.points.length - 1;
+
+        if (lineData.branches) {
+            lineData.branches.forEach(branch => {
+                totalMeters += calculateTotalDistance(branch.points);
+                points += branch.points.length - 1;
+                segments += branch.points.length - 1;
+            });
         }
 
-        let html = '';
-        allLines.forEach((lineData, index) => {
-            // Calculate total distance including branches
-            let totalMeters = calculateTotalDistance(lineData.points);
-            if (lineData.branches) {
-                lineData.branches.forEach(branch => {
-                    totalMeters += calculateTotalDistance(branch.points);
-                });
-            }
-            const totalInches = metersToInches(totalMeters);
-            
-            // Count points and segments including branches
-            let points = lineData.closed ? lineData.points.length - 1 : lineData.points.length;
-            let segments = lineData.closed ? lineData.points.length - 1 : lineData.points.length - 1;
-            
-            // Add branch points and segments (excluding the starting point which is already counted)
-            if (lineData.branches) {
-                lineData.branches.forEach(branch => {
-                    points += branch.points.length - 1; // -1 because start point is shared with main line
-                    segments += branch.points.length - 1; // Each branch adds its own segments
-                });
-            }
+        const totalNi = metersToInches(totalMeters);
 
-            html += `
-                <div class="line-info-item" style="border-left-color: ${lineData.color};">
-                    <strong style="color: ${lineData.color};">Line ${index + 1}</strong>
-                    <div>${formatDistance(totalMeters)} / ${totalInches.toFixed(2)} inches</div>
-                    <div style="font-size: 11px; color: #999; margin-top: 2px;">${points} points, ${segments} segments</div>
-                </div>
-            `;
-        });
+        const item = document.createElement('div');
+        item.className = 'line-summary-item';
+        item.style.borderLeftColor = lineData.color;
+        item.innerHTML = `
+            <div class="line-summary-title" style="color:${lineData.color};">Line ${index + 1}</div>
+            <div class="line-summary-dist">${formatDistance(totalMeters)} / ${totalNi.toFixed(2)} นิ้ว</div>
+            <div class="line-summary-meta">${points} point, ${segments} segments</div>
+        `;
+        stack.appendChild(item);
+    });
 
-        lineInfoContent.innerHTML = html;
-    }
+    // Always scroll to top when a new card is added
+    stack.scrollTop = 0;
+}
+    
+    
 
 // Update labels for preview
 function updatePreviewLabels(previewPoints, color) {
@@ -728,7 +727,6 @@ map.on('click', function (e) {
                         // Show measure info
                         measureInfo.classList.add('active');
                         const totalDistance = calculateTotalDistance(currentLine.points);
-                        measureDistance.textContent = formatDistance(totalDistance);
                     }
             } else {
                 // Active line exists - connecting to a dot
@@ -754,9 +752,8 @@ map.on('click', function (e) {
                         fillOpacity: 0.2
                     }).addTo(map);
 
-                    redrawLineLabels(currentLine);
+redrawLineLabels(currentLine);
                     const totalDistance = calculateTotalDistance(currentLine.points);
-                    measureDistance.textContent = formatDistance(totalDistance);
                     const totalInches = metersToInches(totalDistance);
                     currentLine.polyline.bindPopup(`Distance: ${formatDistance(totalDistance)} / ${totalInches.toFixed(2)} inches<br>Enclosed Shape`);
                     updateLineInfoBox();
@@ -791,9 +788,8 @@ map.on('click', function (e) {
                     opacity: 0.8
                 }).addTo(map);
 
-                redrawLineLabels(currentLine);
+redrawLineLabels(currentLine);
                 const totalDistance = calculateTotalDistance(currentLine.points);
-                measureDistance.textContent = formatDistance(totalDistance);
                 const totalInches = metersToInches(totalDistance);
                 currentLine.polyline.bindPopup(`Distance: ${formatDistance(totalDistance)} / ${totalInches.toFixed(2)} inches`);
                 updateLineInfoBox();
@@ -880,9 +876,7 @@ map.on('click', function (e) {
                             totalDistance += calculateTotalDistance(branch.points);
                         });
                     }
-                    measureDistance.textContent = formatDistance(totalDistance);
-                    
-                    updateLineInfoBox();
+updateLineInfoBox();
                 } else if (currentLine.points.length >= 2) {
                     // Drawing main line
                     if (tempLine) {
@@ -906,8 +900,10 @@ map.on('click', function (e) {
                     redrawLineLabels(currentLine);
                     
                     // Calculate and display total distance
+// Calculate and display total distance
                     const totalDistance = calculateTotalDistance(currentLine.points);
-                    measureDistance.textContent = formatDistance(totalDistance);
+                    
+                    // Update popup
                     
                     // Update popup
                     const totalInches = metersToInches(totalDistance);
@@ -981,8 +977,6 @@ let previewPoint = [e.latlng.lat, e.latlng.lng];
             updatePreviewLabels(previewPoints, currentLine.color);
             
             // Update distance display in measure info box
-            const totalDistance = calculateTotalDistance(previewPoints);
-            measureDistance.textContent = formatDistance(totalDistance);
         }
     });
 
@@ -1003,8 +997,6 @@ console.log('measureBtn:', measureBtn);
 console.log('eraserBtn:', eraserBtn);
 console.log('toggleLabelsBtn:', toggleLabelsBtn);
 console.log('measureInfo:', measureInfo);
-console.log('measureDistance:', measureDistance);
-console.log('measureClear:', measureClear);
 
 // Force re-attach event listeners
 if (measureBtn) {

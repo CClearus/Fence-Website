@@ -228,17 +228,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Right Sidebar Toggle
-    const rightSidebarToggle = document.getElementById('rightSidebarToggle');
-    const lineInfoBox = document.getElementById('lineInfoBox');
-
-    if (rightSidebarToggle && lineInfoBox) {
-        rightSidebarToggle.addEventListener('click', function() {
-            lineInfoBox.classList.toggle('active');
-            rightSidebarToggle.classList.toggle('active');
-        });
-    }
-
     // Fence option selection
     const fenceOptions = document.querySelectorAll('.fence-option');
     fenceOptions.forEach(option => {
