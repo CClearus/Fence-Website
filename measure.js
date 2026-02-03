@@ -81,44 +81,60 @@ eraserBtn.addEventListener('click', function () {
 });
 
 // Toggle labels visibility
-toggleLabelsBtn.addEventListener('click', function () {
-    labelsVisible = !labelsVisible;
+// Track individual toggle states
+let anglesVisible = true;
+let measurementsVisible = true;
 
-    if (labelsVisible) {
-        this.classList.add('active');
-        // Show all labels
-        allLines.forEach(lineData => {
-            lineData.angleLabels.forEach(label => {
-                if (!map.hasLayer(label)) {
-                    label.addTo(map);
-                }
-            });
-            lineData.segmentLabels.forEach(label => {
-                if (!map.hasLayer(label)) {
-                    label.addTo(map);
-                }
-            });
-        });
-    } else {
-        this.classList.remove('active');
-        // Hide all labels
-        allLines.forEach(lineData => {
-            lineData.angleLabels.forEach(label => {
-                if (map.hasLayer(label)) {
-                    map.removeLayer(label);
-                }
-            });
-            lineData.segmentLabels.forEach(label => {
-                if (map.hasLayer(label)) {
-                    map.removeLayer(label);
-                }
-            });
-        });
+// Toggle label dropdown
+toggleLabelsBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    const labelDropdown = document.getElementById('labelDropdown');
+    labelDropdown.classList.toggle('active');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function (e) {
+    const labelDropdown = document.getElementById('labelDropdown');
+    if (!e.target.closest('.custom-label-control')) {
+        labelDropdown.classList.remove('active');
     }
 });
 
-// Initially set toggle button as active
-toggleLabelsBtn.classList.add('active');
+// Toggle angles visibility
+document.getElementById('toggleAngles').addEventListener('click', function () {
+    anglesVisible = !anglesVisible;
+    this.classList.toggle('active');
+    
+    allLines.forEach(lineData => {
+        lineData.angleLabels.forEach(label => {
+            if (anglesVisible && labelsVisible) {
+                if (!map.hasLayer(label)) label.addTo(map);
+            } else {
+                if (map.hasLayer(label)) map.removeLayer(label);
+            }
+        });
+    });
+});
+
+// Toggle measurements visibility
+document.getElementById('toggleMeasurements').addEventListener('click', function () {
+    measurementsVisible = !measurementsVisible;
+    this.classList.toggle('active');
+    
+    allLines.forEach(lineData => {
+        lineData.segmentLabels.forEach(label => {
+            if (measurementsVisible && labelsVisible) {
+                if (!map.hasLayer(label)) label.addTo(map);
+            } else {
+                if (map.hasLayer(label)) map.removeLayer(label);
+            }
+        });
+    });
+});
+
+// Initially set toggle options as active
+document.getElementById('toggleAngles').classList.add('active');
+document.getElementById('toggleMeasurements').classList.add('active');
 
 
 
@@ -1026,4 +1042,3 @@ if (clearAllBtn) {
         clearMeasure();
     });
 }
-

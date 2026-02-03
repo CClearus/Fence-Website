@@ -112,12 +112,31 @@
     <!-- Top Right Controls -->
     <div class="top-right-controls">
         <!-- Toggle Labels Button -->
-        <button class="control-btn small-btn" id="toggleLabelsBtn" title="Toggle Labels">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-            </svg>
-        </button>
+<!-- Toggle Labels Button with Dropdown -->
+        <div class="custom-label-control">
+            <button class="control-btn small-btn" id="toggleLabelsBtn" title="Toggle Labels">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                </svg>
+            </button>
+            <div class="label-dropdown" id="labelDropdown">
+                <div class="label-toggle-option active" id="toggleAngles">
+                    <div class="label-toggle-icon">θ</div>
+                </div>
+                <div class="label-toggle-option active" id="toggleMeasurements">
+                    <div class="label-toggle-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="4" y1="20" x2="20" y2="4" />
+                            <line x1="4" y1="20" x2="4" y2="4" />
+                            <line x1="4" y1="4" x2="20" y2="4" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Layer Control Button -->
 
         <!-- Layer Control Button -->
         <div class="custom-layer-control">

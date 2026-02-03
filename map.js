@@ -1,5 +1,4 @@
 
-
 // Initialize the map
 const map = L.map('map').setView([13.7563, 100.5018], 13);
 
@@ -220,11 +219,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const leftSidebar = document.getElementById('leftSidebar');
     const searchContainer = document.getElementById('searchContainer');
 
-    if (sidebarToggle && leftSidebar && searchContainer) {
+if (sidebarToggle && leftSidebar) {
         sidebarToggle.addEventListener('click', function() {
             leftSidebar.classList.toggle('active');
             sidebarToggle.classList.toggle('active');
-            searchContainer.classList.toggle('shifted');
         });
     }
 
