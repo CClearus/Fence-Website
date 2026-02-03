@@ -101,34 +101,72 @@ document.addEventListener('click', function (e) {
 });
 
 // Toggle angles visibility
+// Toggle angles visibility
 document.getElementById('toggleAngles').addEventListener('click', function () {
     anglesVisible = !anglesVisible;
     this.classList.toggle('active');
     
     allLines.forEach(lineData => {
-        lineData.angleLabels.forEach(label => {
-            if (anglesVisible && labelsVisible) {
-                if (!map.hasLayer(label)) label.addTo(map);
-            } else {
-                if (map.hasLayer(label)) map.removeLayer(label);
-            }
-        });
+        // Toggle main line angle labels
+        if (lineData.angleLabels) {
+            lineData.angleLabels.forEach(label => {
+                if (anglesVisible && labelsVisible) {
+                    if (!map.hasLayer(label)) label.addTo(map);
+                } else {
+                    if (map.hasLayer(label)) map.removeLayer(label);
+                }
+            });
+        }
+        
+        // Toggle branch angle labels
+        if (lineData.branches) {
+            lineData.branches.forEach(branch => {
+                if (branch.angleLabels) {
+                    branch.angleLabels.forEach(label => {
+                        if (anglesVisible && labelsVisible) {
+                            if (!map.hasLayer(label)) label.addTo(map);
+                        } else {
+                            if (map.hasLayer(label)) map.removeLayer(label);
+                        }
+                    });
+                }
+            });
+        }
     });
 });
 
+// Toggle measurements visibility
 // Toggle measurements visibility
 document.getElementById('toggleMeasurements').addEventListener('click', function () {
     measurementsVisible = !measurementsVisible;
     this.classList.toggle('active');
     
     allLines.forEach(lineData => {
-        lineData.segmentLabels.forEach(label => {
-            if (measurementsVisible && labelsVisible) {
-                if (!map.hasLayer(label)) label.addTo(map);
-            } else {
-                if (map.hasLayer(label)) map.removeLayer(label);
-            }
-        });
+        // Toggle main line segment labels
+        if (lineData.segmentLabels) {
+            lineData.segmentLabels.forEach(label => {
+                if (measurementsVisible && labelsVisible) {
+                    if (!map.hasLayer(label)) label.addTo(map);
+                } else {
+                    if (map.hasLayer(label)) map.removeLayer(label);
+                }
+            });
+        }
+        
+        // Toggle branch segment labels
+        if (lineData.branches) {
+            lineData.branches.forEach(branch => {
+                if (branch.segmentLabels) {
+                    branch.segmentLabels.forEach(label => {
+                        if (measurementsVisible && labelsVisible) {
+                            if (!map.hasLayer(label)) label.addTo(map);
+                        } else {
+                            if (map.hasLayer(label)) map.removeLayer(label);
+                        }
+                    });
+                }
+            });
+        }
     });
 });
 
@@ -453,7 +491,12 @@ function redrawLineLabels(lineData) {
     lineData.segmentLabels = [];
 
     // Only draw labels if they're supposed to be visible
-    if (!labelsVisible) return;
+// Only draw labels if they're supposed to be visible
+if (!labelsVisible) return;
+
+// Store whether we should draw each type
+const shouldDrawAngles = anglesVisible && labelsVisible;
+const shouldDrawMeasurements = measurementsVisible && labelsVisible;
 
     // For closed shapes, don't duplicate the last point
     const pointCount = lineData.closed ? lineData.points.length - 1 : lineData.points.length;
@@ -470,15 +513,21 @@ function redrawLineLabels(lineData) {
                     lineData.points[i],
                     lineData.points[nextIdx]
                 );
-                const label = drawAngleLabel(lineData.points[i], angle, lineData.color, false);
-                lineData.angleLabels.push(label);
+if (shouldDrawAngles) {
+    const label = drawAngleLabel(lineData.points[i], angle, lineData.color, false);
+    lineData.angleLabels.push(label);
+}
             }
         } else {
             // For open lines
             // First point - show direction angle
-            const firstAngle = getDirectionAngle(lineData.points[0], lineData.points[1]);
-            const firstLabel = drawAngleLabel(lineData.points[0], firstAngle, lineData.color, false);
-            lineData.angleLabels.push(firstLabel);
+// For open lines
+            // First point - show direction angle
+            if (shouldDrawAngles) {
+                const firstAngle = getDirectionAngle(lineData.points[0], lineData.points[1]);
+                const firstLabel = drawAngleLabel(lineData.points[0], firstAngle, lineData.color, false);
+                lineData.angleLabels.push(firstLabel);
+            }
 
             // Middle points - show angle between segments
             for (let i = 1; i < lineData.points.length - 1; i++) {
@@ -487,16 +536,20 @@ function redrawLineLabels(lineData) {
                     lineData.points[i],
                     lineData.points[i + 1]
                 );
-                const label = drawAngleLabel(lineData.points[i], angle, lineData.color, false);
-                lineData.angleLabels.push(label);
+                if (shouldDrawAngles) {
+                    const label = drawAngleLabel(lineData.points[i], angle, lineData.color, false);
+                    lineData.angleLabels.push(label);
+                }
             }
 
             // Last point - show direction angle
             if (lineData.points.length >= 2) {
                 const lastIdx = lineData.points.length - 1;
                 const lastAngle = getDirectionAngle(lineData.points[lastIdx - 1], lineData.points[lastIdx]);
-                const lastLabel = drawAngleLabel(lineData.points[lastIdx], lastAngle, lineData.color, false);
-                lineData.angleLabels.push(lastLabel);
+                if (shouldDrawAngles) {
+                    const lastLabel = drawAngleLabel(lineData.points[lastIdx], lastAngle, lineData.color, false);
+                    lineData.angleLabels.push(lastLabel);
+                }
             }
         }
     }
@@ -515,19 +568,161 @@ function redrawLineLabels(lineData) {
         const midLat = (lineData.points[i][0] + lineData.points[nextIdx][0]) / 2;
         const midLng = (lineData.points[i][1] + lineData.points[nextIdx][1]) / 2;
 
-        const distanceText = formatDistance(distance);
-        const label = L.marker([midLat, midLng], {
-            icon: L.divIcon({
-                className: 'segment-label',
-                html: `<div style="background: white; padding: 3px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; color: ${lineData.color}; white-space: nowrap; border: 2px solid ${lineData.color}; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: inline-block; min-width: fit-content;">${distanceText}</div>`,
-                iconSize: [0, 0],
-                iconAnchor: [0, 5]
-            }),
-            zIndexOffset: 1000
-        }).addTo(map);
+const distanceText = formatDistance(distance);
+        if (shouldDrawMeasurements) {
+            const label = L.marker([midLat, midLng], {
+                icon: L.divIcon({
+                    className: 'segment-label',
+                    html: `<div style="background: white; padding: 3px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; color: ${lineData.color}; white-space: nowrap; border: 2px solid ${lineData.color}; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: inline-block; min-width: fit-content;">${distanceText}</div>`,
+                    iconSize: [0, 0],
+                    iconAnchor: [0, 5]
+                }),
+                zIndexOffset: 1000
+            }).addTo(map);
 
-        lineData.segmentLabels.push(label);
+            lineData.segmentLabels.push(label);
+        }
     }
+}
+
+// Redraw all labels for branches
+// Redraw all labels for branches
+function redrawBranchLabels(lineData) {
+    if (!lineData.branches || !labelsVisible) return;
+    const shouldDrawAngles = anglesVisible && labelsVisible;
+const shouldDrawMeasurements = measurementsVisible && labelsVisible;
+
+    lineData.branches.forEach(branch => {
+        // Clear existing branch labels
+        if (branch.angleLabels) {
+            branch.angleLabels.forEach(label => {
+                if (map.hasLayer(label)) map.removeLayer(label);
+            });
+        }
+        if (branch.segmentLabels) {
+            branch.segmentLabels.forEach(label => {
+                if (map.hasLayer(label)) map.removeLayer(label);
+            });
+        }
+
+        branch.angleLabels = [];
+        branch.segmentLabels = [];
+
+        if (branch.points.length < 1) return;
+
+        // Find the branch point in the main line
+        const branchPoint = branch.points[0];
+        let branchPointIndex = -1;
+
+        for (let i = 0; i < lineData.points.length; i++) {
+            if (Math.abs(lineData.points[i][0] - branchPoint[0]) < 0.0001 &&
+                Math.abs(lineData.points[i][1] - branchPoint[1]) < 0.0001) {
+                branchPointIndex = i;
+                break;
+            }
+        }
+
+        // Draw angle at the branch starting point (showing angle between main line and branch)
+        if (branchPointIndex !== -1 && branch.points.length >= 2) {
+            // Get the points before and after on the main line
+            if (branchPointIndex > 0 && branchPointIndex < lineData.points.length - 1) {
+                const prevMainPoint = lineData.points[branchPointIndex - 1];
+                const nextMainPoint = lineData.points[branchPointIndex + 1];
+                const nextBranchPoint = branch.points[1];
+
+                // Calculate the three angles
+                const angle1 = calculateAngle(prevMainPoint, branchPoint, nextBranchPoint);
+                const angle2 = calculateAngle(nextBranchPoint, branchPoint, nextMainPoint);
+                const angle3 = calculateAngle(prevMainPoint, branchPoint, nextMainPoint);
+
+                // Calculate direction angles to position labels correctly
+                const dir1 = getDirectionAngle(branchPoint, prevMainPoint);
+                const dir2 = getDirectionAngle(branchPoint, nextBranchPoint);
+                const dir3 = getDirectionAngle(branchPoint, nextMainPoint);
+
+                // Calculate bisector angles for label positioning
+                const bisector1 = (dir1 + dir2) / 2;
+                const bisector2 = (dir2 + dir3) / 2;
+                const bisector3 = (dir3 + dir1) / 2;
+
+                const offsetDistance = 0.00008; // Offset distance for labels
+
+                // Position label 1 (between prev main and branch)
+                const offset1Lat = branchPoint[0] + offsetDistance * Math.sin(bisector1 * Math.PI / 180);
+                const offset1Lng = branchPoint[1] + offsetDistance * Math.cos(bisector1 * Math.PI / 180);
+
+                // Position label 2 (between branch and next main)
+                const offset2Lat = branchPoint[0] + offsetDistance * Math.sin(bisector2 * Math.PI / 180);
+                const offset2Lng = branchPoint[1] + offsetDistance * Math.cos(bisector2 * Math.PI / 180);
+
+                // Position label 3 (between next main and prev main - the continuing angle)
+                const offset3Lat = branchPoint[0] + offsetDistance * Math.sin(bisector3 * Math.PI / 180);
+                const offset3Lng = branchPoint[1] + offsetDistance * Math.cos(bisector3 * Math.PI / 180);
+
+if (shouldDrawAngles) {
+                    const label1 = drawAngleLabel([offset1Lat, offset1Lng], angle1, lineData.color, false);
+                    const label2 = drawAngleLabel([offset2Lat, offset2Lng], angle2, lineData.color, false);
+                    const label3 = drawAngleLabel([offset3Lat, offset3Lng], angle3, lineData.color, false);
+
+                    branch.angleLabels.push(label1, label2, label3);
+                }
+            }
+        }
+
+        // Draw angles for other points along the branch
+// Draw angles for other points along the branch
+        if (branch.points.length >= 2) {
+            // Middle points on the branch
+            for (let i = 1; i < branch.points.length - 1; i++) {
+                const angle = calculateAngle(
+                    branch.points[i - 1],
+                    branch.points[i],
+                    branch.points[i + 1]
+                );
+                if (shouldDrawAngles) {
+                    const label = drawAngleLabel(branch.points[i], angle, lineData.color, false);
+                    branch.angleLabels.push(label);
+                }
+            }
+
+            // Last point - show direction angle
+            if (branch.points.length >= 2) {
+                const lastIdx = branch.points.length - 1;
+                const lastAngle = getDirectionAngle(branch.points[lastIdx - 1], branch.points[lastIdx]);
+                if (shouldDrawAngles) {
+                    const lastLabel = drawAngleLabel(branch.points[lastIdx], lastAngle, lineData.color, false);
+                    branch.angleLabels.push(lastLabel);
+                }
+            }
+        }
+
+        // Draw segment length labels for branches
+// Draw segment length labels for branches
+        for (let i = 0; i < branch.points.length - 1; i++) {
+            const distance = calculateDistance(
+                branch.points[i][0], branch.points[i][1],
+                branch.points[i + 1][0], branch.points[i + 1][1]
+            );
+
+            const midLat = (branch.points[i][0] + branch.points[i + 1][0]) / 2;
+            const midLng = (branch.points[i][1] + branch.points[i + 1][1]) / 2;
+
+            const distanceText = formatDistance(distance);
+            if (shouldDrawMeasurements) {
+                const label = L.marker([midLat, midLng], {
+                    icon: L.divIcon({
+                        className: 'segment-label',
+                        html: `<div style="background: white; padding: 3px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; color: ${lineData.color}; white-space: nowrap; border: 2px solid ${lineData.color}; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: inline-block; min-width: fit-content;">${distanceText}</div>`,
+                        iconSize: [0, 0],
+                        iconAnchor: [0, 5]
+                    }),
+                    zIndexOffset: 1000
+                }).addTo(map);
+
+                branch.segmentLabels.push(label);
+            }
+        }
+    });
 }
 
 // Calculate distance between two points using Haversine formula
@@ -619,7 +814,7 @@ function updateLineInfoBox() {
         item.style.borderLeftColor = lineData.color;
         item.innerHTML = `
             <div class="line-summary-title" style="color:${lineData.color};">Line ${index + 1}</div>
-            <div class="line-summary-dist">${formatDistance(totalMeters)} / ${totalNi.toFixed(2)} นิ้ว</div>
+            <div class="line-summary-dist">${formatDistance(totalMeters)} / ${(totalMeters * 3.28084).toFixed(2)} ft</div>
             <div class="line-summary-meta">${points} point, ${segments} segments</div>
         `;
         stack.appendChild(item);
@@ -628,28 +823,89 @@ function updateLineInfoBox() {
     // Always scroll to top when a new card is added
     stack.scrollTop = 0;
 }
-    
-    
 
+
+
+// Update labels for preview
 // Update labels for preview
 function updatePreviewLabels(previewPoints, color) {
     clearTempLabels();
 
     if (!labelsVisible) return;
 
-    // Show angle at each intermediate point (preview)
-    for (let i = 1; i < previewPoints.length - 1; i++) {
-        const angle = calculateAngle(previewPoints[i - 1], previewPoints[i], previewPoints[i + 1]);
-        const label = drawAngleLabel(previewPoints[i], angle, color, true);
-        tempAngleLabels.push(label);
+    // Check if we're branching from a middle point
+    let isBranchPreview = false;
+    let branchPointIndex = -1;
+
+    if (currentLine && currentLine.activeBranch && previewPoints.length >= 2) {
+        isBranchPreview = true;
+        const branchPoint = previewPoints[0];
+
+        // Find branch point in main line
+        for (let i = 0; i < currentLine.points.length; i++) {
+            if (Math.abs(currentLine.points[i][0] - branchPoint[0]) < 0.0001 &&
+                Math.abs(currentLine.points[i][1] - branchPoint[1]) < 0.0001) {
+                branchPointIndex = i;
+                break;
+            }
+        }
     }
 
-    // Show angle at the preview endpoint (if we have at least 2 points)
-    if (previewPoints.length >= 2) {
-        const lastIdx = previewPoints.length - 1;
-        const dirAngle = getDirectionAngle(previewPoints[lastIdx - 1], previewPoints[lastIdx]);
-        const label = drawAngleLabel(previewPoints[lastIdx], dirAngle, color, true);
-        tempAngleLabels.push(label);
+    // If this is a branch preview, show the angles at the branch point
+    if (isBranchPreview && branchPointIndex !== -1 && branchPointIndex > 0 && branchPointIndex < currentLine.points.length - 1) {
+        const prevMainPoint = currentLine.points[branchPointIndex - 1];
+        const branchPoint = previewPoints[0];
+        const nextMainPoint = currentLine.points[branchPointIndex + 1];
+        const previewPoint = previewPoints[previewPoints.length - 1];
+
+        // Calculate the three angles
+        const angle1 = calculateAngle(prevMainPoint, branchPoint, previewPoint);
+        const angle2 = calculateAngle(previewPoint, branchPoint, nextMainPoint);
+        const angle3 = calculateAngle(prevMainPoint, branchPoint, nextMainPoint);
+
+        // Calculate direction angles for positioning
+        const dir1 = getDirectionAngle(branchPoint, prevMainPoint);
+        const dir2 = getDirectionAngle(branchPoint, previewPoint);
+        const dir3 = getDirectionAngle(branchPoint, nextMainPoint);
+
+        // Calculate bisector angles
+        const bisector1 = (dir1 + dir2) / 2;
+        const bisector2 = (dir2 + dir3) / 2;
+        const bisector3 = (dir3 + dir1) / 2;
+
+        const offsetDistance = 0.00008;
+
+        // Position labels
+        const offset1Lat = branchPoint[0] + offsetDistance * Math.sin(bisector1 * Math.PI / 180);
+        const offset1Lng = branchPoint[1] + offsetDistance * Math.cos(bisector1 * Math.PI / 180);
+
+        const offset2Lat = branchPoint[0] + offsetDistance * Math.sin(bisector2 * Math.PI / 180);
+        const offset2Lng = branchPoint[1] + offsetDistance * Math.cos(bisector2 * Math.PI / 180);
+
+        const offset3Lat = branchPoint[0] + offsetDistance * Math.sin(bisector3 * Math.PI / 180);
+        const offset3Lng = branchPoint[1] + offsetDistance * Math.cos(bisector3 * Math.PI / 180);
+
+        const label1 = drawAngleLabel([offset1Lat, offset1Lng], angle1, color, true);
+        const label2 = drawAngleLabel([offset2Lat, offset2Lng], angle2, color, true);
+        const label3 = drawAngleLabel([offset3Lat, offset3Lng], angle3, color, true);
+
+        tempAngleLabels.push(label1, label2, label3);
+    } else {
+        // Normal preview (not branching)
+        // Show angle at each intermediate point (preview)
+        for (let i = 1; i < previewPoints.length - 1; i++) {
+            const angle = calculateAngle(previewPoints[i - 1], previewPoints[i], previewPoints[i + 1]);
+            const label = drawAngleLabel(previewPoints[i], angle, color, true);
+            tempAngleLabels.push(label);
+        }
+
+        // Show angle at the preview endpoint (if we have at least 2 points)
+        if (previewPoints.length >= 2) {
+            const lastIdx = previewPoints.length - 1;
+            const dirAngle = getDirectionAngle(previewPoints[lastIdx - 1], previewPoints[lastIdx]);
+            const label = drawAngleLabel(previewPoints[lastIdx], dirAngle, color, true);
+            tempAngleLabels.push(label);
+        }
     }
 
     // Show segment lengths for all segments including preview
@@ -714,36 +970,38 @@ map.on('click', function (e) {
                     // Continuing from the last point - just add to end (normal)
                     currentLine.continueFromStart = false;
                 } else {
-                        // Clicking on a middle point - create a new branch segment
-                        finishCurrentLine();
-                        
-                        // Create a new branch but keep same line data reference
-                        const parentLine = nearest.lineData;
-                        
-                        // Initialize branches array if it doesn't exist
-                        if (!parentLine.branches) {
-                            parentLine.branches = [];
-                        }
-                        
-                        // Create a new branch starting from this point
-                        const newBranch = {
-                            startPoint: dotPoint,
-                            points: [dotPoint],
-                            markers: [],
-                            polyline: null
-                        };
-                        
-                        parentLine.branches.push(newBranch);
-                        
-                        // Set current line to continue from this branch
-                        currentLine = parentLine;
-                        currentLine.active = true;
-                        currentLine.activeBranch = newBranch;
-                        
-                        // Show measure info
-                        measureInfo.classList.add('active');
-                        const totalDistance = calculateTotalDistance(currentLine.points);
+                    // Clicking on a middle point - create a new branch segment
+                    finishCurrentLine();
+
+                    // Create a new branch but keep same line data reference
+                    const parentLine = nearest.lineData;
+
+                    // Initialize branches array if it doesn't exist
+                    if (!parentLine.branches) {
+                        parentLine.branches = [];
                     }
+
+                    // Create a new branch starting from this point
+                    const newBranch = {
+                        startPoint: dotPoint,
+                        points: [dotPoint],
+                        markers: [nearest.marker],
+                        polyline: null,
+                        angleLabels: [],
+                        segmentLabels: []
+                    };
+
+                    parentLine.branches.push(newBranch);
+
+                    // Set current line to continue from this branch
+                    currentLine = parentLine;
+                    currentLine.active = true;
+                    currentLine.activeBranch = newBranch;
+
+                    // Show measure info
+                    measureInfo.classList.add('active');
+                    const totalDistance = calculateTotalDistance(currentLine.points);
+                }
             } else {
                 // Active line exists - connecting to a dot
 
@@ -768,7 +1026,7 @@ map.on('click', function (e) {
                         fillOpacity: 0.2
                     }).addTo(map);
 
-redrawLineLabels(currentLine);
+                    redrawLineLabels(currentLine);
                     const totalDistance = calculateTotalDistance(currentLine.points);
                     const totalInches = metersToInches(totalDistance);
                     currentLine.polyline.bindPopup(`Distance: ${formatDistance(totalDistance)} / ${totalInches.toFixed(2)} inches<br>Enclosed Shape`);
@@ -804,7 +1062,7 @@ redrawLineLabels(currentLine);
                     opacity: 0.8
                 }).addTo(map);
 
-redrawLineLabels(currentLine);
+                redrawLineLabels(currentLine);
                 const totalDistance = calculateTotalDistance(currentLine.points);
                 const totalInches = metersToInches(totalDistance);
                 currentLine.polyline.bindPopup(`Distance: ${formatDistance(totalDistance)} / ${totalInches.toFixed(2)} inches`);
@@ -821,113 +1079,115 @@ redrawLineLabels(currentLine);
             }
 
             let clickPoint = [e.latlng.lat, e.latlng.lng];
-                
-                // Determine reference point for snapping
-                let referencePoint;
-                if (currentLine.activeBranch) {
-                    // Branching - use last point of active branch
-                    const branch = currentLine.activeBranch;
-                    referencePoint = branch.points[branch.points.length - 1];
-                } else if (currentLine.continueFromStart) {
-                    referencePoint = currentLine.points[0];
-                } else if (currentLine.points.length > 0) {
-                    referencePoint = currentLine.points[currentLine.points.length - 1];
+
+            // Determine reference point for snapping
+            let referencePoint;
+            if (currentLine.activeBranch) {
+                // Branching - use last point of active branch
+                const branch = currentLine.activeBranch;
+                referencePoint = branch.points[branch.points.length - 1];
+            } else if (currentLine.continueFromStart) {
+                referencePoint = currentLine.points[0];
+            } else if (currentLine.points.length > 0) {
+                referencePoint = currentLine.points[currentLine.points.length - 1];
+            }
+
+            // Apply 90-degree snap if Shift is pressed and we have a reference point
+            if (shiftPressed && referencePoint) {
+                clickPoint = getSnapPoint(referencePoint, clickPoint);
+            }
+
+            // Add point - handle branching
+            if (currentLine.activeBranch) {
+                // Add to the active branch
+                currentLine.activeBranch.points.push(clickPoint);
+                const newMarker = addMarkerToLine(clickPoint, currentLine);
+                currentLine.activeBranch.markers.push(newMarker);
+            } else if (currentLine.continueFromStart) {
+                currentLine.points.unshift(clickPoint);
+                const newMarker = addMarkerToLine(clickPoint, currentLine);
+                currentLine.markers.unshift(newMarker);
+            } else {
+                currentLine.points.push(clickPoint);
+                const newMarker = addMarkerToLine(clickPoint, currentLine);
+
+                // Set as start marker if this is the first point
+                if (currentLine.points.length === 1) {
+                    currentLine.startMarker = newMarker;
                 }
-                
-                // Apply 90-degree snap if Shift is pressed and we have a reference point
-                if (shiftPressed && referencePoint) {
-                    clickPoint = getSnapPoint(referencePoint, clickPoint);
-                }
-                
-                // Add point - handle branching
-                if (currentLine.activeBranch) {
-                    // Add to the active branch
-                    currentLine.activeBranch.points.push(clickPoint);
-                    const newMarker = addMarkerToLine(clickPoint, currentLine);
-                    currentLine.activeBranch.markers.push(newMarker);
-                } else if (currentLine.continueFromStart) {
-                    currentLine.points.unshift(clickPoint);
-                    const newMarker = addMarkerToLine(clickPoint, currentLine);
-                    currentLine.markers.unshift(newMarker);
-                } else {
-                    currentLine.points.push(clickPoint);
-                    const newMarker = addMarkerToLine(clickPoint, currentLine);
-                    
-                    // Set as start marker if this is the first point
-                    if (currentLine.points.length === 1) {
-                        currentLine.startMarker = newMarker;
-                    }
-                }
+            }
 
             // If we have at least 2 points, draw/update the polyline
             // Draw/update polylines
-                if (currentLine.activeBranch && currentLine.activeBranch.points.length >= 2) {
-                    // Drawing a branch
-                    if (tempLine) {
-                        map.removeLayer(tempLine);
-                        tempLine = null;
-                    }
-                    
-                    clearTempLabels();
-                    
-                    // Remove old branch polyline if exists
-                    if (currentLine.activeBranch.polyline) {
-                        map.removeLayer(currentLine.activeBranch.polyline);
-                    }
-                    
-                    // Draw the branch polyline
-                    currentLine.activeBranch.polyline = L.polyline(currentLine.activeBranch.points, {
-                        color: currentLine.color,
-                        weight: 3,
-                        opacity: 0.8
-                    }).addTo(map);
-                    
-                    // Redraw all labels for main line and branches
-                    redrawLineLabels(currentLine);
-                    
-                    // Calculate total distance including branches
-                    let totalDistance = calculateTotalDistance(currentLine.points);
-                    if (currentLine.branches) {
-                        currentLine.branches.forEach(branch => {
-                            totalDistance += calculateTotalDistance(branch.points);
-                        });
-                    }
-updateLineInfoBox();
-                } else if (currentLine.points.length >= 2) {
-                    // Drawing main line
-                    if (tempLine) {
-                        map.removeLayer(tempLine);
-                        tempLine = null;
-                    }
-                    
-                    clearTempLabels();
-                    
-                    if (currentLine.polyline) {
-                        map.removeLayer(currentLine.polyline);
-                    }
-                    
-                    currentLine.polyline = L.polyline(currentLine.points, {
-                        color: currentLine.color,
-                        weight: 3,
-                        opacity: 0.8
-                    }).addTo(map);
-                    
-                    // Redraw all labels
-                    redrawLineLabels(currentLine);
-                    
-                    // Calculate and display total distance
-// Calculate and display total distance
-                    const totalDistance = calculateTotalDistance(currentLine.points);
-                    
-                    // Update popup
-                    
-                    // Update popup
-                    const totalInches = metersToInches(totalDistance);
-                    currentLine.polyline.bindPopup(`Distance: ${formatDistance(totalDistance)} / ${totalInches.toFixed(2)} inches`);
-                    
-                    // Update info box
-                    updateLineInfoBox();
+            // Draw/update polylines
+            if (currentLine.activeBranch && currentLine.activeBranch.points.length >= 2) {
+                // Drawing a branch
+                if (tempLine) {
+                    map.removeLayer(tempLine);
+                    tempLine = null;
                 }
+
+                clearTempLabels();
+
+                // Remove old branch polyline if exists
+                if (currentLine.activeBranch.polyline) {
+                    map.removeLayer(currentLine.activeBranch.polyline);
+                }
+
+                // Draw the branch polyline
+                currentLine.activeBranch.polyline = L.polyline(currentLine.activeBranch.points, {
+                    color: currentLine.color,
+                    weight: 3,
+                    opacity: 0.8
+                }).addTo(map);
+
+                // Redraw all labels for main line AND branches
+                redrawLineLabels(currentLine);
+                redrawBranchLabels(currentLine);
+
+                // Calculate total distance including branches
+                let totalDistance = calculateTotalDistance(currentLine.points);
+                if (currentLine.branches) {
+                    currentLine.branches.forEach(branch => {
+                        totalDistance += calculateTotalDistance(branch.points);
+                    });
+                }
+                updateLineInfoBox();
+            } else if (currentLine.points.length >= 2) {
+                // Drawing main line
+                if (tempLine) {
+                    map.removeLayer(tempLine);
+                    tempLine = null;
+                }
+
+                clearTempLabels();
+
+                if (currentLine.polyline) {
+                    map.removeLayer(currentLine.polyline);
+                }
+
+                currentLine.polyline = L.polyline(currentLine.points, {
+                    color: currentLine.color,
+                    weight: 3,
+                    opacity: 0.8
+                }).addTo(map);
+
+                // Redraw all labels
+                redrawLineLabels(currentLine);
+
+                // Calculate and display total distance
+                // Calculate and display total distance
+                const totalDistance = calculateTotalDistance(currentLine.points);
+
+                // Update popup
+
+                // Update popup
+                const totalInches = metersToInches(totalDistance);
+                currentLine.polyline.bindPopup(`Distance: ${formatDistance(totalDistance)} / ${totalInches.toFixed(2)} inches`);
+
+                // Update info box
+                updateLineInfoBox();
+            }
         }
     } else if (!eraserActive) {
         // Regular marker adding when not in measure or eraser mode
@@ -946,55 +1206,55 @@ map.on('contextmenu', function (e) {
 
 // Show temp line while moving mouse
 // Show temp line while moving mouse
-    map.on('mousemove', function (e) {
-        if (measureActive && currentLine && currentLine.active) {
-            // Remove previous temp line
-            if (tempLine) {
-                map.removeLayer(tempLine);
-            }
-
-let previewPoint = [e.latlng.lat, e.latlng.lng];
-            
-            // Determine reference point for preview
-            let referencePoint;
-            if (currentLine.activeBranch) {
-                const branch = currentLine.activeBranch;
-                referencePoint = branch.points[branch.points.length - 1];
-            } else if (currentLine.continueFromStart && currentLine.points.length > 0) {
-                referencePoint = currentLine.points[0];
-            } else if (currentLine.points.length > 0) {
-                referencePoint = currentLine.points[currentLine.points.length - 1];
-            }
-
-            // Apply 90-degree snap for preview if Shift is pressed
-            if (shiftPressed && referencePoint) {
-                previewPoint = getSnapPoint(referencePoint, previewPoint);
-            }
-
-            // Draw temp line from correct point to cursor
-            let previewPoints;
-            if (currentLine.activeBranch) {
-                // Draw from the active branch
-                previewPoints = [...currentLine.activeBranch.points, previewPoint];
-            } else if (currentLine.continueFromStart) {
-                previewPoints = [previewPoint, ...currentLine.points];
-            } else {
-                previewPoints = [...currentLine.points, previewPoint];
-            }
-            
-            tempLine = L.polyline(previewPoints, {
-                color: currentLine.color,
-                weight: 2,
-                opacity: 0.5,
-                dashArray: '5, 10'
-            }).addTo(map);
-
-            // Update preview labels (this will show both angle and distance)
-            updatePreviewLabels(previewPoints, currentLine.color);
-            
-            // Update distance display in measure info box
+map.on('mousemove', function (e) {
+    if (measureActive && currentLine && currentLine.active) {
+        // Remove previous temp line
+        if (tempLine) {
+            map.removeLayer(tempLine);
         }
-    });
+
+        let previewPoint = [e.latlng.lat, e.latlng.lng];
+
+        // Determine reference point for preview
+        let referencePoint;
+        if (currentLine.activeBranch) {
+            const branch = currentLine.activeBranch;
+            referencePoint = branch.points[branch.points.length - 1];
+        } else if (currentLine.continueFromStart && currentLine.points.length > 0) {
+            referencePoint = currentLine.points[0];
+        } else if (currentLine.points.length > 0) {
+            referencePoint = currentLine.points[currentLine.points.length - 1];
+        }
+
+        // Apply 90-degree snap for preview if Shift is pressed
+        if (shiftPressed && referencePoint) {
+            previewPoint = getSnapPoint(referencePoint, previewPoint);
+        }
+
+        // Draw temp line from correct point to cursor
+        let previewPoints;
+        if (currentLine.activeBranch) {
+            // Draw from the active branch
+            previewPoints = [...currentLine.activeBranch.points, previewPoint];
+        } else if (currentLine.continueFromStart) {
+            previewPoints = [previewPoint, ...currentLine.points];
+        } else {
+            previewPoints = [...currentLine.points, previewPoint];
+        }
+
+        tempLine = L.polyline(previewPoints, {
+            color: currentLine.color,
+            weight: 2,
+            opacity: 0.5,
+            dashArray: '5, 10'
+        }).addTo(map);
+
+        // Update preview labels (this will show both angle and distance)
+        updatePreviewLabels(previewPoints, currentLine.color);
+
+        // Update distance display in measure info box
+    }
+});
 
 map.on('click', function (e) {
     if (eraserActive) {

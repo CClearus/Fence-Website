@@ -491,14 +491,14 @@ body {
     right: 20px;
     z-index: 999;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-end;
     gap: 12px;
 }
 
 .measure-buttons {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     gap: 10px;
 }
 
