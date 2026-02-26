@@ -9,11 +9,38 @@ let shiftPressed = false;
 let tempAngleLabels = [];
 let tempSegmentLabels = [];
 
+// Fence type tracking
+let selectedFenceType = null;
+function isCowboyFence() { return selectedFenceType === 'cowboy'; }
+
+// Max 1 connection per dot (counts how many lines use this point as endpoint)
+function countDotConnections(point) {
+    let count = 0;
+    allLines.forEach(ld => {
+        if (ld.points.length === 0) return;
+        const first = ld.points[0], last = ld.points[ld.points.length - 1];
+        if (Math.abs(point[0]-first[0]) < 0.0001 && Math.abs(point[1]-first[1]) < 0.0001) count++;
+        else if (Math.abs(point[0]-last[0]) < 0.0001 && Math.abs(point[1]-last[1]) < 0.0001) count++;
+    });
+    return count;
+}
+
 // Color palette for different lines
 const colorPalette = [
     '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
     '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#a855f7'
 ];
+
+// Track fence type selection
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.fence-type-card').forEach(card => {
+        card.addEventListener('click', function() {
+            selectedFenceType = this.getAttribute('data-type');
+        });
+    });
+    const activeCard = document.querySelector('.fence-type-card.active');
+    if (activeCard) selectedFenceType = activeCard.getAttribute('data-type');
+});
 
 // Get measure tool elements
 const measureBtn = document.getElementById('measureBtn');
@@ -40,23 +67,20 @@ document.addEventListener('keyup', function (e) {
     }
 });
 
-// Toggle measure mode
+// Toggle measure mode — requires fence type to be selected first
 measureBtn.addEventListener('click', function () {
+    if (!selectedFenceType) {
+        const grid = document.querySelector('.fence-type-grid');
+        if (grid) { grid.style.outline = '2px solid #ef4444'; setTimeout(() => grid.style.outline = '', 1200); }
+        return;
+    }
     measureActive = !measureActive;
-
     if (measureActive) {
         this.classList.add('active');
         map.getContainer().style.cursor = 'crosshair';
-
-        // Disable eraser mode
-        if (eraserActive) {
-            eraserActive = false;
-            eraserBtn.classList.remove('active');
-        }
+        if (eraserActive) { eraserActive = false; eraserBtn.classList.remove('active'); }
     } else {
-        this.classList.remove('active');
-        map.getContainer().style.cursor = '';
-        finishCurrentLine();
+        stopDrawMode();
     }
 });
 
@@ -329,6 +353,7 @@ function clearMeasure() {
     });
     allLines = [];
     currentLine = null;
+    _clearFenceLayer();
 
     // Remove temp line
     if (tempLine) {
@@ -341,20 +366,35 @@ function clearMeasure() {
     updateLineInfoBox();
 }
 
-// Finish current line
+// Finish current line — keeps draw mode active for next line
 function finishCurrentLine() {
     if (currentLine) {
         currentLine.active = false;
+        currentLine.continueFromStart = false;
+        currentLine.activeBranch = null;
         currentLine = null;
     }
-
-    // Remove temp line
-    if (tempLine) {
-        map.removeLayer(tempLine);
-        tempLine = null;
-    }
-
+    if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
     clearTempLabels();
+}
+
+// Fully stop draw mode
+function stopDrawMode() {
+    finishCurrentLine();
+    measureActive = false;
+    const btn = document.getElementById('measureBtn');
+    if (btn) btn.classList.remove('active');
+    map.getContainer().style.cursor = '';
+}
+
+// Clear fence layer helper
+function _clearFenceLayer() {
+    if (typeof fenceLayerGroup !== 'undefined') {
+        fenceLayerGroup.clearLayers();
+        ['resTotal','resPosts','resBeams','resPrice'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        const warnEl = document.getElementById('fenceWarnings');
+        if (warnEl) warnEl.style.display = 'none';
+    }
 }
 
 // Start or continue a line
@@ -372,7 +412,10 @@ function startLine(fromPoint = null, existingLine = null) {
             markers: [],
             angleLabels: [],
             segmentLabels: [],
-            active: true
+            active: true,
+            continueFromStart: false,
+            activeBranch: null,
+            fenceType: selectedFenceType
         };
         allLines.push(currentLine);
 
@@ -433,8 +476,8 @@ function removeSegment(lineData, clickedMarker) {
     // Update the polyline
     lineData.polyline.setLatLngs(lineData.points);
 
-    // Redraw all labels for this line
     redrawLineLabels(lineData);
+    _clearFenceLayer();
     updateLineInfoBox();
 }
 
@@ -467,9 +510,8 @@ function removeLine(lineData) {
         }
     });
 
-    // Remove from array
     allLines.splice(index, 1);
-
+    _clearFenceLayer();
     updateLineInfoBox();
 }
 
@@ -760,23 +802,46 @@ function metersToInches(meters) {
     return meters * 39.3701;
 }
 
-// Calculate point for 90-degree snap (horizontal or vertical)
-function getSnapPoint(startPoint, currentPoint) {
-    const lat1 = startPoint[0];
-    const lng1 = startPoint[1];
-    const lat2 = currentPoint[0];
-    const lng2 = currentPoint[1];
+// Calculate point for 90-degree snap.
+// For cowboy fence (2+ points already placed): snaps perpendicular to the LAST segment direction.
+// For Shift-snap with only 1 point: snaps to global horizontal/vertical.
+function getSnapPoint(startPoint, currentPoint, prevPoint) {
+    if (prevPoint) {
+        // Snap 90° relative to the previous segment (prevPoint → startPoint)
+        // The new segment must be perpendicular to the last one.
+        // prevSegment direction vector (in lat/lng space):
+        const dx = startPoint[1] - prevPoint[1]; // lng component
+        const dy = startPoint[0] - prevPoint[0]; // lat component
 
+        // Perpendicular directions to the previous segment: (−dy, dx) and (dy, −dx)
+        // Project currentPoint onto the perpendicular line through startPoint
+        // Perpendicular unit vector: (-dy, dx) normalized
+        const len = Math.sqrt(dx*dx + dy*dy);
+        if (len < 1e-10) {
+            // Previous segment has zero length, fall back to global snap
+        } else {
+            const px = -dy / len; // perpendicular direction in lng
+            const py =  dx / len; // perpendicular direction in lat
+
+            // Project (currentPoint - startPoint) onto the perpendicular direction
+            const relLat = currentPoint[0] - startPoint[0];
+            const relLng = currentPoint[1] - startPoint[1];
+            const t = relLat * py + relLng * px;
+
+            // Snapped point = startPoint + t * perpendicular
+            return [startPoint[0] + t * py, startPoint[1] + t * px];
+        }
+    }
+
+    // Global horizontal/vertical snap (Shift key, or only 1 point placed)
+    const lat1 = startPoint[0], lng1 = startPoint[1];
+    const lat2 = currentPoint[0], lng2 = currentPoint[1];
     const deltaLat = Math.abs(lat2 - lat1);
     const deltaLng = Math.abs(lng2 - lng1);
-
-    // Snap to horizontal or vertical based on which is closer
     if (deltaLat > deltaLng) {
-        // Snap to vertical (same longitude)
-        return [lat2, lng1];
+        return [lat2, lng1]; // vertical
     } else {
-        // Snap to horizontal (same latitude)
-        return [lat1, lng2];
+        return [lat1, lng2]; // horizontal
     }
 }
 
@@ -942,305 +1007,140 @@ function updatePreviewLabels(previewPoints, color) {
 // Map click handler
 map.on('click', function (e) {
     if (measureActive) {
-        // Check if clicking near an existing marker
         const nearest = findNearestMarker(e.latlng);
 
         if (nearest) {
-            // Clicking on an existing dot
+            // ── Clicked on an existing dot ──
             const dotPoint = [nearest.marker.getLatLng().lat, nearest.marker.getLatLng().lng];
+            const hitLine  = nearest.lineData;
+            const hitFirst = hitLine.points[0];
+            const hitLast  = hitLine.points[hitLine.points.length - 1];
+            const isHitEndpoint = (
+                (Math.abs(dotPoint[0]-hitFirst[0]) < 0.0001 && Math.abs(dotPoint[1]-hitFirst[1]) < 0.0001) ||
+                (Math.abs(dotPoint[0]-hitLast[0])  < 0.0001 && Math.abs(dotPoint[1]-hitLast[1])  < 0.0001)
+            );
 
             if (!currentLine) {
-                // No active line - continue the line that this dot belongs to
-                currentLine = nearest.lineData;
+                // ── No active drawing — resume existing line from this endpoint ──
+                if (!isHitEndpoint) return;
+                if (countDotConnections(dotPoint) >= 2) return;
+
+                currentLine = hitLine;
                 currentLine.active = true;
+                currentLine.activeBranch = null;
+                currentLine.continueFromStart = false;
 
-                // Find which end of the line this dot is
-                const firstPoint = currentLine.points[0];
-                const lastPoint = currentLine.points[currentLine.points.length - 1];
-
-                const isFirstPoint = (Math.abs(dotPoint[0] - firstPoint[0]) < 0.0001 &&
-                    Math.abs(dotPoint[1] - firstPoint[1]) < 0.0001);
-                const isLastPoint = (Math.abs(dotPoint[0] - lastPoint[0]) < 0.0001 &&
-                    Math.abs(dotPoint[1] - lastPoint[1]) < 0.0001);
-
-                if (isFirstPoint) {
-                    // Continuing from the first point - need to reverse and add to end
-                    currentLine.continueFromStart = true;
-                } else if (isLastPoint) {
-                    // Continuing from the last point - just add to end (normal)
-                    currentLine.continueFromStart = false;
-                } else {
-                    // Clicking on a middle point - create a new branch segment
-                    finishCurrentLine();
-
-                    // Create a new branch but keep same line data reference
-                    const parentLine = nearest.lineData;
-
-                    // Initialize branches array if it doesn't exist
-                    if (!parentLine.branches) {
-                        parentLine.branches = [];
-                    }
-
-                    // Create a new branch starting from this point
-                    const newBranch = {
-                        startPoint: dotPoint,
-                        points: [dotPoint],
-                        markers: [nearest.marker],
-                        polyline: null,
-                        angleLabels: [],
-                        segmentLabels: []
-                    };
-
-                    parentLine.branches.push(newBranch);
-
-                    // Set current line to continue from this branch
-                    currentLine = parentLine;
-                    currentLine.active = true;
-                    currentLine.activeBranch = newBranch;
-
-                    // Show measure info
-                    measureInfo.classList.add('active');
-                    const totalDistance = calculateTotalDistance(currentLine.points);
+                const clickedFirst = Math.abs(dotPoint[0]-hitFirst[0]) < 0.0001 &&
+                                     Math.abs(dotPoint[1]-hitFirst[1]) < 0.0001;
+                if (clickedFirst) {
+                    currentLine.points.reverse();
+                    currentLine.markers.reverse();
                 }
-            } else {
-                // Active line exists - connecting to a dot
+                return;
+            }
 
-                // Check if connecting to its own first point (closing shape)
-                const firstPoint = currentLine.points[0];
-                const isOwnFirstPoint = (Math.abs(dotPoint[0] - firstPoint[0]) < 0.0001 &&
-                    Math.abs(dotPoint[1] - firstPoint[1]) < 0.0001);
+            // ── Active line — connecting to a dot ──
 
-                if (isOwnFirstPoint && currentLine.points.length >= 3) {
-                    // Close the shape
-                    currentLine.points.push(dotPoint);
-                    currentLine.closed = true;
+            // Cowboy: snap connection to 90° relative to previous segment
+            let connectPoint = dotPoint;
+            if (isCowboyFence() && currentLine.points.length >= 2) {
+                const refPt  = currentLine.points[currentLine.points.length - 1];
+                const prevPt = currentLine.points[currentLine.points.length - 2];
+                const snapped = getSnapPoint(refPt, dotPoint, prevPt);
+                const snapDist = Math.sqrt(Math.pow(snapped[0]-dotPoint[0],2)+Math.pow(snapped[1]-dotPoint[1],2));
+                if (snapDist > 0.0002) return;
+                connectPoint = snapped;
+            }
 
-                    // Remove old polyline and create polygon
-                    if (currentLine.polyline) {
-                        map.removeLayer(currentLine.polyline);
-                    }
-                    currentLine.polyline = L.polygon(currentLine.points, {
-                        color: currentLine.color,
-                        weight: 3,
-                        opacity: 0.8,
-                        fillOpacity: 0.2
-                    }).addTo(map);
+            // Check if closing own shape
+            const ownFirst = currentLine.points[0];
+            const isClosing = Math.abs(dotPoint[0]-ownFirst[0]) < 0.0001 && Math.abs(dotPoint[1]-ownFirst[1]) < 0.0001;
 
-                    redrawLineLabels(currentLine);
-                    const totalDistance = calculateTotalDistance(currentLine.points);
-                    const totalInches = metersToInches(totalDistance);
-                    currentLine.polyline.bindPopup(`Distance: ${formatDistance(totalDistance)} / ${totalInches.toFixed(2)} inches<br>Enclosed Shape`);
-                    updateLineInfoBox();
-                    finishCurrentLine();
-                    return;
-                }
-
-                // Connecting to another dot (could be same line or different)
-                if (currentLine.continueFromStart) {
-                    // We're drawing from the start, so prepend the point
-                    currentLine.points.unshift(dotPoint);
-                } else {
-                    // Normal - add to end
-                    currentLine.points.push(dotPoint);
-                }
-
-                // Update polyline
-                if (tempLine) {
-                    map.removeLayer(tempLine);
-                    tempLine = null;
-                }
-
-                clearTempLabels();
-
-                if (currentLine.polyline) {
-                    map.removeLayer(currentLine.polyline);
-                }
-
-                currentLine.polyline = L.polyline(currentLine.points, {
-                    color: currentLine.color,
-                    weight: 3,
-                    opacity: 0.8
-                }).addTo(map);
-
+            if (isClosing && currentLine.points.length >= 3) {
+                currentLine.points.push(ownFirst);
+                currentLine.closed = true;
+                if (currentLine.polyline) map.removeLayer(currentLine.polyline);
+                currentLine.polyline = L.polygon(currentLine.points, { color: currentLine.color, weight: 3, opacity: 0.8, fillOpacity: 0.2 }).addTo(map);
                 redrawLineLabels(currentLine);
-                const totalDistance = calculateTotalDistance(currentLine.points);
-                const totalInches = metersToInches(totalDistance);
-                currentLine.polyline.bindPopup(`Distance: ${formatDistance(totalDistance)} / ${totalInches.toFixed(2)} inches`);
+                const td = calculateTotalDistance(currentLine.points);
+                currentLine.polyline.bindPopup(`Distance: ${formatDistance(td)} / ${metersToInches(td).toFixed(2)} in<br>Enclosed Shape`);
                 updateLineInfoBox();
-
-                // Finish this line segment
                 finishCurrentLine();
+                return;
             }
+
+            if (!isClosing) {
+                if (!isHitEndpoint) return;
+                if (countDotConnections(dotPoint) >= 2) return;
+            }
+
+            currentLine.points.push(connectPoint);
+            addMarkerToLine(connectPoint, currentLine);
+            _redrawCurrentPolyline();
+
         } else {
-            // Clicking on empty space (not on a dot)
-            if (!currentLine) {
-                // Start new line
-                startLine();
-            }
+            // ── Clicked empty space — add new point ──
+            if (!currentLine) startLine();
 
             let clickPoint = [e.latlng.lat, e.latlng.lng];
+            const refPt = currentLine.points.length > 0 ? currentLine.points[currentLine.points.length - 1] : null;
 
-            // Determine reference point for snapping
-            let referencePoint;
-            if (currentLine.activeBranch) {
-                // Branching - use last point of active branch
-                const branch = currentLine.activeBranch;
-                referencePoint = branch.points[branch.points.length - 1];
-            } else if (currentLine.continueFromStart) {
-                referencePoint = currentLine.points[0];
-            } else if (currentLine.points.length > 0) {
-                referencePoint = currentLine.points[currentLine.points.length - 1];
+            // Cowboy: force 90° from 2nd segment onward (relative to prev segment); Shift: always snap
+            if (refPt && (shiftPressed || (isCowboyFence() && currentLine.points.length >= 2))) {
+                const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
+                clickPoint = getSnapPoint(refPt, clickPoint, prevPt);
             }
 
-            // Apply 90-degree snap if Shift is pressed and we have a reference point
-            if (shiftPressed && referencePoint) {
-                clickPoint = getSnapPoint(referencePoint, clickPoint);
-            }
-
-            // Add point - handle branching
-            if (currentLine.activeBranch) {
-                // Add to the active branch
-                currentLine.activeBranch.points.push(clickPoint);
-                const newMarker = addMarkerToLine(clickPoint, currentLine);
-                currentLine.activeBranch.markers.push(newMarker);
-            } else if (currentLine.continueFromStart) {
-                currentLine.points.unshift(clickPoint);
-                const newMarker = addMarkerToLine(clickPoint, currentLine);
-                currentLine.markers.unshift(newMarker);
-            } else {
-                currentLine.points.push(clickPoint);
-                const newMarker = addMarkerToLine(clickPoint, currentLine);
-
-                // Set as start marker if this is the first point
-                if (currentLine.points.length === 1) {
-                    currentLine.startMarker = newMarker;
-                }
-            }
-
-            // If we have at least 2 points, draw/update the polyline
-            // Draw/update polylines
-            // Draw/update polylines
-            if (currentLine.activeBranch && currentLine.activeBranch.points.length >= 2) {
-                // Drawing a branch
-                if (tempLine) {
-                    map.removeLayer(tempLine);
-                    tempLine = null;
-                }
-
-                clearTempLabels();
-
-                // Remove old branch polyline if exists
-                if (currentLine.activeBranch.polyline) {
-                    map.removeLayer(currentLine.activeBranch.polyline);
-                }
-
-                // Draw the branch polyline
-                currentLine.activeBranch.polyline = L.polyline(currentLine.activeBranch.points, {
-                    color: currentLine.color,
-                    weight: 3,
-                    opacity: 0.8
-                }).addTo(map);
-
-                // Redraw all labels for main line AND branches
-                redrawLineLabels(currentLine);
-                redrawBranchLabels(currentLine);
-
-                // Calculate total distance including branches
-                let totalDistance = calculateTotalDistance(currentLine.points);
-                if (currentLine.branches) {
-                    currentLine.branches.forEach(branch => {
-                        totalDistance += calculateTotalDistance(branch.points);
-                    });
-                }
-                updateLineInfoBox();
-            } else if (currentLine.points.length >= 2) {
-                // Drawing main line
-                if (tempLine) {
-                    map.removeLayer(tempLine);
-                    tempLine = null;
-                }
-
-                clearTempLabels();
-
-                if (currentLine.polyline) {
-                    map.removeLayer(currentLine.polyline);
-                }
-
-                currentLine.polyline = L.polyline(currentLine.points, {
-                    color: currentLine.color,
-                    weight: 3,
-                    opacity: 0.8
-                }).addTo(map);
-
-                // Redraw all labels
-                redrawLineLabels(currentLine);
-
-                // Calculate and display total distance
-                // Calculate and display total distance
-                const totalDistance = calculateTotalDistance(currentLine.points);
-
-                // Update popup
-
-                // Update popup
-                const totalInches = metersToInches(totalDistance);
-                currentLine.polyline.bindPopup(`Distance: ${formatDistance(totalDistance)} / ${totalInches.toFixed(2)} inches`);
-
-                // Update info box
-                updateLineInfoBox();
-            }
+            currentLine.points.push(clickPoint);
+            const newMarker = addMarkerToLine(clickPoint, currentLine);
+            if (currentLine.points.length === 1) currentLine.startMarker = newMarker;
+            _redrawCurrentPolyline();
         }
+
     } else if (!eraserActive) {
-        // Regular marker adding when not in measure or eraser mode
         const newMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
         newMarker.bindPopup(`Coordinates:<br>Lat: ${e.latlng.lat.toFixed(4)}<br>Lng: ${e.latlng.lng.toFixed(4)}`);
     }
 });
 
-// Right-click to finish current line
+function _redrawCurrentPolyline() {
+    if (!currentLine || currentLine.points.length < 2) return;
+    if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
+    clearTempLabels();
+    if (currentLine.polyline) map.removeLayer(currentLine.polyline);
+    currentLine.polyline = L.polyline(currentLine.points, { color: currentLine.color, weight: 3, opacity: 0.8 }).addTo(map);
+    redrawLineLabels(currentLine);
+    const td = calculateTotalDistance(currentLine.points);
+    currentLine.polyline.bindPopup(`Distance: ${formatDistance(td)} / ${metersToInches(td).toFixed(2)} in`);
+    updateLineInfoBox();
+}
+
+// Right-click: finish current line or stop draw mode
 map.on('contextmenu', function (e) {
-    if (measureActive && currentLine) {
+    if (measureActive) {
         L.DomEvent.preventDefault(e);
-        finishCurrentLine();
+        if (currentLine) { finishCurrentLine(); }
+        else { stopDrawMode(); }
     }
 });
 
 // Show temp line while moving mouse
-// Show temp line while moving mouse
 map.on('mousemove', function (e) {
     if (measureActive && currentLine && currentLine.active) {
-        // Remove previous temp line
-        if (tempLine) {
-            map.removeLayer(tempLine);
-        }
+        if (tempLine) { map.removeLayer(tempLine); }
 
         let previewPoint = [e.latlng.lat, e.latlng.lng];
 
-        // Determine reference point for preview
-        let referencePoint;
-        if (currentLine.activeBranch) {
-            const branch = currentLine.activeBranch;
-            referencePoint = branch.points[branch.points.length - 1];
-        } else if (currentLine.continueFromStart && currentLine.points.length > 0) {
-            referencePoint = currentLine.points[0];
-        } else if (currentLine.points.length > 0) {
-            referencePoint = currentLine.points[currentLine.points.length - 1];
+        const referencePoint = currentLine.points.length > 0
+            ? currentLine.points[currentLine.points.length - 1] : null;
+
+        // Snap: cowboy forces 90° from 2nd segment (relative to prev segment), Shift always snaps
+        if (referencePoint && (shiftPressed || (isCowboyFence() && currentLine.points.length >= 2))) {
+            const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
+            previewPoint = getSnapPoint(referencePoint, previewPoint, prevPt);
         }
 
-        // Apply 90-degree snap for preview if Shift is pressed
-        if (shiftPressed && referencePoint) {
-            previewPoint = getSnapPoint(referencePoint, previewPoint);
-        }
-
-        // Draw temp line from correct point to cursor
-        let previewPoints;
-        if (currentLine.activeBranch) {
-            // Draw from the active branch
-            previewPoints = [...currentLine.activeBranch.points, previewPoint];
-        } else if (currentLine.continueFromStart) {
-            previewPoints = [previewPoint, ...currentLine.points];
-        } else {
-            previewPoints = [...currentLine.points, previewPoint];
-        }
+        const previewPoints = [...currentLine.points, previewPoint];
 
         tempLine = L.polyline(previewPoints, {
             color: currentLine.color,
