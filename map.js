@@ -1,6 +1,5 @@
-
 // Initialize the map
-const map = L.map('map').setView([13.7563, 100.5018], 13);
+const map = L.map('map', { zoomControl: false }).setView([13.7563, 100.5018], 13);
 
 // Define different map layers
 const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -214,18 +213,6 @@ function flyToLocation(lat, lng, name) {
 
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', function() {
-    // Left Sidebar Toggle
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const leftSidebar = document.getElementById('leftSidebar');
-    const searchContainer = document.getElementById('searchContainer');
-
-if (sidebarToggle && leftSidebar) {
-        sidebarToggle.addEventListener('click', function() {
-            leftSidebar.classList.toggle('active');
-            sidebarToggle.classList.toggle('active');
-        });
-    }
-
     // Fence option selection
     const fenceOptions = document.querySelectorAll('.fence-option');
     fenceOptions.forEach(option => {

@@ -1006,6 +1006,8 @@ function updatePreviewLabels(previewPoints, color) {
 
 // Map click handler
 map.on('click', function (e) {
+    // Block map click if a swap button was just clicked (prevents starting a new line)
+    if (typeof _swapClickSuppressed !== 'undefined' && _swapClickSuppressed) return;
     if (measureActive) {
         const nearest = findNearestMarker(e.latlng);
 
@@ -1035,6 +1037,11 @@ map.on('click', function (e) {
                 if (clickedFirst) {
                     currentLine.points.reverse();
                     currentLine.markers.reverse();
+                    // Must redraw polyline so mousemove preview extends from the correct end
+                    if (currentLine.polyline) map.removeLayer(currentLine.polyline);
+                    currentLine.polyline = L.polyline(currentLine.points, {
+                        color: currentLine.color, weight: 3, opacity: 0.8
+                    }).addTo(map);
                 }
                 return;
             }

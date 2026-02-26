@@ -16,14 +16,6 @@
 <body>
     <div id="map"></div>
 
-    <!-- Left Sidebar Toggle -->
-    <div class="sidebar-toggle" id="sidebarToggle">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 18l6-6-6-6" />
-        </svg>
-    </div>
-
-    <!-- Left Sidebar Panel -->
     <!-- Left Sidebar Panel -->
     <div class="left-sidebar" id="leftSidebar">
         <div class="sidebar-content">
@@ -33,8 +25,7 @@
             <div class="fence-type-grid">
                 <div class="fence-type-card active" data-type="cowboy">
                     <div class="ftc-icon">
-                        <!-- cowboy / wooden rail fence icon -->
-                        <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
                             <rect x="4" y="6" width="6" height="36" rx="2" fill="#c8a46e"/>
                             <rect x="38" y="6" width="6" height="36" rx="2" fill="#c8a46e"/>
                             <rect x="4" y="13" width="40" height="5" rx="2" fill="#a0724a"/>
@@ -43,9 +34,9 @@
                     </div>
                     <div class="ftc-label">รั้วคาวบอย</div>
                 </div>
-                <div class="fence-type-card" data-type="concrete">
+                <div class="fence-type-card ftc-disabled" data-type="concrete">
                     <div class="ftc-icon">
-                        <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" opacity="0.25">
                             <rect x="4" y="6" width="6" height="36" rx="2" fill="#9ca3af"/>
                             <rect x="38" y="6" width="6" height="36" rx="2" fill="#9ca3af"/>
                             <rect x="4" y="11" width="40" height="7" rx="1" fill="#d1d5db"/>
@@ -55,9 +46,9 @@
                     </div>
                     <div class="ftc-label">รั้วคอนกรีต<br>สำเร็จรูป</div>
                 </div>
-                <div class="fence-type-card" data-type="rod">
+                <div class="fence-type-card ftc-disabled" data-type="rod">
                     <div class="ftc-icon">
-                        <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" opacity="0.25">
                             <rect x="4" y="6" width="4" height="36" rx="2" fill="#6b7280"/>
                             <rect x="40" y="6" width="4" height="36" rx="2" fill="#6b7280"/>
                             <rect x="15" y="6" width="3" height="36" rx="1.5" fill="#6b7280"/>
@@ -66,11 +57,11 @@
                             <rect x="4" y="37" width="40" height="3" rx="1" fill="#374151"/>
                         </svg>
                     </div>
-                    <div class="ftc-label">รั้วตะแกรง<br>เหล็ก</div>
+                    <div class="ftc-label">รั้วลวดหนาม</div>
                 </div>
                 <div class="fence-type-card" data-type="brick">
                     <div class="ftc-icon">
-                        <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
                             <rect x="4" y="6" width="40" height="36" rx="2" fill="#d97706"/>
                             <rect x="4" y="14" width="40" height="2" fill="#92400e" opacity="0.4"/>
                             <rect x="4" y="22" width="40" height="2" fill="#92400e" opacity="0.4"/>
@@ -84,56 +75,46 @@
                 </div>
             </div>
 
-            <!-- Section: Beam / Column -->
-            <div class="sb-section-label">เลือกเสา - คาน</div>
-            <div class="sb-select-wrap">
-                <select class="sb-select" id="beamSelect">
-                    <option value="2">2 ชั้น</option>
-                    <option value="3">3 ชั้น</option>
-                    <option value="4">4 ชั้น</option>
-                </select>
-                <div class="sb-select-icon">▼</div>
-            </div>
-            <div class="beam-spec-box" id="beamSpecBox">
-                <div class="beam-spec-row active" data-beam="2">
-                    <span class="bsr-title">2 ชั้น</span>
-                    <span class="bsr-dim">0.15 × 0.15 × 1.50 ม.</span><span class="bsr-tag">งเสา</span>
+            <!-- Section: Beam / Column (cowboy only) -->
+            <div id="beamSection">
+                <div class="sb-section-label">เลือกเสา - คาน</div>
+                <div class="sb-select-wrap">
+                    <select class="sb-select" id="beamSelect">
+                        <option value="2">2 ชั้น</option>
+                        <option value="3">3 ชั้น</option>
+                        <option value="4">4 ชั้น</option>
+                    </select>
+                    <div class="sb-select-icon">▼</div>
                 </div>
-                <div class="beam-spec-row" data-beam="2b">
-                    <span class="bsr-dim indent">0.15 × 0.15 × 1.50 ม.</span>
+                <div class="beam-spec-box" id="beamSpecBox">
+                    <div class="beam-spec-row active" data-beam="2">
+                        <span class="bsr-title">2 ชั้น</span>
+                        <span class="bsr-dim">0.15 × 0.15 × 1.50 ม.</span>
+                        <span class="bsr-tag">งเสา</span>
+                    </div>
+                    <div class="beam-spec-row" data-beam="2b">
+                        <span class="bsr-dim indent">0.15 × 0.15 × 1.50 ม.</span>
+                    </div>
+                    <div class="beam-spec-row" data-beam="3">
+                        <span class="bsr-title">3 ชั้น</span>
+                        <span class="bsr-dim">0.15 × 0.15 × 2.00 ม.</span>
+                    </div>
+                    <div class="beam-spec-row" data-beam="4">
+                        <span class="bsr-title">4 ชั้น</span>
+                        <span class="bsr-dim">0.15 × 0.15 × 2.50 ม.</span>
+                    </div>
                 </div>
-                <div class="beam-spec-row" data-beam="3">
-                    <span class="bsr-title">3 ชั้น</span>
-                    <span class="bsr-dim">0.15 × 0.15 × 2.00 ม.</span>
-                </div>
-                <div class="beam-spec-row" data-beam="4">
-                    <span class="bsr-title">4 ชั้น</span>
-                    <span class="bsr-dim">0.15 × 0.15 × 2.50 ม.</span>
-                </div>
-            </div>
-
-            <!-- Section: Post size in inches -->
-            <div class="sb-section-label">ขนาดเสา <span class="sb-label-m">n</span> (นิ้ว)</div>
-            <div class="sb-input-row">
-                <input type="number" class="sb-input" id="postSizeInches" value="6" min="1" step="0.5">
-                <span class="sb-input-unit">นิ้ว</span>
-                <span class="sb-input-hint" id="postSizeHint">= 0.152 ม.</span>
             </div>
 
-            <!-- Section: Post spacing (m) -->
-            <div class="sb-section-label">ระยะจุดศูนย์กลางเสา <span class="sb-label-m">m</span></div>
-            <div class="sb-input-row">
-                <input type="number" class="sb-input" id="postSpacing" value="2.5" min="0.5" step="0.5">
-                <span class="sb-input-unit">เมตร</span>
-            </div>
-
-            <!-- Section: Double corner post toggle (cowboy fence) -->
-            <div class="sb-section-label">เสามุมคู่ <span style="font-size:11px;color:#6b7280;">(cowboy)</span></div>
-            <div class="sb-input-row" style="gap:10px;align-items:center;">
-                <label class="sb-toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                    <input type="checkbox" id="doubleCornerPost" style="width:18px;height:18px;cursor:pointer;">
-                    <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
-                </label>
+            <!-- Section: Double corner post toggle (cowboy only) -->
+            <div id="doubleCornerSection">
+                <div class="sb-section-label">เสามุมคู่ <span style="font-size:11px;color:#6b7280;">(cowboy)</span></div>
+                <div class="sb-input-row" style="gap:10px;align-items:center;margin-bottom:4px;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="doubleCornerPost" style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;">
+                        <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
+                    </label>
+                </div>
             </div>
 
             <!-- Divider -->
@@ -142,38 +123,31 @@
             <!-- Warnings -->
             <div class="fw-box" id="fenceWarnings" style="display:none"></div>
 
-            <!-- Section: Results after calculate -->
-            <div class="sb-result-grid" id="sbResults">
-                <div class="sbr-item">
+            <!-- Section: Results -->
+            <div class="sb-result-stack" id="sbResults">
+                <div class="sbr-row-item">
                     <div class="sbr-label">ความยาวทั้งหมด</div>
-                    <div class="sbr-row">
+                    <div class="sbr-field-row">
                         <input type="text" class="sbr-input" id="resTotal" readonly placeholder="—">
                         <span class="sbr-unit">เมตร</span>
                     </div>
                 </div>
-                <div class="sbr-item">
+                <div class="sbr-row-item">
                     <div class="sbr-label">จำนวนเสาที่ต้องใช้</div>
-                    <div class="sbr-row">
+                    <div class="sbr-field-row">
                         <input type="text" class="sbr-input" id="resPosts" readonly placeholder="—">
                     </div>
                 </div>
-                <div class="sbr-item">
+                <div class="sbr-row-item">
                     <div class="sbr-label">จำนวนคานที่ต้องใช้</div>
-                    <div class="sbr-row">
+                    <div class="sbr-field-row">
                         <input type="text" class="sbr-input" id="resBeams" readonly placeholder="—">
-                    </div>
-                </div>
-                <div class="sbr-item">
-                    <div class="sbr-label">ราคาโดยประมาณ</div>
-                    <div class="sbr-row">
-                        <input type="text" class="sbr-input" id="resPrice" readonly placeholder="—">
-                        <span class="sbr-unit">บาท</span>
                     </div>
                 </div>
             </div>
 
             <button class="sb-calc-btn" id="drawFenceBtn">คำนวนวัสดุ</button>
-            <button class="sb-submit-btn" id="clearFenceBtn">สร้างแผน</button>
+            <button class="sb-submit-btn sb-submit-disabled" id="clearFenceBtn" disabled>สร้างแผน</button>
 
         </div>
     </div>
@@ -295,26 +269,32 @@
     <script src="measure.js"></script>
     <script src="fence.js"></script>
 
+    <!-- Hidden inputs for fence.js defaults (fields removed from UI) -->
+    <input type="hidden" id="postSizeInches" value="6">
+    <input type="hidden" id="postSpacing" value="2.5">
+    <input type="hidden" id="resPrice">
+
     <script>
-    // Live hint: inches → meters
-    document.getElementById('postSizeInches').addEventListener('input', function() {
-        const m = (parseFloat(this.value) || 0) * 0.0254;
-        document.getElementById('postSizeHint').textContent = '= ' + m.toFixed(3) + ' ม.';
+    // Fence type card selection — show/hide sections based on type
+    function applyFenceTypeUI(type) {
+        const dcSection    = document.getElementById('doubleCornerSection');
+        const beamSection  = document.getElementById('beamSection');
+        const isBrick = (type === 'brick');
+        dcSection.style.display   = isBrick ? 'none' : '';
+        beamSection.style.display = isBrick ? 'none' : '';
+    }
+
+    document.querySelectorAll('.fence-type-card:not(.ftc-disabled)').forEach(card => {
+        card.addEventListener('click', function() {
+            document.querySelectorAll('.fence-type-card').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            applyFenceTypeUI(this.getAttribute('data-type'));
+        });
     });
-    // Live hint: spacing warnings
-    document.getElementById('postSpacing').addEventListener('input', function() {
-        const v = parseFloat(this.value);
-        const warnEl = document.getElementById('fenceWarnings');
-        if (v > 0 && v < 1) {
-            warnEl.innerHTML = '<div class="fw-item">⚠️ ระยะห่างน้อยกว่า 1 เมตร — รั้วแน่นเกินไป</div>';
-            warnEl.style.display = 'block';
-        } else if (v > 3) {
-            warnEl.innerHTML = '<div class="fw-item">⚠️ ระยะห่างมากกว่า 3 เมตร — รั้วห่างเกินไป</div>';
-            warnEl.style.display = 'block';
-        } else {
-            warnEl.style.display = 'none';
-        }
-    });
+
+    // Apply on load based on default active card
+    const defaultCard = document.querySelector('.fence-type-card.active');
+    if (defaultCard) applyFenceTypeUI(defaultCard.getAttribute('data-type'));
     </script>
 </body>
 

@@ -436,13 +436,18 @@ function drawFence(linePoints, m, n, splitAtStart, doubleCorner) {
 function calcPanels(space, m) {
     if (space < 1e-4) return { ticks: [], standardCount: 0, splitCount: 0 };
 
-    const full  = Math.floor(space / m);
+    const full  = Math.floor(space / m + 1e-9); // small epsilon to avoid floor(4.0000001) = 4 issues
     const r_raw = space - full * m;
 
+    // Use a tighter tolerance: remainder < 1mm or > (m - 1mm) means treat as exact multiple
+    const TOL = 0.001; // 1mm
     let splitCount, splitSize, standardCount;
 
-    if (r_raw < 1e-3) {
-        standardCount = full;
+    if (r_raw < TOL || r_raw > m - TOL) {
+        // Treat as exact multiple — no split needed
+        // If r_raw > m-TOL, that extra sliver rounds into an extra full panel
+        const roundedFull = r_raw > m - TOL ? full + 1 : full;
+        standardCount = roundedFull;
         splitCount    = 0;
         splitSize     = 0;
     } else {
@@ -566,8 +571,8 @@ function _redrawFence() {
 // UI WIRING
 // ============================================
 
-// Fence type card selection
-document.querySelectorAll('.fence-type-card').forEach(card => {
+// Fence type card selection (handled in HTML inline script, but also update here for safety)
+document.querySelectorAll('.fence-type-card:not(.ftc-disabled)').forEach(card => {
     card.addEventListener('click', function() {
         document.querySelectorAll('.fence-type-card').forEach(c=>c.classList.remove('active'));
         this.classList.add('active');
@@ -582,11 +587,16 @@ document.getElementById('beamSelect').addEventListener('change', function() {
 });
 
 // Global click delegation for swap buttons (works even after layer redraw)
+// _swapClickSuppressed prevents the map.on('click') from firing after a swap
+let _swapClickSuppressed = false;
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('.dc-swap-btn');
     if (!btn) return;
     e.stopPropagation();
     e.preventDefault();
+    // Suppress the Leaflet map click that bubbles through right after
+    _swapClickSuppressed = true;
+    setTimeout(() => { _swapClickSuppressed = false; }, 50);
     const k = btn.getAttribute('data-k');
     if (k) {
         swappedCorners.set(k, !(swappedCorners.get(k) || false));
@@ -598,42 +608,72 @@ document.addEventListener('click', function(e) {
 function runFenceCalc() {
     if (typeof allLines === 'undefined' || allLines.length === 0) return;
 
-    const m       = parseFloat(document.getElementById('postSpacing').value) || 2.5;
     const nInches = parseFloat(document.getElementById('postSizeInches').value) || 6;
     const n       = nInches * 0.0254;
     const layers  = parseInt(document.getElementById('beamSelect').value) || 2;
     const doubleCorner = document.getElementById('doubleCornerPost')?.checked ?? false;
 
-    const allWarnings = validateInputs(m, nInches);
+    // Determine the ACTIVE fence type from the sidebar (used as fallback for old lines without fenceType)
+    const activeCard = document.querySelector('.fence-type-card.active');
+    const activeFenceType = activeCard ? activeCard.getAttribute('data-type') : 'cowboy';
 
+    const allWarnings = [];
     fenceLayerGroup.clearLayers();
 
+    // Group valid lines by fenceType — each type is processed independently
+    // so brick lines and cowboy lines never share a cornerMap
     const validLines = allLines.filter(ld => ld.points.length >= 2);
-    buildCornerMap(validLines.map(ld => ld.points));
 
-    let grandTotal=0, grandPosts=0, grandBeams=0;
+    // Separate lines into cowboy group vs brick group
+    const cowboyLines = validLines.filter(ld => (ld.fenceType || activeFenceType) !== 'brick');
+    const brickLines  = validLines.filter(ld => (ld.fenceType || activeFenceType) === 'brick');
 
-    validLines.forEach(ld => {
-        const res = drawFence(ld.points, m, n, true, doubleCorner);
-        grandTotal += res.grandTotal;
-        grandPosts += res.totalPosts;
-        grandBeams += res.totalBeams * layers;
-        allWarnings.push(...res.warnings);
-    });
+    let grandTotal = 0, grandPosts = 0, grandBeams = 0;
 
-    if (doubleCorner) {
-        for (const [k, entry] of cornerMap.entries()) {
-            const result = drawDoubleCornerPost(entry.pt, n, true);
-            grandPosts += result.count;
+    // ── Process COWBOY / other non-brick lines ──
+    if (cowboyLines.length > 0) {
+        const m_cowboy = parseFloat(document.getElementById('postSpacing').value) || 2.5;
+        const useDoubleCorner = doubleCorner;
+
+        // Build cornerMap ONLY from cowboy lines
+        buildCornerMap(cowboyLines.map(ld => ld.points));
+
+        cowboyLines.forEach(ld => {
+            const res = drawFence(ld.points, m_cowboy, n, true, useDoubleCorner);
+            grandTotal += res.grandTotal;
+            grandPosts += res.totalPosts;
+            grandBeams += res.totalBeams * layers;
+            allWarnings.push(...res.warnings);
+        });
+
+        if (useDoubleCorner) {
+            for (const [k, entry] of cornerMap.entries()) {
+                const result = drawDoubleCornerPost(entry.pt, n, true);
+                grandPosts += result.count;
+            }
         }
     }
 
-    const price = Math.round(grandTotal * PRICE_PER_M);
+    // ── Process BRICK lines independently ──
+    if (brickLines.length > 0) {
+        const m_brick = 2.5;
+
+        // Build cornerMap ONLY from brick lines
+        buildCornerMap(brickLines.map(ld => ld.points));
+
+        brickLines.forEach(ld => {
+            const res = drawFence(ld.points, m_brick, n, true, false);
+            grandTotal += res.grandTotal;
+            grandPosts += res.totalPosts;
+            grandBeams += res.totalBeams; // brick: no layer multiplier
+            allWarnings.push(...res.warnings);
+        });
+    }
 
     document.getElementById('resTotal').value = grandTotal.toFixed(2);
     document.getElementById('resPosts').value = grandPosts;
     document.getElementById('resBeams').value = grandBeams;
-    document.getElementById('resPrice').value = price.toLocaleString();
+    // Price hidden — no display
 
     const warnEl = document.getElementById('fenceWarnings');
     if (allWarnings.length > 0) {
