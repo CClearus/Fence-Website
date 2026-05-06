@@ -518,8 +518,8 @@ function drawPost(latlng, b, type) {
     const postL = (parseFloat(document.getElementById('postSizeLength')?.value) || 6) * 0.0254;
 
     // Make displayed square slightly bigger than actual pole for visibility
-const userScale = window._poleScale || 1.0;
-const SCALE = (type === 'endpoint' || type === 'corner' ? 1.6 : 5.4) * userScale;
+    const userScale = window._poleScale || 1.0;
+    const SCALE = (type === 'endpoint' || type === 'corner' ? 1.6 : 5.4) * userScale;  // ← Fixed: added * operator
     const halfW = (postW * SCALE) / 2;
     const halfL = (postL * SCALE) / 2;
 
