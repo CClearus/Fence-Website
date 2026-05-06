@@ -116,6 +116,34 @@ toggleLabelsBtn.addEventListener('click', function (e) {
     labelDropdown.classList.toggle('active');
 });
 
+// Summary stack toggle
+document.addEventListener('click', function(e) {
+    if (e.target.closest('#toggleSummary')) {
+        const summaryVisible = document.getElementById('toggleSummary').classList.toggle('active');
+        const stack = document.getElementById('lineSummaryStack');
+        if (stack) stack.style.display = summaryVisible ? '' : 'none';
+    }
+});
+
+// Angle font size slider
+document.addEventListener('input', function(e) {
+    if (e.target.id === 'angleFontSlider') {
+        window._angleFontSize = parseInt(e.target.value);
+        document.getElementById('angleFontVal').textContent = e.target.value;
+        allLines.forEach(ld => { redrawLineLabels(ld); if (ld.branches) redrawBranchLabels(ld); });
+    }
+    if (e.target.id === 'distFontSlider') {
+        window._distFontSize = parseInt(e.target.value);
+        document.getElementById('distFontVal').textContent = e.target.value;
+        allLines.forEach(ld => { redrawLineLabels(ld); if (ld.branches) redrawBranchLabels(ld); });
+    }
+    if (e.target.id === 'poleScaleSlider') {
+        window._poleScale = parseFloat(e.target.value);
+        document.getElementById('poleScaleVal').textContent = parseFloat(e.target.value).toFixed(1);
+        if (typeof runFenceCalc === 'function') runFenceCalc();
+    }
+});
+
 // Close dropdown when clicking outside
 document.addEventListener('click', function (e) {
     const labelDropdown = document.getElementById('labelDropdown');
@@ -255,17 +283,17 @@ function getDirectionAngle(point1, point2) {
 // Draw angle label
 function drawAngleLabel(point, angle, color, isTemp = false) {
     const angleText = `${Math.round(angle)}°`;
+    const fs = window._angleFontSize || 12;
     const label = L.marker(point, {
         icon: L.divIcon({
             className: 'angle-label',
-            html: `<div style="background: ${isTemp ? 'rgba(255,255,255,0.85)' : 'white'}; padding: 3px 7px; border-radius: 4px; border: 2px solid ${color}; font-size: 12px; font-weight: bold; color: ${color}; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: inline-block; min-width: fit-content;">${angleText}</div>`,
+            html: `<div style="background: ${isTemp ? 'rgba(255,255,255,0.85)' : 'white'}; padding: 3px 7px; border-radius: 4px; border: 2px solid ${color}; font-size: ${fs}px; font-weight: bold; color: ${color}; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: inline-block; min-width: fit-content;">${angleText}</div>`,
             iconSize: [0, 0],
             iconAnchor: [0, -10]
         }),
         zIndexOffset: 2000,
         pane: 'markerPane'
     }).addTo(map);
-
     return label;
 }
 
@@ -387,6 +415,28 @@ function stopDrawMode() {
     map.getContainer().style.cursor = '';
 }
 
+// Called when toggling between draw ↔ simulate modes
+// Hides or restores the circle markers for all lines
+function _syncMarkersToMode() {
+    allLines.forEach(lineData => {
+        lineData.markers.forEach((marker, idx) => {
+            if (simulateMode) {
+                // Show red dot at every corner/endpoint in simulate mode
+                marker.setStyle({
+                    radius: 5,
+                    opacity: 1,
+                    fillOpacity: 1,
+                    weight: 2,
+                    color: '#fff',
+                    fillColor: '#dc2626'
+                });
+            } else {
+                marker.setStyle({ radius: 6, opacity: 1, fillOpacity: 1, weight: 2, color: '#fff', fillColor: lineData.color });
+            }
+        });
+    });
+}
+
 // Clear fence layer helper
 function _clearFenceLayer() {
     if (typeof fenceLayerGroup !== 'undefined') {
@@ -428,25 +478,24 @@ function startLine(fromPoint = null, existingLine = null) {
 
 // Add marker to a line
 function addMarkerToLine(point, lineData) {
+    const isSimulating = typeof simulateMode !== 'undefined' && simulateMode;
     const marker = L.circleMarker(point, {
-        radius: 6,
+        radius: isSimulating ? 0 : 6,
         fillColor: lineData.color,
-        color: '#fff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 1,
+        color: isSimulating ? 'transparent' : '#fff',
+        weight: isSimulating ? 0 : 2,
+        opacity: isSimulating ? 0 : 1,
+        fillOpacity: isSimulating ? 0 : 1,
         className: 'measure-endpoint'
     }).addTo(map);
 
-    // Only add hover effects, NO click handler here
     marker.on('mouseover', function () {
-        if (measureActive || eraserActive) {
+        if ((measureActive || eraserActive) && !simulateMode) {
             marker.setStyle({ radius: 8 });
         }
     });
-
     marker.on('mouseout', function () {
-        marker.setStyle({ radius: 6 });
+        if (!simulateMode) marker.setStyle({ radius: 6 });
     });
 
     lineData.markers.push(marker);
@@ -612,16 +661,16 @@ if (shouldDrawAngles) {
 
 const distanceText = formatDistance(distance);
         if (shouldDrawMeasurements) {
+            const dfs = window._distFontSize || 11;
             const label = L.marker([midLat, midLng], {
                 icon: L.divIcon({
                     className: 'segment-label',
-                    html: `<div style="background: white; padding: 3px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; color: ${lineData.color}; white-space: nowrap; border: 2px solid ${lineData.color}; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: inline-block; min-width: fit-content;">${distanceText}</div>`,
+                    html: `<div style="background: white; padding: 3px 6px; border-radius: 3px; font-size: ${dfs}px; font-weight: bold; color: ${lineData.color}; white-space: nowrap; border: 2px solid ${lineData.color}; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: inline-block; min-width: fit-content;">${distanceText}</div>`,
                     iconSize: [0, 0],
                     iconAnchor: [0, 5]
                 }),
                 zIndexOffset: 1000
             }).addTo(map);
-
             lineData.segmentLabels.push(label);
         }
     }
@@ -803,33 +852,41 @@ function metersToInches(meters) {
 }
 
 // Calculate point for 90-degree snap.
-// For cowboy fence (2+ points already placed): snaps perpendicular to the LAST segment direction.
-// For Shift-snap with only 1 point: snaps to global horizontal/vertical.
 function getSnapPoint(startPoint, currentPoint, prevPoint) {
     if (prevPoint) {
-        // Snap 90° relative to the previous segment (prevPoint → startPoint)
-        // The new segment must be perpendicular to the last one.
-        // prevSegment direction vector (in lat/lng space):
-        const dx = startPoint[1] - prevPoint[1]; // lng component
-        const dy = startPoint[0] - prevPoint[0]; // lat component
+        // Three allowed directions from the last segment (prevPoint → startPoint):
+        //   0°: straight ahead (same direction as incoming)
+        //  +90°: turn right (perpendicular)
+        //  -90°: turn left (perpendicular)
+        const dx = startPoint[1] - prevPoint[1]; // lng component of incoming segment
+        const dy = startPoint[0] - prevPoint[0]; // lat component of incoming segment
+        const len = Math.sqrt(dx * dx + dy * dy);
 
-        // Perpendicular directions to the previous segment: (−dy, dx) and (dy, −dx)
-        // Project currentPoint onto the perpendicular line through startPoint
-        // Perpendicular unit vector: (-dy, dx) normalized
-        const len = Math.sqrt(dx*dx + dy*dy);
-        if (len < 1e-10) {
-            // Previous segment has zero length, fall back to global snap
-        } else {
-            const px = -dy / len; // perpendicular direction in lng
-            const py =  dx / len; // perpendicular direction in lat
+        if (len > 1e-10) {
+            // Unit vectors for the 3 candidate directions
+            const ux = dx / len, uy = dy / len;         // straight
+            const px = -uy,      py =  ux;               // left perp
+            const qx =  uy,      qy = -ux;               // right perp
 
-            // Project (currentPoint - startPoint) onto the perpendicular direction
             const relLat = currentPoint[0] - startPoint[0];
             const relLng = currentPoint[1] - startPoint[1];
-            const t = relLat * py + relLng * px;
 
-            // Snapped point = startPoint + t * perpendicular
-            return [startPoint[0] + t * py, startPoint[1] + t * px];
+            // Project cursor onto each direction and find the best snap point
+            const candidates = [
+                { vLat: uy, vLng: ux },   // straight
+                { vLat: py, vLng: px },   // left perp
+                { vLat: qy, vLng: qx },   // right perp
+            ].map(({ vLat, vLng }) => {
+                const t = relLat * vLat + relLng * vLng;
+                const snapLat = startPoint[0] + t * vLat;
+                const snapLng = startPoint[1] + t * vLng;
+                const dLat = currentPoint[0] - snapLat;
+                const dLng = currentPoint[1] - snapLng;
+                return { snapLat, snapLng, dist: dLat * dLat + dLng * dLng };
+            });
+
+            candidates.sort((a, b) => a.dist - b.dist);
+            return [candidates[0].snapLat, candidates[0].snapLng];
         }
     }
 

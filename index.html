@@ -5,80 +5,114 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Map with Search</title>
-
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-
-    <!-- Custom Styles -->
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 
 <body>
     <div id="map"></div>
 
-    <!-- Left Sidebar Panel -->
+    <!-- ======== LEFT SIDEBAR ======== -->
     <div class="left-sidebar" id="leftSidebar">
-        <div class="sidebar-content">
+        <!-- Page tab switcher -->
+        <div class="sb-tab-bar">
+            <button class="sb-tab sb-tab-active" id="sbTab1" onclick="switchSbTab(1)">ระบบแผนที่</button>
+            <button class="sb-tab" id="sbTab2" onclick="switchSbTab(2)">ระบบกรอกข้อมูล</button>
+        </div>
 
-            <!-- Section: Fence Type -->
-            <div class="sb-section-label">เลือกประเภทรั้ว</div>
-            <div class="fence-type-grid">
-                <div class="fence-type-card active" data-type="cowboy">
-                    <div class="ftc-icon">
-                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
-                            <rect x="4" y="6" width="6" height="36" rx="2" fill="#c8a46e"/>
-                            <rect x="38" y="6" width="6" height="36" rx="2" fill="#c8a46e"/>
-                            <rect x="4" y="13" width="40" height="5" rx="2" fill="#a0724a"/>
-                            <rect x="4" y="25" width="40" height="5" rx="2" fill="#a0724a"/>
-                        </svg>
-                    </div>
-                    <div class="ftc-label">รั้วคาวบอย</div>
-                </div>
-                <div class="fence-type-card ftc-disabled" data-type="concrete">
-                    <div class="ftc-icon">
-                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" opacity="0.25">
-                            <rect x="4" y="6" width="6" height="36" rx="2" fill="#9ca3af"/>
-                            <rect x="38" y="6" width="6" height="36" rx="2" fill="#9ca3af"/>
-                            <rect x="4" y="11" width="40" height="7" rx="1" fill="#d1d5db"/>
-                            <rect x="4" y="22" width="40" height="7" rx="1" fill="#d1d5db"/>
-                            <rect x="4" y="33" width="40" height="7" rx="1" fill="#d1d5db"/>
-                        </svg>
-                    </div>
-                    <div class="ftc-label">รั้วคอนกรีต<br>สำเร็จรูป</div>
-                </div>
-                <div class="fence-type-card ftc-disabled" data-type="rod">
-                    <div class="ftc-icon">
-                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" opacity="0.25">
-                            <rect x="4" y="6" width="4" height="36" rx="2" fill="#6b7280"/>
-                            <rect x="40" y="6" width="4" height="36" rx="2" fill="#6b7280"/>
-                            <rect x="15" y="6" width="3" height="36" rx="1.5" fill="#6b7280"/>
-                            <rect x="26" y="6" width="3" height="36" rx="1.5" fill="#6b7280"/>
-                            <rect x="4" y="8" width="40" height="3" rx="1" fill="#374151"/>
-                            <rect x="4" y="37" width="40" height="3" rx="1" fill="#374151"/>
-                        </svg>
-                    </div>
-                    <div class="ftc-label">รั้วลวดหนาม</div>
-                </div>
-                <div class="fence-type-card" data-type="brick">
-                    <div class="ftc-icon">
-                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
-                            <rect x="4" y="6" width="40" height="36" rx="2" fill="#d97706"/>
-                            <rect x="4" y="14" width="40" height="2" fill="#92400e" opacity="0.4"/>
-                            <rect x="4" y="22" width="40" height="2" fill="#92400e" opacity="0.4"/>
-                            <rect x="4" y="30" width="40" height="2" fill="#92400e" opacity="0.4"/>
-                            <rect x="18" y="6" width="2" height="8" fill="#92400e" opacity="0.3"/>
-                            <rect x="28" y="16" width="2" height="8" fill="#92400e" opacity="0.3"/>
-                            <rect x="18" y="24" width="2" height="8" fill="#92400e" opacity="0.3"/>
-                        </svg>
-                    </div>
-                    <div class="ftc-label">รั้วอิฐ</div>
-                </div>
+        <!-- ── PAGE 1: Fence chooser + options ── -->
+        <!-- ── PAGE 1: Fence chooser + options ── -->
+        <div class="sidebar-content" id="sbPage1">
+
+            <!-- Draw ↔ Simulate mode switch — now lives in Page 1 -->
+            <div class="sb-mode-switch" id="sbModeSwitch" style="margin-bottom:10px;">
+                <button class="sbms-btn sbms-active" id="sbmsDrawBtn" onclick="setAppMode('draw')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                    </svg>
+                    วาดรั้ว
+                </button>
+                <button class="sbms-btn" id="sbmsSimBtn" onclick="setAppMode('simulate')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    จำลองรั้ว
+                </button>
             </div>
+            <!-- Fence type area with yellow background -->
+            <div class="sb-fence-type-area">
+                <div class="sb-section-label" style="margin-bottom:8px;">เลือกประเภทรั้ว</div>
+                <div class="sb-fence-cards" id="sbFenceCards">
+                    <!-- COWBOY -->
+                    <div class="sb-fence-card active" data-type="cowboy" id="sbcard-cowboy">
+                        <div class="sfc-icon">
+                            <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+                                <rect x="4" y="6" width="5" height="36" rx="2" fill="#92400e" />
+                                <rect x="39" y="6" width="5" height="36" rx="2" fill="#92400e" />
+                                <rect x="4" y="14" width="40" height="5" rx="1.5" fill="#d97706" />
+                                <rect x="4" y="26" width="40" height="5" rx="1.5" fill="#d97706" />
+                            </svg>
+                        </div>
+                        <div class="sfc-label">รั้วคาวบอย</div>
+                    </div>
+                    <!-- CONCRETE (disabled) -->
+                    <div class="sb-fence-card sfc-disabled" data-type="concrete">
+                        <div class="sfc-icon" style="opacity:0.4;">
+                            <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+                                <rect x="4" y="6" width="6" height="36" rx="2" fill="#9ca3af" />
+                                <rect x="38" y="6" width="6" height="36" rx="2" fill="#9ca3af" />
+                                <rect x="4" y="11" width="40" height="7" rx="1" fill="#d1d5db" />
+                                <rect x="4" y="22" width="40" height="7" rx="1" fill="#d1d5db" />
+                                <rect x="4" y="33" width="40" height="7" rx="1" fill="#d1d5db" />
+                            </svg>
+                        </div>
+                        <div class="sfc-label">รั้วคอนกรีต<br>สำเร็จรูป</div>
+                    </div>
+                    <!-- BARBED WIRE (disabled) -->
+                    <!-- BARBED WIRE -->
+                    <div class="sb-fence-card" data-type="barbed" id="sbcard-barbed">
+                        <div class="sfc-icon">
+                            <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+                                <rect x="4" y="6" width="4" height="36" rx="2" fill="#6b7280" />
+                                <rect x="40" y="6" width="4" height="36" rx="2" fill="#6b7280" />
+                                <rect x="15" y="6" width="3" height="36" rx="1.5" fill="#6b7280" />
+                                <rect x="26" y="6" width="3" height="36" rx="1.5" fill="#6b7280" />
+                                <rect x="4" y="8" width="40" height="3" rx="1" fill="#374151" />
+                                <rect x="4" y="37" width="40" height="3" rx="1" fill="#374151" />
+                            </svg>
+                        </div>
+                        <div class="sfc-label">รั้วลวดหนาม</div>
+                    </div>
+                    <!-- BRICK -->
+                    <div class="sb-fence-card" data-type="brick" id="sbcard-brick">
+                        <div class="sfc-icon">
+                            <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+                                <rect x="3" y="5" width="42" height="38" rx="3" fill="#e8aa60" />
+                                <rect x="4" y="6" width="19" height="9" rx="1.5" fill="#d97706" opacity="0.78" />
+                                <rect x="25" y="6" width="20" height="9" rx="1.5" fill="#d97706" opacity="0.78" />
+                                <rect x="4" y="17" width="11" height="9" rx="1.5" fill="#d97706" opacity="0.78" />
+                                <rect x="17" y="17" width="14" height="9" rx="1.5" fill="#d97706" opacity="0.78" />
+                                <rect x="33" y="17" width="12" height="9" rx="1.5" fill="#d97706" opacity="0.78" />
+                                <rect x="4" y="28" width="19" height="9" rx="1.5" fill="#d97706" opacity="0.78" />
+                                <rect x="25" y="28" width="20" height="9" rx="1.5" fill="#d97706" opacity="0.78" />
+                            </svg>
+                        </div>
+                        <div class="sfc-label">รั้วอิฐ</div>
+                    </div>
+                </div>
+            </div><!-- /.sb-fence-type-area -->
 
-            <!-- Section: Beam / Column (cowboy only) -->
-            <div id="beamSection">
+            <div class="sb-divider"></div>
+
+            <!-- ── COWBOY OPTIONS ── -->
+            <div id="p1CowboyOpts">
                 <div class="sb-section-label">เลือกเสา - คาน</div>
-                <div class="sb-select-wrap">
+                <div class="sb-select-wrap" style="position:relative;">
                     <select class="sb-select" id="beamSelect">
                         <option value="2">2 ชั้น</option>
                         <option value="3">3 ชั้น</option>
@@ -86,44 +120,109 @@
                     </select>
                     <div class="sb-select-icon">▼</div>
                 </div>
-                <div class="beam-spec-box" id="beamSpecBox">
-                    <div class="beam-spec-row active" data-beam="2">
-                        <span class="bsr-title">2 ชั้น</span>
-                        <span class="bsr-dim">0.15 × 0.15 × 1.50 ม.</span>
-                        <span class="bsr-tag">งเสา</span>
+                <!-- Beam spec display — updates based on selection -->
+                <div class="sb-beam-spec" id="sbBeamSpec">
+                    <div class="sbbs-row" id="sbbs2">
+                        <span class="sbbs-floor">2 ชั้น</span>
+                        <span class="sbbs-dim">0.15 × 0.15 × 1.50 ม.</span>
                     </div>
-                    <div class="beam-spec-row" data-beam="2b">
-                        <span class="bsr-dim indent">0.15 × 0.15 × 1.50 ม.</span>
+                    <div class="sbbs-row" id="sbbs3" style="display:none;">
+                        <span class="sbbs-floor">3 ชั้น</span>
+                        <span class="sbbs-dim">0.15 × 0.15 × 2.00 ม.</span>
                     </div>
-                    <div class="beam-spec-row" data-beam="3">
-                        <span class="bsr-title">3 ชั้น</span>
-                        <span class="bsr-dim">0.15 × 0.15 × 2.00 ม.</span>
-                    </div>
-                    <div class="beam-spec-row" data-beam="4">
-                        <span class="bsr-title">4 ชั้น</span>
-                        <span class="bsr-dim">0.15 × 0.15 × 2.50 ม.</span>
+                    <div class="sbbs-row" id="sbbs4" style="display:none;">
+                        <span class="sbbs-floor">4 ชั้น</span>
+                        <span class="sbbs-dim">0.15 × 0.15 × 2.50 ม.</span>
                     </div>
                 </div>
-            </div>
 
-            <!-- Section: Double corner post toggle (cowboy only) -->
-            <div id="doubleCornerSection">
-                <div class="sb-section-label">เสามุมคู่ <span style="font-size:11px;color:#6b7280;">(cowboy)</span></div>
-                <div class="sb-input-row" style="gap:10px;align-items:center;margin-bottom:4px;">
+                <div class="sb-section-label" style="margin-top:12px;">ขนาดเสา (นิ้ว)</div>
+                <div class="sb-input-row" style="margin-bottom:6px;">
+                    <input type="number" class="sb-number-input" id="postSizeWidth" value="6" min="1" max="24"
+                        step="0.5" style="width:100%;" placeholder="ขนาดด้านละ (นิ้ว)">
+                    <span class="sb-input-unit">นิ้ว</span>
+                </div>
+                <input type="hidden" id="postSizeLength" value="6">
+
+                <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
+                <div class="sb-spacing-pills" id="spacingPills">
+                    <button class="sp-pill" data-val="2.0" onclick="setSpacing(2.0)">2.0</button>
+                    <button class="sp-pill sp-active" data-val="2.5" onclick="setSpacing(2.5)">2.5</button>
+                    <button class="sp-pill" data-val="custom" onclick="setSpacing('custom')">กำหนดเอง</button>
+                </div>
+                <input type="number" class="sb-number-input" id="postSpacing" value="2.5" min="1" max="3" step="0.1"
+                    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+
+                <div style="margin-top:12px;">
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                        <input type="checkbox" id="doubleCornerPost" style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;">
+                        <input type="checkbox" id="doubleCornerPost"
+                            style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;">
                         <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
                     </label>
                 </div>
             </div>
 
-            <!-- Divider -->
+            <!-- ── BARBED WIRE OPTIONS (separate div) ── -->
+            <div id="p1BarbedOpts" style="display:none;">
+                <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (นิ้ว)</div>
+                <div class="sb-input-row" style="margin-bottom:6px;">
+                    <input type="number" class="sb-number-input" id="postSizeWidthBarbed" value="4" min="1" max="12"
+                        step="0.5" style="width:100%;" placeholder="ขนาดด้านละ (นิ้ว)">
+                    <span class="sb-input-unit">นิ้ว</span>
+                </div>
+
+                <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
+                <div class="sb-spacing-pills" id="spacingPillsBarbed">
+                    <button class="sp-pill" data-val="2.0" onclick="setSpacingBarbed(2.0)">2.0</button>
+                    <button class="sp-pill sp-active" data-val="2.5" onclick="setSpacingBarbed(2.5)">2.5</button>
+                    <button class="sp-pill" data-val="3.0" onclick="setSpacingBarbed(3.0)">3.0</button>
+                    <button class="sp-pill" data-val="custom" onclick="setSpacingBarbed('custom')">กำหนดเอง</button>
+                </div>
+                <input type="number" class="sb-number-input" id="postSpacingBarbed" value="2.5" min="1" max="3"
+                    step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+
+                <div class="sb-section-label" style="margin-top:10px;">ตัวเลือก N-Brace</div>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="nBraceSolo" style="width:16px;height:16px;accent-color:#dc2626;">
+                    <span style="font-size:12px;color:#374151;">N-Brace เดี่ยว (เสาค้ำหัว-ท้าย)</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="nBraceDual" style="width:16px;height:16px;accent-color:#1d4ed8;">
+                    <span style="font-size:12px;color:#374151;">N-Brace คู่ (ทุก 50 ม.)</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                    <input type="checkbox" id="nBraceAngle" style="width:16px;height:16px;accent-color:#7c3aed;">
+                    <span style="font-size:12px;color:#374151;">N-Brace มุม (เสาคู่ที่มุม)</span>
+                </label>
+            </div>
+
+            <!-- ── BRICK OPTIONS ── -->
+            <div id="p1BrickOpts" style="display:none;">
+                <div class="sb-section-label">ขนาดเสา (นิ้ว)</div>
+                <div class="sb-input-row" style="margin-bottom:6px;">
+                    <input type="number" class="sb-number-input" id="postSizeWidthBrick" value="6" min="1" max="24"
+                        step="0.5" style="width:100%;" placeholder="ขนาดด้านละ (นิ้ว)">
+                    <span class="sb-input-unit">นิ้ว</span>
+                </div>
+
+                <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
+                <div class="sb-spacing-pills" id="spacingPillsBrick">
+                    <button class="sp-pill" data-val="2.0" onclick="setSpacingBrick(2.0)">2.0</button>
+                    <button class="sp-pill sp-active" data-val="2.5" onclick="setSpacingBrick(2.5)">2.5</button>
+                    <button class="sp-pill" data-val="3.0" onclick="setSpacingBrick(3.0)">3.0</button>
+                    <button class="sp-pill" data-val="custom" onclick="setSpacingBrick('custom')">กำหนดเอง</button>
+                </div>
+                <input type="number" class="sb-number-input" id="postSpacingBrick" value="2.5" min="1" max="3"
+                    step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+            </div>
+
             <div class="sb-divider"></div>
 
-            <!-- Warnings -->
+            <!-- Calculate button + results -->
+            <button class="sb-calc-btn-sm" id="calcBtn" onclick="doCalc()">คำนวณวัสดุ</button>
+
             <div class="fw-box" id="fenceWarnings" style="display:none"></div>
 
-            <!-- Section: Results -->
             <div class="sb-result-stack" id="sbResults">
                 <div class="sbr-row-item">
                     <div class="sbr-label">ความยาวทั้งหมด</div>
@@ -136,23 +235,66 @@
                     <div class="sbr-label">จำนวนเสาที่ต้องใช้</div>
                     <div class="sbr-field-row">
                         <input type="text" class="sbr-input" id="resPosts" readonly placeholder="—">
+                        <span class="sbr-unit">ต้น</span>
                     </div>
                 </div>
                 <div class="sbr-row-item">
                     <div class="sbr-label">จำนวนคานที่ต้องใช้</div>
                     <div class="sbr-field-row">
                         <input type="text" class="sbr-input" id="resBeams" readonly placeholder="—">
+                        <span class="sbr-unit">อัน</span>
                     </div>
                 </div>
+                <div class="sbr-row-item">
+                    <div class="sbr-label">ราคาโดยประมาณ</div>
+                    <div class="sbr-field-row">
+                        <input type="text" class="sbr-input" id="resPriceDisplay" readonly placeholder="—">
+                        <span class="sbr-unit">บาท</span>
+                    </div>
+                </div>
+                <!-- Add after your result/price inputs -->
+                <!-- Add right after your last result/price input -->
+                <button id="btnTogglePlanMode" class="sb-calc-btn-sm"
+                    style="margin-top:12px; background:#1f2937; display:block; width:100%;">วาดแผน</button>
+
+
+</div>
+
+        </div><!-- /#sbPage1 -->
+
+        <!-- Plan Mode Panel — lives outside sbPage1 so CSS can show it independently -->
+        <div id="planModePanel" style="display:none; padding:14px 16px 20px;">
+            <div style="font-family:'Courier New',monospace;font-size:14px;font-weight:bold;color:#1f2937;border-bottom:2px solid #1f2937;padding-bottom:8px;margin-bottom:14px;">PLAN VIEW</div>
+            <div class="form-section">
+                <label class="form-label">หน่วยมาตราส่วน</label>
+                <select id="planUnitSelect" class="form-select">
+                    <option value="cm_km" selected>1 cm = ? km</option>
+                    <option value="m_m">1 cm = ? m</option>
+                    <option value="mm_cm">1 cm = ? cm</option>
+                </select>
             </div>
+            <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">รายการเส้น</div>
+            <div id="planLineList" style="max-height:260px;overflow-y:auto;"></div>
+            <button onclick="togglePlanMode()" style="margin-top:16px;width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">✕ ออกจากโหมดแผน</button>
+        </div>
 
-            <button class="sb-calc-btn" id="drawFenceBtn">คำนวนวัสดุ</button>
-            <button class="sb-submit-btn sb-submit-disabled" id="clearFenceBtn" disabled>สร้างแผน</button>
-
+        <!-- ── PAGE 2: Draw mode / data entry (old sidebar content) ── -->
+        <!-- ── PAGE 2: DISABLED for now ── -->
+        <div class="sidebar-content" id="sbPage2" style="display:none;">
+            <div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px;">man</div>
+        </div>
+        <div class="sb-fence-hint" style="margin-top:12px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                style="flex-shrink:0;margin-top:1px;">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>เลือกประเภทรั้วและตั้งค่าจากหน้า "เลือกรั้ว" ก่อนวาด</span>
         </div>
     </div>
 
-    <!-- Search Bar -->
+    <!-- ======== SEARCH BAR ======== -->
     <div class="search-container" id="searchContainer">
         <div class="search-box">
             <input type="text" class="search-input" id="searchInput" placeholder="ค้นหาสถานที่">
@@ -166,10 +308,8 @@
         <div class="search-results" id="searchResults"></div>
     </div>
 
-    <!-- Top Right Controls -->
+    <!-- ======== TOP RIGHT CONTROLS ======== -->
     <div class="top-right-controls">
-        <!-- Toggle Labels Button -->
-<!-- Toggle Labels Button with Dropdown -->
         <div class="custom-label-control">
             <button class="control-btn small-btn" id="toggleLabelsBtn" title="Toggle Labels">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -178,24 +318,41 @@
                 </svg>
             </button>
             <div class="label-dropdown" id="labelDropdown">
-                <div class="label-toggle-option active" id="toggleAngles">
+                <div class="label-toggle-option active" id="toggleAngles" title="Toggle angle labels">
                     <div class="label-toggle-icon">θ</div>
                 </div>
-                <div class="label-toggle-option active" id="toggleMeasurements">
+                <div class="label-toggle-option active" id="toggleMeasurements" title="Toggle distance labels">
                     <div class="label-toggle-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <line x1="4" y1="20" x2="20" y2="4" />
                             <line x1="4" y1="20" x2="4" y2="4" />
                             <line x1="4" y1="4" x2="20" y2="4" />
                         </svg>
                     </div>
                 </div>
+                <div class="label-toggle-option active" id="toggleSummary" title="Toggle summary panel">
+                    <div class="label-toggle-icon">☰</div>
+                </div>
+                <div class="label-slider-row" id="angleSizeRow">
+                    <span class="label-slider-label">θ size</span>
+                    <input type="range" id="angleFontSlider" min="8" max="24" value="12" step="1" class="label-slider">
+                    <span class="label-slider-val" id="angleFontVal">12</span>
+                </div>
+                <div class="label-slider-row" id="distSizeRow">
+                    <span class="label-slider-label">m size</span>
+                    <input type="range" id="distFontSlider" min="8" max="24" value="11" step="1" class="label-slider">
+                    <span class="label-slider-val" id="distFontVal">11</span>
+                </div>
+                <div class="label-slider-row" id="poleSizeRow">
+                    <span class="label-slider-label">pole</span>
+                    <input type="range" id="poleScaleSlider" min="0.3" max="3.0" value="1.0" step="0.1"
+                        class="label-slider">
+                    <span class="label-slider-val" id="poleScaleVal">1.0</span>
+                </div>
             </div>
         </div>
 
-        <!-- Layer Control Button -->
-
-        <!-- Layer Control Button -->
         <div class="custom-layer-control">
             <div class="layer-toggle-btn" id="layerToggle">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -229,6 +386,7 @@
         </div>
     </div>
 
+    <!-- ======== MEASURE TOOL (bottom-right) ======== -->
     <div class="measure-tool">
         <div class="measure-buttons">
             <button class="measure-btn" id="measureBtn" title="Measure Distance">
@@ -253,48 +411,220 @@
             </button>
         </div>
         <div class="measure-info" id="measureInfo">
-    <div class="line-summary-stack" id="lineSummaryStack">
+            <div class="line-summary-stack" id="lineSummaryStack"></div>
+        </div>
     </div>
-</div>
-    </div>
 
 
 
-
-    <!-- Leaflet JavaScript -->
+    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-
-    <!-- Custom Scripts -->
     <script src="map.js"></script>
     <script src="measure.js"></script>
     <script src="fence.js"></script>
+    <script src="plan_mode.js"></script> i
 
-    <!-- Hidden inputs for fence.js defaults (fields removed from UI) -->
-    <input type="hidden" id="postSizeInches" value="6">
-    <input type="hidden" id="postSpacing" value="2.5">
+    <!-- Hidden inputs -->
     <input type="hidden" id="resPrice">
 
     <script>
-    // Fence type card selection — show/hide sections based on type
-    function applyFenceTypeUI(type) {
-        const dcSection    = document.getElementById('doubleCornerSection');
-        const beamSection  = document.getElementById('beamSection');
-        const isBrick = (type === 'brick');
-        dcSection.style.display   = isBrick ? 'none' : '';
-        beamSection.style.display = isBrick ? 'none' : '';
-    }
+        // ── Tab switcher ──
+        function switchSbTab(n) {
+            document.getElementById('sbPage1').style.display = n === 1 ? '' : 'none';
+            document.getElementById('sbPage2').style.display = n === 2 ? '' : 'none';
+            document.getElementById('sbTab1').classList.toggle('sb-tab-active', n === 1);
+            document.getElementById('sbTab2').classList.toggle('sb-tab-active', n === 2);
+        }
 
-    document.querySelectorAll('.fence-type-card:not(.ftc-disabled)').forEach(card => {
-        card.addEventListener('click', function() {
-            document.querySelectorAll('.fence-type-card').forEach(c => c.classList.remove('active'));
-            this.classList.add('active');
-            applyFenceTypeUI(this.getAttribute('data-type'));
+        // ── Spacing pills ──
+        function setSpacing(val) {
+            const input = document.getElementById('postSpacing');
+            document.querySelectorAll('.sp-pill').forEach(p => p.classList.remove('sp-active'));
+            if (val === 'custom') {
+                input.style.display = '';
+                input.focus();
+                document.querySelector('.sp-pill[data-val="custom"]').classList.add('sp-active');
+            } else {
+                input.value = val;
+                input.style.display = 'none';
+                document.querySelector(`.sp-pill[data-val="${val}"]`).classList.add('sp-active');
+            }
+        }
+
+        // Keep postSizeLength in sync with postSizeWidth (square post)
+        // Keep postSizeLength in sync with postSizeWidth (square post)
+        document.getElementById('postSizeWidth').addEventListener('input', function () {
+            document.getElementById('postSizeLength').value = this.value;
         });
-    });
 
-    // Apply on load based on default active card
-    const defaultCard = document.querySelector('.fence-type-card.active');
-    if (defaultCard) applyFenceTypeUI(defaultCard.getAttribute('data-type'));
+        // Beam select → show matching spec row
+        document.getElementById('beamSelect').addEventListener('change', function () {
+            ['sbbs2', 'sbbs3', 'sbbs4'].forEach(id => document.getElementById(id).style.display = 'none');
+            var el = document.getElementById('sbbs' + this.value);
+            if (el) el.style.display = '';
+        });
+
+        // ── Sidebar fence card selection ──
+        var currentSbFenceType = 'cowboy';
+
+        document.querySelectorAll('.sb-fence-card:not(.sfc-disabled)').forEach(function (card) {
+            card.addEventListener('click', function (e) {
+                console.log('Card clicked:', this.getAttribute('data-type')); // Debug log
+
+                document.querySelectorAll('.sb-fence-card').forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                currentSbFenceType = this.getAttribute('data-type');
+                applySbFenceType(currentSbFenceType);
+
+                // Also update selectedFenceType for measure.js
+                if (typeof selectedFenceType !== 'undefined') {
+                    selectedFenceType = currentSbFenceType;
+                    console.log('selectedFenceType set to:', selectedFenceType);
+                }
+
+                // If in draw mode, this will use the new fence type for new lines
+                if (typeof measureActive !== 'undefined' && measureActive && currentLine) {
+                    currentLine.fenceType = currentSbFenceType;
+                }
+
+                // Auto-start draw mode if not active
+                if (typeof measureActive !== 'undefined' && !measureActive) {
+                    const measureBtn = document.getElementById('measureBtn');
+                    if (measureBtn) measureBtn.click();
+                }
+            });
+        });
+
+        function applySbFenceType(type) {
+            console.log('applySbFenceType called with type:', type); // Debug log
+
+            // Hide all option divs first
+            const cowboyDiv = document.getElementById('p1CowboyOpts');
+            const brickDiv = document.getElementById('p1BrickOpts');
+            const barbedDiv = document.getElementById('p1BarbedOpts');
+
+            if (cowboyDiv) cowboyDiv.style.display = 'none';
+            if (brickDiv) brickDiv.style.display = 'none';
+            if (barbedDiv) barbedDiv.style.display = 'none';
+
+            // Show the selected one
+            if (type === 'cowboy' && cowboyDiv) {
+                cowboyDiv.style.display = 'block';
+            } else if (type === 'brick' && brickDiv) {
+                brickDiv.style.display = 'block';
+            } else if (type === 'barbed' && barbedDiv) {
+                barbedDiv.style.display = 'block';
+            }
+        }
+
+        // ── Calc button: trigger simulate mode which runs runFenceCalc ──
+        function doCalc() {
+            if (typeof setAppMode === 'function') setAppMode('simulate');
+            // Immediately recalc with current inputs
+            if (typeof runFenceCalc === 'function') runFenceCalc();
+            // Show price
+            var price = parseFloat(document.getElementById('resTotal').value) * 850;
+            if (!isNaN(price)) {
+                document.getElementById('resPrice').value = price.toLocaleString('th-TH', { maximumFractionDigits: 0 });
+                document.getElementById('resPriceDisplay').value = price.toLocaleString('th-TH', { maximumFractionDigits: 0 });
+            }
+        }
+
+        // ── Show/hide sidebar sections (called by dock cards too) ──
+        function applyFenceTypeUI(type) {
+            // In new layout the sidebar sections are inside page1, so this is a no-op
+            // kept for compatibility with dock card script
+        }
+
+        // ── Dock card click handler (kept for backward compat / draw triggering) ──
+        document.querySelectorAll('.fence-dock-card:not(.ftc-disabled)').forEach(function (card) {
+            card.addEventListener('click', function () {
+                var wasActive = this.classList.contains('active');
+                document.querySelectorAll('.fence-dock-card').forEach(c => c.classList.remove('active'));
+                if (!wasActive) {
+                    this.classList.add('active');
+                    if (typeof selectedFenceType !== 'undefined') selectedFenceType = this.getAttribute('data-type');
+                    if (typeof measureActive !== 'undefined' && !measureActive) document.getElementById('measureBtn').click();
+                } else {
+                    if (typeof selectedFenceType !== 'undefined') selectedFenceType = null;
+                    if (typeof measureActive !== 'undefined' && measureActive) document.getElementById('measureBtn').click();
+                }
+            });
+        });
+
+        // Init
+        (function () {
+            applySbFenceType('cowboy');
+            window.addEventListener('load', function () {
+                if (typeof selectedFenceType !== 'undefined') selectedFenceType = 'cowboy';
+                // Sync dock card
+                var dockCard = document.getElementById('fdcard-cowboy');
+                if (dockCard) dockCard.classList.add('active');
+            });
+        })();
+
+        var simulateMode = false;
+
+        function setAppMode(mode) {
+            simulateMode = (mode === 'simulate');
+            document.getElementById('sbmsDrawBtn').classList.toggle('sbms-active', !simulateMode);
+            document.getElementById('sbmsSimBtn').classList.toggle('sbms-active', simulateMode);
+            if (simulateMode) {
+                if (typeof stopDrawMode === 'function') stopDrawMode();
+                measureActive = false;
+                map.getContainer().style.cursor = 'default';
+                map.dragging.enable();
+                if (typeof _syncMarkersToMode === 'function') _syncMarkersToMode();
+                _hideDrawLines();
+                if (typeof runFenceCalc === 'function') runFenceCalc();
+            } else {
+                if (typeof fenceLayerGroup !== 'undefined') fenceLayerGroup.clearLayers();
+                if (typeof swappedCorners !== 'undefined') swappedCorners.clear();
+                _showDrawLines();
+                if (typeof _syncMarkersToMode === 'function') _syncMarkersToMode();
+                map.getContainer().style.cursor = '';
+                if (typeof selectedFenceType !== 'undefined' && selectedFenceType) {
+                    if (typeof measureActive !== 'undefined' && !measureActive) document.getElementById('measureBtn').click();
+                }
+            }
+        }
+
+        function _hideDrawLines() {
+            if (typeof allLines === 'undefined') return;
+            allLines.forEach(ld => { if (ld.polyline && map.hasLayer(ld.polyline)) map.removeLayer(ld.polyline); });
+        }
+        function _showDrawLines() {
+            if (typeof allLines === 'undefined') return;
+            allLines.forEach(ld => { if (ld.polyline && !map.hasLayer(ld.polyline)) ld.polyline.addTo(map); });
+        }
+
+        function setSpacingBarbed(val) {
+            const input = document.getElementById('postSpacingBarbed');
+            document.querySelectorAll('#spacingPillsBarbed .sp-pill').forEach(p => p.classList.remove('sp-active'));
+            if (val === 'custom') {
+                input.style.display = '';
+                input.focus();
+                document.querySelector('#spacingPillsBarbed .sp-pill[data-val="custom"]').classList.add('sp-active');
+            } else {
+                input.value = val;
+                input.style.display = 'none';
+                document.querySelector(`#spacingPillsBarbed .sp-pill[data-val="${val}"]`).classList.add('sp-active');
+            }
+        }
+
+        function setSpacingBrick(val) {
+            const input = document.getElementById('postSpacingBrick');
+            document.querySelectorAll('#spacingPillsBrick .sp-pill').forEach(p => p.classList.remove('sp-active'));
+            if (val === 'custom') {
+                input.style.display = '';
+                input.focus();
+                document.querySelector('#spacingPillsBrick .sp-pill[data-val="custom"]').classList.add('sp-active');
+            } else {
+                input.value = val;
+                input.style.display = 'none';
+                document.querySelector(`#spacingPillsBrick .sp-pill[data-val="${val}"]`).classList.add('sp-active');
+            }
+        }
     </script>
 </body>
 

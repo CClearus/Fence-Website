@@ -2,8 +2,9 @@
 const map = L.map('map', { zoomControl: false }).setView([13.7563, 100.5018], 13);
 
 // Define different map layers
-const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
+// NEW - use CartoDB as fallback (no referer restriction)
+const osmLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap contributors © CartoDB',
     maxZoom: 19,
     minZoom: 3
 });

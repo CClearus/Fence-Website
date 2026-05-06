@@ -227,7 +227,7 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     }
 
     const [armRed, armBlue] = getCornerArms(entry);
-    const halfSz = DOUBLE_CORNER_HALF;
+const halfSz = DOUBLE_CORNER_HALF * (window._poleScale || 1.0);
 
     function drawColorSquare(latlng, b, color) {
         const rect = [
@@ -273,7 +273,8 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
 // ============================================
 // DRAW FENCE
 // ============================================
-function drawFence(linePoints, m, n, splitAtStart, doubleCorner) {
+function drawFence(linePoints, m, n, splitAtStart, doubleCorner, lineColor) {
+    lineColor = lineColor || '#3b82f6';
     const numSegs = linePoints.length - 1;
     const closed = numSegs >= 3 && hav(linePoints[0], linePoints[linePoints.length-1]) < 0.5;
 
@@ -343,8 +344,8 @@ function drawFence(linePoints, m, n, splitAtStart, doubleCorner) {
         }
 
         // Calculate panel layout — blue box is the first pillar so panels start fresh from it
-        // Full m-spaced panels from leftOff, remainder adjusted at the far end
-        const calc = calcPanels(panelSpace, m);
+// Calculate panel layout — pole width n is factored into spacing
+        const calc = calcPanels(panelSpace, m, n);
 
         grandTotal += A_i;
 
@@ -374,18 +375,17 @@ function drawFence(linePoints, m, n, splitAtStart, doubleCorner) {
             const pts = [];
             const steps = Math.max(2, Math.ceil(leftOff * 3));
             for (let s = 0; s <= steps; s++) pts.push(interp(linePoints, segStart + leftOff * s / steps));
-            L.polyline(pts, { color: COL_NORMAL, weight: 5, opacity: 0.75, lineJoin: 'round' }).addTo(fenceLayerGroup);
+L.polyline(pts, { color: lineColor, weight: 5, opacity: 0.75, lineJoin: 'round' }).addTo(fenceLayerGroup);
         }
 
         // Draw panels
         for (let i = 0; i < allBounds.length - 1; i++) {
             const d0 = allBounds[i], d1 = allBounds[i + 1];
             if (d1 - d0 < 1e-4) continue;
-            const color = splitPanelFlags[i] ? COL_SPLIT : COL_NORMAL;
             const steps = Math.max(2, Math.ceil((d1 - d0) * 3));
             const pts = [];
             for (let s = 0; s <= steps; s++) pts.push(interp(linePoints, d0 + (d1 - d0) * s / steps));
-            L.polyline(pts, { color, weight: 5, opacity: 0.75, lineJoin: 'round' }).addTo(fenceLayerGroup);
+            L.polyline(pts, { color: lineColor, weight: 5, opacity: 0.75, lineJoin: 'round' }).addTo(fenceLayerGroup);
         }
 
         // Draw post-panel gap (corner area after last pillar)
@@ -393,7 +393,7 @@ function drawFence(linePoints, m, n, splitAtStart, doubleCorner) {
             const pts = [];
             const steps = Math.max(2, Math.ceil(rightOff * 3));
             for (let s = 0; s <= steps; s++) pts.push(interp(linePoints, panelEnd + rightOff * s / steps));
-            L.polyline(pts, { color: COL_NORMAL, weight: 5, opacity: 0.75, lineJoin: 'round' }).addTo(fenceLayerGroup);
+            L.polyline(pts, { color: lineColor, weight: 5, opacity: 0.75, lineJoin: 'round' }).addTo(fenceLayerGroup);
         }
 
         // Draw interior posts
@@ -433,47 +433,80 @@ function drawFence(linePoints, m, n, splitAtStart, doubleCorner) {
 // Calculate panel layout for a given usable space.
 // Returns ticks (interior post positions), standardCount, splitCount.
 // Panels: full-m ones first, then adjusted ones at end if remainder exists.
-function calcPanels(space, m) {
+function calcPanels(space, m, n) {
+    // m = desired CLEAR GAP between pole faces (user input "ระยะห่าง")
+    // n = pole length along fence axis (meters)
+    // space = total usable distance between the two endpoint/corner pole faces
+    //
+    // Layout: [gap] [pole] [gap] [pole] ... [gap]
+    // With k interior poles:
+    //   total = (k+1)*gap_avg + k*n  = space
+    //   (k+1)*gap_avg = space - k*n
+    //   gap_avg = (space - k*n) / (k+1)
+    //
+    // We want gap_avg to be as close to m as possible and always >= 1 and <= 3.
+    // Find best k: k = floor((space - m) / (m + n))
+    // Then adjust split panels so the remainder distributes evenly.
+
+    n = n || 0;
     if (space < 1e-4) return { ticks: [], standardCount: 0, splitCount: 0 };
 
-    const full  = Math.floor(space / m + 1e-9); // small epsilon to avoid floor(4.0000001) = 4 issues
-    const r_raw = space - full * m;
+    // Minimum and maximum allowed gap
+    const GAP_MIN = 1.0;
+    const GAP_MAX = 3.0;
 
-    // Use a tighter tolerance: remainder < 1mm or > (m - 1mm) means treat as exact multiple
-    const TOL = 0.001; // 1mm
-    let splitCount, splitSize, standardCount;
+    // How many interior poles fit at desired gap m?
+    // (k+1)*m + k*n = space  =>  k*(m+n) = space - m  =>  k = (space-m)/(m+n)
+    let k = Math.max(0, Math.floor((space - m) / (m + n) + 1e-9));
 
-    if (r_raw < TOL || r_raw > m - TOL) {
-        // Treat as exact multiple — no split needed
-        // If r_raw > m-TOL, that extra sliver rounds into an extra full panel
-        const roundedFull = r_raw > m - TOL ? full + 1 : full;
-        standardCount = roundedFull;
-        splitCount    = 0;
-        splitSize     = 0;
-    } else {
-        let a = 1;
-        for (a = 1; a <= 3; a++) {
-            const k = (r_raw + m * (a - 1)) / a;
-            if (k >= m / 2 - 1e-6) break;
-        }
-        if (a > full + 1) a = full + 1;
-        splitCount    = a;
-        splitSize     = (r_raw + m * (a - 1)) / a;
-        standardCount = (full + 1) - a;
+    // With k interior poles, actual gap = (space - k*n) / (k+1)
+    let gap = (space - k * n) / (k + 1);
+
+    // If gap is too large (> GAP_MAX), add more poles
+    while (gap > GAP_MAX + 1e-6 && k < 1000) {
+        k++;
+        gap = (space - k * n) / (k + 1);
     }
+
+    // If gap is too small (< GAP_MIN), remove poles
+    while (gap < GAP_MIN - 1e-6 && k > 0) {
+        k--;
+        gap = (space - k * n) / (k + 1);
+    }
+
+    // Now we have k interior poles with uniform gap.
+    // Apply the split logic: if gap is not exactly m, distribute evenly.
+    // Standard panels = full-m gaps, split panels = shorter/longer adjusted gaps.
+    // Since we derived gap directly, all panels are the same size (gap).
+    // We use a = 0 splits (all panels equal) unless the remainder needs adjustment.
+
+    // Build tick positions: interior poles at positions n/2 + gap + n/2, etc.
+    // i.e. after each gap, place a pole of width n, then next gap.
+    // Pole CENTER positions from left face of first gap:
+    //   pos_i = (i+1)*gap + (i + 0.5)*n   for i = 0..k-1
+    // But space is measured face-to-face of the bounding poles (already in panelSpace),
+    // so we place ticks at cumulative (gap + n) steps:
+    //   tick_0 = gap + n/2  ... wait, ticks are pole CENTERS.
+    // Actually in drawFence, ticks are offsets from leftOff (the left bounding pole center face).
+    // So tick center positions within space:
+    //   tick_i = gap + n/2 + i*(gap + n)   for i=0..k-1
+    // Verify last tick + n/2 + gap = space:
+    //   gap + n/2 + (k-1)*(gap+n) + n/2 + gap = k*gap + k*n = space ✓ (when gap exact)
 
     const ticks = [];
-    let pos = 0;
-    for (let i = 0; i < standardCount; i++) {
-        pos += m;
-        if (pos < space - 1e-4) ticks.push({ pos, isSplit: false });
-    }
-    for (let i = 0; i < splitCount - 1; i++) {
-        pos += splitSize;
-        ticks.push({ pos, isSplit: true });
+    for (let i = 0; i < k; i++) {
+        const pos = gap + n / 2 + i * (gap + n);
+        if (pos > 1e-4 && pos < space - 1e-4) {
+            ticks.push({ pos, isSplit: false });
+        }
     }
 
-    return { ticks, standardCount, splitCount };
+    // standardCount = number of full-m gaps, splitCount = adjusted gaps
+    // For UI/cost display we count panels as gaps (k+1 total)
+    const standardCount = k + 1;
+    const splitCount = 0;
+
+    return { ticks, standardCount, splitCount, splitSize: gap, m: gap };
 }
 
 // Draw a post:
@@ -481,44 +514,37 @@ function calcPanels(space, m) {
 // - 'endpoint' → slightly larger circle
 // - 'corner' → square (drawn separately by drawDoubleCornerPost, this handles single fallback)
 function drawPost(latlng, b, type) {
-    if (type === 'normal' || type === 'split') {
-        // Small dot for interior segment posts
-        L.circleMarker(latlng, {
-            radius: 3,
-            color: COL_POST_NORMAL,
-            weight: 1,
-            fillColor: '#fff',
-            fillOpacity: 1,
-            opacity: 1
-        }).addTo(fenceLayerGroup);
-        return;
+    const postW = (parseFloat(document.getElementById('postSizeWidth')?.value)  || 6) * 0.0254;
+    const postL = (parseFloat(document.getElementById('postSizeLength')?.value) || 6) * 0.0254;
+
+    // Make displayed square slightly bigger than actual pole for visibility
+const userScale = window._poleScale || 1.0;
+const SCALE = (type === 'endpoint' || type === 'corner' ? 1.6 : 5.4) * userScale;
+    const halfW = (postW * SCALE) / 2;
+    const halfL = (postL * SCALE) / 2;
+
+    let fillColor, strokeColor, strokeWeight;
+    if (type === 'endpoint' || type === 'corner') {
+        fillColor    = '#dc2626'; // red
+        strokeColor  = '#ffffff';
+        strokeWeight = 2;
+    } else {
+        fillColor    = '#ffffff'; // white interior post
+        strokeColor  = '#1f2937';
+        strokeWeight = 1.5;
     }
 
-    if (type === 'endpoint') {
-        // Slightly larger dot for line endpoints
-        L.circleMarker(latlng, {
-            radius: 4.5,
-            color: COL_POST_NORMAL,
-            weight: 1.5,
-            fillColor: '#fff',
-            fillOpacity: 1,
-            opacity: 1
-        }).addTo(fenceLayerGroup);
-        return;
-    }
-
-    // 'corner' fallback (single corner, no doubleCorner mode) — small square
-    const halfH = 0.45, halfW = 0.45;
     const rect = [
-        offPt(offPt(latlng, b + 90, halfH), b,       halfW),
-        offPt(offPt(latlng, b - 90, halfH), b,       halfW),
-        offPt(offPt(latlng, b - 90, halfH), b + 180, halfW),
-        offPt(offPt(latlng, b + 90, halfH), b + 180, halfW),
+        offPt(offPt(latlng, b + 90, halfW), b,       halfL),
+        offPt(offPt(latlng, b - 90, halfW), b,       halfL),
+        offPt(offPt(latlng, b - 90, halfW), b + 180, halfL),
+        offPt(offPt(latlng, b + 90, halfW), b + 180, halfL),
     ];
+
     L.polygon(rect, {
-        color: '#6b7280',
-        weight: 1.5,
-        fillColor: 'white',
+        color: strokeColor,
+        weight: strokeWeight,
+        fillColor: fillColor,
         fillOpacity: 1,
         opacity: 1
     }).addTo(fenceLayerGroup);
@@ -529,8 +555,8 @@ function drawPost(latlng, b, type) {
 // ============================================
 function validateInputs(m, nInches) {
     const msgs = [];
-    if (m < 1)   msgs.push('⚠️ ระยะห่างน้อยกว่า 1 เมตร — รั้วแน่นเกินไป');
-    if (m > 3)   msgs.push('⚠️ ระยะห่างมากกว่า 3 เมตร — รั้วห่างเกินไป');
+    if (m < 1)   msgs.push('⚠️ ระยะห่างน้อยกว่า 1 เมตร — ปรับเป็น 1 เมตร');
+    if (m > 3)   msgs.push('⚠️ ระยะห่างมากกว่า 3 เมตร — ปรับเป็น 3 เมตร');
     return msgs;
 }
 
@@ -605,45 +631,51 @@ document.addEventListener('click', function(e) {
 });
 
 // Core fence calculation and draw function
+// Core fence calculation and draw function
 function runFenceCalc() {
     if (typeof allLines === 'undefined' || allLines.length === 0) return;
 
-    const nInches = parseFloat(document.getElementById('postSizeInches').value) || 6;
-    const n       = nInches * 0.0254;
-    const layers  = parseInt(document.getElementById('beamSelect').value) || 2;
-    const doubleCorner = document.getElementById('doubleCornerPost')?.checked ?? false;
+    // Read post dimensions from inputs (in inches → meters)
+    const postWidthInput = document.getElementById('postSizeWidth');
+    const postLengthInput = document.getElementById('postSizeLength');
+    const postW = postWidthInput ? parseFloat(postWidthInput.value) || 6 : 6;
+    const postL = postLengthInput ? parseFloat(postLengthInput.value) || 6 : 6;
+    const n = postL * 0.0254;  // inches → meters, only the along-fence dimension matters
+    
+    const layersInput = document.getElementById('beamSelect');
+    const layers = layersInput ? parseInt(layersInput.value) || 2 : 2;
+    const doubleCornerInput = document.getElementById('doubleCornerPost');
+    const doubleCorner = doubleCornerInput ? doubleCornerInput.checked : false;
 
-    // Determine the ACTIVE fence type from the sidebar (used as fallback for old lines without fenceType)
-    const activeCard = document.querySelector('.fence-type-card.active');
+    // Determine the ACTIVE fence type from the sidebar
+    const activeCard = document.querySelector('.sb-fence-card.active');
     const activeFenceType = activeCard ? activeCard.getAttribute('data-type') : 'cowboy';
 
     const allWarnings = [];
-    fenceLayerGroup.clearLayers();
+    if (fenceLayerGroup) fenceLayerGroup.clearLayers();
 
-    // Group valid lines by fenceType — each type is processed independently
-    // so brick lines and cowboy lines never share a cornerMap
-    const validLines = allLines.filter(ld => ld.points.length >= 2);
-
-    // Separate lines into cowboy group vs brick group
-    const cowboyLines = validLines.filter(ld => (ld.fenceType || activeFenceType) !== 'brick');
-    const brickLines  = validLines.filter(ld => (ld.fenceType || activeFenceType) === 'brick');
+    // Group valid lines by fenceType
+    const validLines = allLines.filter(ld => ld.points && ld.points.length >= 2);
+    const cowboyLines = validLines.filter(ld => (ld.fenceType || activeFenceType) !== 'brick' && (ld.fenceType || activeFenceType) !== 'barbed');
+    const brickLines = validLines.filter(ld => (ld.fenceType || activeFenceType) === 'brick');
+    const barbedLines = validLines.filter(ld => (ld.fenceType || activeFenceType) === 'barbed');
 
     let grandTotal = 0, grandPosts = 0, grandBeams = 0;
 
-    // ── Process COWBOY / other non-brick lines ──
+    // ── Process COWBOY lines ──
     if (cowboyLines.length > 0) {
-        const m_cowboy = parseFloat(document.getElementById('postSpacing').value) || 2.5;
+        const spacingInput = document.getElementById('postSpacing');
+        const m_cowboy = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
         const useDoubleCorner = doubleCorner;
 
-        // Build cornerMap ONLY from cowboy lines
         buildCornerMap(cowboyLines.map(ld => ld.points));
 
         cowboyLines.forEach(ld => {
-            const res = drawFence(ld.points, m_cowboy, n, true, useDoubleCorner);
+            const res = drawFence(ld.points, m_cowboy, n, true, useDoubleCorner, ld.color);
             grandTotal += res.grandTotal;
             grandPosts += res.totalPosts;
             grandBeams += res.totalBeams * layers;
-            allWarnings.push(...res.warnings);
+            if (res.warnings) allWarnings.push(...res.warnings);
         });
 
         if (useDoubleCorner) {
@@ -654,44 +686,196 @@ function runFenceCalc() {
         }
     }
 
-    // ── Process BRICK lines independently ──
+    // ── Process BRICK lines ──
     if (brickLines.length > 0) {
-        const m_brick = 2.5;
+        const spacingInput = document.getElementById('postSpacingBrick');
+        const m_brick = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
+        
+        // Get brick post size
+        const brickPostInput = document.getElementById('postSizeWidthBrick');
+        const brickPostSize = brickPostInput ? parseFloat(brickPostInput.value) || 6 : 6;
+        const n_brick = brickPostSize * 0.0254;
 
-        // Build cornerMap ONLY from brick lines
         buildCornerMap(brickLines.map(ld => ld.points));
 
         brickLines.forEach(ld => {
-            const res = drawFence(ld.points, m_brick, n, true, false);
+            const res = drawFence(ld.points, m_brick, n_brick, true, false, ld.color);
             grandTotal += res.grandTotal;
             grandPosts += res.totalPosts;
-            grandBeams += res.totalBeams; // brick: no layer multiplier
-            allWarnings.push(...res.warnings);
+            grandBeams += res.totalBeams;
+            if (res.warnings) allWarnings.push(...res.warnings);
         });
     }
 
-    document.getElementById('resTotal').value = grandTotal.toFixed(2);
-    document.getElementById('resPosts').value = grandPosts;
-    document.getElementById('resBeams').value = grandBeams;
-    // Price hidden — no display
+    // ── Process BARBED WIRE lines ──
+    if (barbedLines.length > 0) {
+        const spacingInput = document.getElementById('postSpacingBarbed');
+        const m_barbed = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
+        
+        // Get barbed wire post size
+        const barbedPostInput = document.getElementById('postSizeWidthBarbed');
+        const barbedPostSize = barbedPostInput ? parseFloat(barbedPostInput.value) || 6 : 6;
+        const n_barbed = barbedPostSize * 0.0254;
+        
+        const nBraceSolo = document.getElementById('nBraceSolo')?.checked ?? false;
+        const nBraceDual = document.getElementById('nBraceDual')?.checked ?? false;
+        const nBraceAngle = document.getElementById('nBraceAngle')?.checked ?? false;
+        
+        barbedLines.forEach(ld => {
+            const res = drawBarbedWireFence(ld.points, { 
+                nBraceSolo, 
+                nBraceDual, 
+                nBraceAngle,
+                postSize: n_barbed,
+                spacing: m_barbed
+            });
+            grandTotal += res.grandTotal;
+            grandPosts += res.totalPosts;
+        });
+    }
+
+    const totalInput = document.getElementById('resTotal');
+    if (totalInput) totalInput.value = grandTotal.toFixed(2);
+    const postsInput = document.getElementById('resPosts');
+    if (postsInput) postsInput.value = grandPosts;
+    const beamsInput = document.getElementById('resBeams');
+    if (beamsInput) beamsInput.value = grandBeams;
 
     const warnEl = document.getElementById('fenceWarnings');
-    if (allWarnings.length > 0) {
-        warnEl.innerHTML = allWarnings.map(w=>`<div class="fw-item">${w}</div>`).join('');
-        warnEl.style.display = 'block';
-    } else {
-        warnEl.style.display = 'none';
+    if (warnEl) {
+        if (allWarnings.length > 0) {
+            warnEl.innerHTML = allWarnings.map(w=>`<div class="fw-item">${w}</div>`).join('');
+            warnEl.style.display = 'block';
+        } else {
+            warnEl.style.display = 'none';
+        }
     }
 }
 
-// "คำนวนวัสดุ" — calculate and draw
-document.getElementById('drawFenceBtn').addEventListener('click', function() {
-    if (typeof allLines === 'undefined' || allLines.length === 0) {
-        alert('กรุณาวาดเส้นก่อน');
-        return;
+// ============================================
+// BARBED WIRE FENCE — รั้วลวดหนาม
+// ============================================
+// Options (read from checkboxes):
+//   nBraceSolo   — arrow markers at start & end (directional support posts)
+//   nBraceDual   — cross markers every 50m along the fence
+//   nBraceAngle  — double-post at every corner (same as ใช้เสา 2 ต้นที่มุมต่อ)
+
+// ============================================
+// BARBED WIRE FENCE — รั้วลวดหนาม
+// ============================================
+function drawBarbedWireFence(linePoints, options) {
+    const { nBraceSolo, nBraceDual, nBraceAngle, postSize, spacing } = options;
+    const n = postSize || (parseFloat(document.getElementById('postSizeWidthBarbed')?.value) || 6) * 0.0254;
+    const m = spacing || Math.min(3, Math.max(1, parseFloat(document.getElementById('postSpacingBarbed')?.value) || 2.5));
+    const total = totalLen(linePoints);
+
+    // Draw the wire lines (3 strands)
+    const strandOffsets = [-0.3, 0, 0.3];
+    strandOffsets.forEach((_, si) => {
+        const pts = [];
+        const steps = Math.max(4, Math.ceil(total * 4));
+        for (let i = 0; i <= steps; i++) pts.push(interp(linePoints, total * i / steps));
+        L.polyline(pts, {
+            color: '#4b5563',
+            weight: si === 1 ? 3 : 1.5,
+            opacity: 0.85,
+            dashArray: si === 1 ? null : '6,4'
+        }).addTo(fenceLayerGroup);
+    });
+
+    // Draw regular line posts along the fence
+    let d = 0;
+    let postCount = 0;
+    while (d <= total + 1e-4) {
+        const pt = interp(linePoints, Math.min(d, total));
+        const b = bearingAt(linePoints, Math.min(d, total));
+        drawPost(pt, b, (d < 1e-3 || d >= total - 1e-3) ? 'endpoint' : 'normal');
+        d += m;
+        postCount++;
     }
-    runFenceCalc();
-});
+
+    // N-BRACE SOLO — arrow markers at start and end
+    if (nBraceSolo) {
+        _drawNBraceArrow(linePoints[0], bearing(linePoints[0], linePoints[1]), 'start');
+        const last = linePoints[linePoints.length - 1];
+        const prev = linePoints[linePoints.length - 2];
+        _drawNBraceArrow(last, bearing(prev, last), 'end');
+    }
+
+    // N-BRACE DUAL — cross markers every 50m
+    if (nBraceDual) {
+        let crossD = 50;
+        while (crossD < total - 25) {
+            const pt = interp(linePoints, crossD);
+            const b = bearingAt(linePoints, crossD);
+            _drawNBraceCross(pt, b);
+            crossD += 50;
+        }
+    }
+
+    // N-BRACE ANGLE — double post at each corner
+    if (nBraceAngle) {
+        buildCornerMap([linePoints]);
+        for (const [k, entry] of cornerMap.entries()) {
+            drawDoubleCornerPost(entry.pt, n, false);
+        }
+    }
+
+    return { grandTotal: total, totalPosts: postCount };
+}
+
+// Draw a directional support-post arrow (N-brace solo indicator)
+// direction: 'start' draws > pointing inward, 'end' draws < pointing inward
+function _drawNBraceArrow(pt, b, direction) {
+    const armLen = 1.5; // meters, length of each brace arm
+    // Brace arms angle 45° off the fence on each side
+    const bInward = direction === 'start' ? b : (b + 180);
+    const arm1End = offPt(offPt(pt, bInward, armLen), bInward + 90, armLen);
+    const arm2End = offPt(offPt(pt, bInward, armLen), bInward - 90, armLen);
+
+    [arm1End, arm2End].forEach(armEnd => {
+        L.polyline([pt, armEnd], {
+            color: '#dc2626',
+            weight: 3,
+            opacity: 0.9,
+            dashArray: '4,3'
+        }).addTo(fenceLayerGroup);
+    });
+
+    // Small circle at the brace tip
+    L.circleMarker(pt, {
+        radius: 5,
+        color: '#dc2626',
+        fillColor: '#fca5a5',
+        fillOpacity: 1,
+        weight: 2
+    }).addTo(fenceLayerGroup);
+}
+
+// Draw an X cross marker (N-brace dual, every 50m)
+function _drawNBraceCross(pt, b) {
+    const armLen = 1.2;
+    const corners = [
+        [offPt(pt, b + 45,  armLen), offPt(pt, b + 225, armLen)],
+        [offPt(pt, b + 135, armLen), offPt(pt, b + 315, armLen)],
+    ];
+    corners.forEach(pair => {
+        L.polyline(pair, {
+            color: '#1d4ed8',
+            weight: 2.5,
+            opacity: 0.9
+        }).addTo(fenceLayerGroup);
+    });
+    L.circleMarker(pt, {
+        radius: 4,
+        color: '#1d4ed8',
+        fillColor: '#93c5fd',
+        fillOpacity: 1,
+        weight: 2
+    }).addTo(fenceLayerGroup);
+}
+
+// "คำนวนวัสดุ" — calculate and draw
 
 // "สร้างแผน" — clear
 document.getElementById('clearFenceBtn').addEventListener('click', function() {
