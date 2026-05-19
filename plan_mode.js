@@ -7,12 +7,11 @@ let selectedUnit = 'cm_km';
 let activeTileLayer = null;
 let originalMapBg = '';
 
+// Locked ratio: null = auto (follows zoom), number = fixed 1:N
+let lockedRatio = null;
+
 function initPlanMode() {
-  const scaleDiv = document.createElement('div');
-  scaleDiv.id = 'customScaleBar';
-  document.getElementById('map').appendChild(scaleDiv);
   map.on('zoomend moveend', updatePlanScale);
-  updatePlanScale();
 
   const btn = document.getElementById('btnTogglePlanMode');
   if(btn) btn.addEventListener('click', togglePlanMode);
@@ -20,14 +19,61 @@ function initPlanMode() {
   const dlBtn = document.getElementById('btnDownloadPDF');
   if(dlBtn) dlBtn.addEventListener('click', downloadPlanPDF);
 
-  const unitSel = document.getElementById('planUnitSelect');
-  if(unitSel) {
-    unitSel.addEventListener('change', (e) => {
-      selectedUnit = e.target.value;
-      updatePlanScale();
-      if(planModeActive) renderPlanView();
+  // Scale bar click → toggle picker
+  const scaleBar = document.getElementById('customScaleBar');
+  if (scaleBar) {
+    scaleBar.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const picker = document.getElementById('psbPicker');
+      if (!picker) return;
+      const isOpen = picker.style.display !== 'none';
+      picker.style.display = isOpen ? 'none' : 'block';
+      if (!isOpen) buildRatioPicker();
     });
   }
+
+  // Close picker when clicking elsewhere
+  document.addEventListener('click', () => {
+    const picker = document.getElementById('psbPicker');
+    if (picker) picker.style.display = 'none';
+  });
+}
+
+function buildRatioPicker() {
+  const opts = document.getElementById('psbOptions');
+  if (!opts) return;
+  const presets = [500, 1000, 2000, 2500, 5000, 10000, 25000, 50000];
+  opts.innerHTML = '';
+
+  // Auto option
+  const autoEl = document.createElement('div');
+  autoEl.className = 'psb-pick-opt' + (lockedRatio === null ? ' active' : '');
+  autoEl.textContent = 'Auto (follow zoom)';
+  autoEl.addEventListener('click', (e) => { e.stopPropagation(); lockedRatio = null; updatePlanScale(); document.getElementById('psbPicker').style.display = 'none'; });
+  opts.appendChild(autoEl);
+
+  presets.forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'psb-pick-opt' + (lockedRatio === r ? ' active' : '');
+    el.textContent = `1 : ${r.toLocaleString()}`;
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      lockedRatio = r;
+      applyLockedRatio(r);
+      document.getElementById('psbPicker').style.display = 'none';
+    });
+    opts.appendChild(el);
+  });
+}
+
+function applyLockedRatio(ratio) {
+  // Adjust zoom so that 1cm on screen = ratio cm in real world
+  const center = map.getCenter();
+  const mpc = ratio / 100; // meters per screen-cm
+  const mpp = mpc / 37.795; // meters per pixel
+  const zoom = Math.log2(156543.03 * Math.cos(center.lat * Math.PI / 180) / mpp);
+  map.setZoom(zoom);
+  updatePlanScale();
 }
 
 async function downloadPlanPDF() {
@@ -79,99 +125,126 @@ async function downloadPlanPDF() {
 }
 
 function togglePlanMode() {
-  if (!allLines || allLines.length === 0) {
-    alert('กรุณาวาดเส้นก่อนเข้าโหมดแผน');
-    return;
-  }
-
-  planModeActive = !planModeActive;
-  const sidebar = document.querySelector('.left-sidebar');
-  const mapEl = document.getElementById('map');
-
-  if (planModeActive) {
-    // Disable map click (prevent new lines)
-    map.off('click');
-    map.getContainer().style.cursor = 'default';
-    if (typeof measureActive !== 'undefined') { measureActive = false; }
-    const measureBtn = document.getElementById('measureBtn');
-    if (measureBtn) measureBtn.classList.remove('active');
-
-    // Hide normal-mode overlays: polylines, labels, markers
-    allLines.forEach(ld => {
-      if (ld.polyline && map.hasLayer(ld.polyline)) map.removeLayer(ld.polyline);
-      if (ld.segmentLabels) ld.segmentLabels.forEach(l => map.hasLayer(l) && map.removeLayer(l));
-      if (ld.angleLabels)   ld.angleLabels.forEach(l =>   map.hasLayer(l) && map.removeLayer(l));
-      if (ld.markers)       ld.markers.forEach(m =>       map.hasLayer(m) && map.removeLayer(m));
-      if (ld.startMarker && map.hasLayer(ld.startMarker)) map.removeLayer(ld.startMarker);
-      if (ld.branches) ld.branches.forEach(br => {
-        if (br.polyline && map.hasLayer(br.polyline)) map.removeLayer(br.polyline);
-        if (br.segmentLabels) br.segmentLabels.forEach(l => map.hasLayer(l) && map.removeLayer(l));
-        if (br.angleLabels)   br.angleLabels.forEach(l =>   map.hasLayer(l) && map.removeLayer(l));
-        if (br.markers)       br.markers.forEach(m =>       map.hasLayer(m) && map.removeLayer(m));
-      });
-    });
-    if (typeof fenceLayerGroup !== 'undefined') fenceLayerGroup.clearLayers();
-
-    // Hide bottom-right UI
-    const measureInfo = document.getElementById('measureInfo');
-    if (measureInfo) measureInfo.style.display = 'none';
-    const measureTool = document.querySelector('.measure-tool');
-    if (measureTool) measureTool.style.display = 'none';
-
-    // Show plan panel, hide normal sidebar
-    sidebar.classList.add('plan-mode-active');
-    const planPanel = document.getElementById('planModePanel');
-    if (planPanel) planPanel.style.display = 'block';
-
-    // White map background, remove tiles
-    originalMapBg = mapEl.style.background;
-    mapEl.classList.add('plan-bg');
-    map.eachLayer(layer => {
-      if (layer instanceof L.TileLayer) {
-        activeTileLayer = layer;
-        map.removeLayer(layer);
-      }
-    });
-
-    const firstLine = allLines[0];
-    if (firstLine && firstLine.points.length >= 2) {
-      map.fitBounds(firstLine.points, { padding: [100, 100], maxZoom: 18, animate: true });
+    if (!allLines || allLines.length === 0) {
+        alert('กรุณาวาดเส้นหรือเพิ่มด้านก่อนเข้าโหมดแผน');
+        return;
     }
 
-    planLayerGroup.addTo(map);
-    renderPlanView();
-
-  } else {
-    // Re-attach map click handler
-    map.on('click', window._mapClickHandler || function(){});
+    planModeActive = !planModeActive;
+    const sidebar = document.querySelector('.left-sidebar');
+    const mapEl = document.getElementById('map');
+    const imRoot = document.querySelector('.im-root'); // Input Mode Sidebar
     
-    // Restore normal overlays
-    allLines.forEach(ld => {
-      if (ld.polyline && !map.hasLayer(ld.polyline)) ld.polyline.addTo(map);
-      if (ld.segmentLabels && (typeof measurementsVisible === 'undefined' || measurementsVisible))
-        ld.segmentLabels.forEach(l => !map.hasLayer(l) && l.addTo(map));
-      if (ld.angleLabels && (typeof anglesVisible === 'undefined' || anglesVisible))
-        ld.angleLabels.forEach(l => !map.hasLayer(l) && l.addTo(map));
-      if (ld.markers) ld.markers.forEach(m => !map.hasLayer(m) && m.addTo(map));
-    });
+    // Search bar selector (adjust if your ID is different)
+    const searchBar = document.getElementById('searchBar') || document.querySelector('.search-container, #search-input');
 
-    // Restore bottom-right UI
-    const measureTool = document.querySelector('.measure-tool');
-    if (measureTool) measureTool.style.display = '';
+    if (planModeActive) {
+        // Hide Search Bar
+        if (searchBar) searchBar.style.display = 'none';
+        
+        // Hide Input Mode Sidebar content
+        if (imRoot) imRoot.style.display = 'none';
 
-    sidebar.classList.remove('plan-mode-active');
-    const planPanel = document.getElementById('planModePanel');
-    if (planPanel) planPanel.style.display = 'none';
+        // Disable map click
+        map._savedClickListeners = map._events && map._events.click ? [...map._events.click] : [];
+        map.off('click');
+        map.getContainer().style.cursor = 'default';
+        if (typeof measureActive !== 'undefined') { measureActive = false; }
+        const measureBtn = document.getElementById('measureBtn');
+        if (measureBtn) measureBtn.classList.remove('active');
 
-    mapEl.classList.remove('plan-bg');
-    mapEl.style.background = originalMapBg;
-    if (activeTileLayer) activeTileLayer.addTo(map);
+        // Hide overlays
+        allLines.forEach(ld => {
+            if (ld.polyline && map.hasLayer(ld.polyline)) map.removeLayer(ld.polyline);
+            if (ld.segmentLabels) ld.segmentLabels.forEach(l => map.hasLayer(l) && map.removeLayer(l));
+            if (ld.angleLabels)   ld.angleLabels.forEach(l =>   map.hasLayer(l)  && map.removeLayer(l));
+            if (ld.markers)       ld.markers.forEach(m =>       map.hasLayer(m)  && map.removeLayer(m));
+            if (ld.startMarker && map.hasLayer(ld.startMarker)) map.removeLayer(ld.startMarker);
+            if (ld.branches) ld.branches.forEach(br => {
+                if (br.polyline && map.hasLayer(br.polyline)) map.removeLayer(br.polyline);
+            });
+        });
+        if (typeof fenceLayerGroup !== 'undefined') fenceLayerGroup.clearLayers();
 
-    map.removeLayer(planLayerGroup);
-    planLayerGroup.clearLayers();
+        // Hide UI elements
+        const measureInfo = document.getElementById('measureInfo');
+        if (measureInfo) measureInfo.style.display = 'none';
+        const measureTool = document.querySelector('.measure-tool');
+        if (measureTool) measureTool.style.display = 'none';
+        
+        sidebar.classList.add('plan-mode-active');
+        document.querySelectorAll('.custom-label-control, .custom-layer-control').forEach(el => el.style.display = 'none');
+        
+        const scaleBar = document.getElementById('customScaleBar');
+        if (scaleBar) scaleBar.style.display = 'block';
+        updatePlanScale();
+        const planPanel = document.getElementById('planModePanel');
+        if (planPanel) planPanel.style.display = 'block';
 
-    if (typeof runFenceCalc === 'function') runFenceCalc();
-  }
+        // White background
+        originalMapBg = mapEl.style.background;
+        mapEl.classList.add('plan-bg');
+        map.eachLayer(layer => {
+            if (layer instanceof L.TileLayer) {
+                activeTileLayer = layer;
+                map.removeLayer(layer);
+            }
+        });
+
+        const firstLine = allLines[0];
+        if (firstLine && firstLine.points.length >= 2) {
+            map.fitBounds(firstLine.points, { padding: [80, 80], maxZoom: 18, animate: true });
+        }
+
+        planLayerGroup.addTo(map);
+        renderPlanView();
+    } else {
+        // Show Search Bar
+        if (searchBar) searchBar.style.display = '';
+        
+        // Show Input Mode Sidebar
+        if (imRoot) imRoot.style.display = '';
+
+        if (map._savedClickListeners && map._savedClickListeners.length > 0) {
+            map._savedClickListeners.forEach(h => map.on('click', h.fn, h.ctx));
+        }
+        
+        // Restore overlays
+        allLines.forEach(ld => {
+            if (ld.polyline && !map.hasLayer(ld.polyline)) ld.polyline.addTo(map);
+            if (ld.segmentLabels && (typeof measurementsVisible === 'undefined' || measurementsVisible))
+                ld.segmentLabels.forEach(l => !map.hasLayer(l) && l.addTo(map));
+            if (ld.angleLabels && (typeof anglesVisible === 'undefined' || anglesVisible))
+                ld.angleLabels.forEach(l => !map.hasLayer(l) && l.addTo(map));
+            if (ld.markers) ld.markers.forEach(m => !map.hasLayer(m) && m.addTo(map));
+        });
+
+        const measureTool = document.querySelector('.measure-tool');
+        if (measureTool) measureTool.style.display = '';
+        sidebar.classList.remove('plan-mode-active');
+        document.querySelectorAll('.custom-label-control, .custom-layer-control').forEach(el => el.style.display = '');
+        
+        const scaleBar = document.getElementById('customScaleBar');
+        if (scaleBar) scaleBar.style.display = 'none';
+        lockedRatio = null;
+        
+        const planPanel = document.getElementById('planModePanel');
+        if (planPanel) planPanel.style.display = 'none';
+        mapEl.classList.remove('plan-bg');
+        mapEl.style.background = originalMapBg;
+        if (activeTileLayer) activeTileLayer.addTo(map);
+
+        document.getElementById('customScaleBar').style.display = 'none';
+        map.removeLayer(planLayerGroup);
+        planLayerGroup.clearLayers();
+
+        if (typeof switchSbTab === 'function') {
+            const activeTab = document.getElementById('sbTab2')?.classList.contains('sb-tab-active') ? 2 : 1;
+            switchSbTab(activeTab);
+        }
+
+        if (typeof runFenceCalc === 'function') runFenceCalc();
+    }
 }
 
 function renderPlanView() {
@@ -204,74 +277,65 @@ function renderPlanView() {
 
 function drawPlanLine(lineData, idx) {
     const pts = lineData.points;
-    if(!pts || pts.length < 2) return;
+    if (!pts || pts.length < 2) return;
 
     // Main black line
     L.polyline(pts, { color: '#1a1a1a', weight: 3, opacity: 1 }).addTo(planLayerGroup);
 
-    // Line label
+    // Line Label (Professional Black & White Style)
     L.marker(pts[0], {
-        icon: L.divIcon({ className:'', html:`<div style="font-size:12px;font-weight:bold;color:#000;background:#fff;padding:2px 5px;border:1px solid #000;">Line ${idx+1}</div>`, iconSize:[0,0], iconAnchor:[10,10] }),
-        zIndexOffset: 1500
+        icon: L.divIcon({
+            className: '',
+            html: `<div style="font-size:12px;font-weight:bold;color:#000;background:#ffffff;padding:4px 8px;border:2px solid #000;white-space:nowrap;border-radius:2px;box-shadow:2px 2px 0px rgba(0,0,0,0.1);">Line ${idx + 1}</div>`,
+            iconSize: [0, 0],
+            iconAnchor: [-15, -15] // Push label to top-left so it doesn't cover the corner
+        }),
+        zIndexOffset: 1600
     }).addTo(planLayerGroup);
 
-    const m = Math.min(3, Math.max(1, parseFloat(document.getElementById('postSpacing')?.value) || 2.5));
-    const n = (parseFloat(document.getElementById('postSizeWidth')?.value) || 6) * 0.0254;
+    const m = parseFloat(document.getElementById('postSpacing')?.value) || 2.5;
+    const n = 0.15;
     let dAcc = 0;
-
-    // Use first segment as the "standard" length baseline
     const standardLen = hav(pts[0], pts[1]);
 
-    for(let i=0; i<pts.length-1; i++) {
-        const p0 = pts[i], p1 = pts[i+1];
+    for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i], p1 = pts[i + 1];
         const segLen = hav(p0, p1);
         const b = bearing(p0, p1);
 
-        // Determine if this segment needs the detailed pole & measurement breakdown
         const isDifferent = Math.abs(segLen - standardLen) > 0.05;
         const showDetails = i < 2 || isDifferent;
 
-        // Calculate exact distances from segment start (p0) to each pole center
-        let leftOff = (i === 0) ? 0 : n / 2;
-        let rightOff = (i === pts.length - 2) ? 0 : n / 2;
-        let usable = segLen - leftOff - rightOff;
-        let poleDists = [leftOff];
-
-        if(usable > 0.5) {
-            const k = Math.max(0, Math.floor((usable - m) / (m + n)));
-            let gap = (usable - k * n) / (k + 1);
-            let cur = leftOff;
-            for(let j=0; j<k; j++) {
-                cur += gap + n;
-                poleDists.push(cur);
-            }
+        let poleDists = [0];
+        if (segLen > 0.5) {
+            const calc = calcPanels(segLen, m);
+            calc.ticks.forEach(t => poleDists.push(t.pos));
         }
-        poleDists.push(segLen - rightOff);
+        poleDists.push(segLen);
 
-        // Draw all poles in this segment
+        // Draw Posts
         poleDists.forEach((dist, pIdx) => {
             const pt = interp(pts, dAcc + dist);
-            // Corner/start/end of line = red box, normal interior = white box
             const isCorner = (i === 0 && pIdx === 0) || (i === pts.length - 2 && pIdx === poleDists.length - 1);
             drawPlanPost(pt, b, isCorner, n);
         });
 
-        // Only draw detailed measurements on specified segments
-        if(showDetails) {
-            // 1. Measure between each pole (white/red boxes)
-            for(let j=0; j<poleDists.length-1; j++) {
+        // Draw Measurements
+        if (showDetails) {
+            // Sub-segments (Offset 0.35m)
+            for (let j = 0; j < poleDists.length - 1; j++) {
                 const sPt = interp(pts, dAcc + poleDists[j]);
-                const ePt = interp(pts, dAcc + poleDists[j+1]);
+                const ePt = interp(pts, dAcc + poleDists[j + 1]);
                 const spanLen = hav(sPt, ePt);
-                // Offset 0.18m places it neatly between pole boxes
-                drawDimLine(sPt, ePt, 0.18, spanLen.toFixed(2) + 'm', '#444');
+                drawDimLine(sPt, ePt, 0.35, spanLen.toFixed(2) + 'm', '#000');
             }
-            // 2. Overall segment measurement
-            drawDimLine(p0, p1, 0.55, segLen.toFixed(2) + 'm', '#000');
+            // Main segment (Offset 0.75m)
+            drawDimLine(p0, p1, 0.75, segLen.toFixed(2) + 'm', '#000');
         }
         dAcc += segLen;
     }
 }
+
 
 function drawPlanPost(pt, b, isCorner, n) {
     const scale = window._poleScale || 1.0;
@@ -287,6 +351,93 @@ function drawPlanPost(pt, b, isCorner, n) {
     L.polygon(corners, {
         color: '#1a1a1a', weight: 2,
         fillColor: color, fillOpacity: 1, opacity: 1
+    }).addTo(planLayerGroup);
+}
+
+
+function drawPlanAngle(prevPt, vertexPt, nextPt, idx) {
+    const b1 = bearing(prevPt, vertexPt); // incoming bearing
+    const b2 = bearing(vertexPt, nextPt); // outgoing bearing
+    
+    // Calculate interior angle
+    let angle = ((b2 - b1) + 360) % 360;
+    // For fence drawing, we usually want the interior angle
+    if (angle > 180) angle = 360 - angle;
+    
+    const rad = angle * Math.PI / 180;
+    const isRightAngle = Math.abs(angle - 90) < 5; // 85-95° = box style
+    const radius = 0.4; // meters for arc/box size
+    
+    // Position offset for label (pushes label away from vertex)
+    const labelOffset = isRightAngle ? 0.65 : 0.55;
+    const bisectAngle = ((b1 + b2) / 2 + 360) % 360;
+    const labelPt = offPt(vertexPt, bisectAngle + 90, labelOffset);
+    
+    if (isRightAngle) {
+        // ── Engineer Box Style (90°) ──
+        const boxSize = radius * 0.8;
+        const corner1 = offPt(vertexPt, b1, boxSize);
+        const corner2 = offPt(corner1, b2, boxSize);
+        const corner3 = offPt(vertexPt, b2, boxSize);
+        
+        // Draw the square corner
+        L.polyline([corner1, corner2, corner3], {
+            color: '#2563eb', // blue for engineering style
+            weight: 2,
+            opacity: 0.9
+        }).addTo(planLayerGroup);
+        
+        // Fill the corner lightly
+        L.polygon([vertexPt, corner1, corner2, corner3], {
+            color: 'transparent',
+            fillColor: '#3b82f6',
+            fillOpacity: 0.15
+        }).addTo(planLayerGroup);
+        
+    } else {
+        // ── Arc Style (Non-90°) ──
+        const steps = 24;
+        const arcPts = [];
+        // Start from b1 direction, sweep to b2 direction
+        let startAngle = b1;
+        let endAngle = b2;
+        
+        // Handle angle wrapping correctly
+        if (endAngle < startAngle) endAngle += 360;
+        
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const deg = startAngle + (endAngle - startAngle) * t;
+            const pt = offPt(vertexPt, deg, radius);
+            arcPts.push(pt);
+        }
+        
+        L.polyline(arcPts, {
+            color: '#2563eb',
+            weight: 2,
+            opacity: 0.9,
+            dashArray: null
+        }).addTo(planLayerGroup);
+        
+        // Add a small dot at the vertex
+        L.circleMarker(vertexPt, {
+            radius: 3,
+            color: '#2563eb',
+            fillColor: '#2563eb',
+            fillOpacity: 1,
+            weight: 1
+        }).addTo(planLayerGroup);
+    }
+    
+    // ── Angle Label ──
+    L.marker(labelPt, {
+        icon: L.divIcon({
+            className: '',
+            html: `<div style="font-size:11px;font-weight:600;color:#1e40af;background:rgba(255,255,255,0.92);padding:2px 4px;border:1px solid #93c5fd;border-radius:2px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.1);">${Math.round(angle)}°</div>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0]
+        }),
+        zIndexOffset: 1400
     }).addTo(planLayerGroup);
 }
 
@@ -347,48 +498,77 @@ function drawPostSizeLabel(pt, b, n, inches) {
 }
 function drawDimLine(startPt, endPt, offsetM, label, color) {
     const b = bearing(startPt, endPt);
-    const s = offPt(startPt, b - 90, offsetM);
-    const e = offPt(endPt,   b - 90, offsetM);
+    
+    // Calculate offset direction to avoid crossing the fence line
+    const perpBearing = (b - 90 + 360) % 360;
+    
+    const s = offPt(startPt, perpBearing, offsetM);
+    const e = offPt(endPt,   perpBearing, offsetM);
+    
+    // Witness lines (dashed)
+    L.polyline([startPt, s], { color: '#000', weight: 0.8, dashArray: '3,3', opacity: 0.5 }).addTo(planLayerGroup);
+    L.polyline([endPt,   e], { color: '#000', weight: 0.8, dashArray: '3,3', opacity: 0.5 }).addTo(planLayerGroup);
 
-    // Witness lines from fence to dim line
-    L.polyline([startPt, s], { color: '#888', weight: 0.8, dashArray: '4,4' }).addTo(planLayerGroup);
-    L.polyline([endPt,   e], { color: '#888', weight: 0.8, dashArray: '4,4' }).addTo(planLayerGroup);
+    // Main dim line (solid black)
+    L.polyline([s, e], { color: '#000', weight: 1.2 }).addTo(planLayerGroup);
 
-    // Main dim line
-    L.polyline([s, e], { color: color, weight: 1.5 }).addTo(planLayerGroup);
+    // Tick marks (vertical lines at ends)
+    const tickLen = 0.08;
+    L.polyline([offPt(s, b - 90, -tickLen), offPt(s, b - 90, tickLen)], { color: '#000', weight: 1.5 }).addTo(planLayerGroup);
+    L.polyline([offPt(e, b - 90, -tickLen), offPt(e, b - 90, tickLen)], { color: '#000', weight: 1.5 }).addTo(planLayerGroup);
 
-    // Tick marks (arrowhead-style 45° ticks)
-    const tickLen = 0.10;
-    L.polyline([offPt(s, b - 90, -tickLen), offPt(s, b - 90, tickLen)], { color: color, weight: 2 }).addTo(planLayerGroup);
-    L.polyline([offPt(e, b - 90, -tickLen), offPt(e, b - 90, tickLen)], { color: color, weight: 2 }).addTo(planLayerGroup);
-
-    // Centred label
+    // Text Label
     const mid = [(s[0]+e[0])/2, (s[1]+e[1])/2];
-    const labelLen = label.length;
     L.marker(mid, {
         icon: L.divIcon({
             className: '',
-            html: `<div style="font-size:12px;color:${color};font-weight:bold;font-family:'Courier New',monospace;white-space:nowrap;background:rgba(255,255,255,0.85);padding:1px 4px;">${label}</div>`,
+            html: `<div style="font-size:12px;color:#000;font-weight:bold;font-family:'Courier New',monospace;background:#ffffff;padding:2px 6px;border:1px solid #000;border-radius:2px;white-space:nowrap;">${label}</div>`,
             iconSize: [0, 0],
-            iconAnchor: [labelLen * 3.5, -4]
+            iconAnchor: [0, 0] // Centers the label perfectly on the midpoint
         }),
-        zIndexOffset: 1500
+        zIndexOffset: 1600
     }).addTo(planLayerGroup);
 }
 
 function updatePlanScale() {
+  const el = document.getElementById('customScaleBar');
+  if (!el) return;
+  if (!planModeActive) { el.style.display = 'none'; return; }
+
   const zoom = map.getZoom();
   const center = map.getCenter();
-  const mpp = 156543.03 * Math.cos(center.lat * Math.PI/180) / Math.pow(2, zoom);
-  const mpc = mpp * (96 / 2.54);
-  
-  let txt = '';
-  if(selectedUnit === 'cm_km') txt = `1 cm = ${(mpc/1000).toFixed(3)} km`;
-  else if(selectedUnit === 'm_m') txt = `1 cm = ${mpc.toFixed(2)} m`;
-  else if(selectedUnit === 'mm_cm') txt = `1 cm = ${(mpc*100).toFixed(1)} cm`;
+  const mpp = 156543.03 * Math.cos(center.lat * Math.PI / 180) / Math.pow(2, zoom);
+  const mpc = mpp * 37.795;
+  const ratio = lockedRatio || Math.round(mpc * 100);
+
+  const niceMeters = niceScaleLength(mpp);
+  const barPx = Math.round(niceMeters / mpp);
+  const halfLabel = niceMeters >= 1000
+    ? ((niceMeters / 2) / 1000).toFixed(1) + ' km'
+    : Math.round(niceMeters / 2) + ' m';
+  const endLabel = niceMeters >= 1000
+    ? (niceMeters / 1000).toFixed(niceMeters % 1000 === 0 ? 0 : 1) + ' km'
+    : niceMeters + ' m';
+
+  const title = document.getElementById('psbTitle');
+  const track = document.getElementById('psbTrack');
+  const mid   = document.getElementById('psbMid');
+  const end   = document.getElementById('psbEnd');
+
+  if (title) title.textContent = `SCALE 1:${ratio.toLocaleString()}` + (lockedRatio ? ' 🔒' : '');
+  if (track) track.style.width = barPx + 'px';
+  if (mid)   { mid.textContent = halfLabel; mid.style.left = (barPx / 2) + 'px'; }
+  if (end)   end.textContent = endLabel;
+}
 
   const el = document.getElementById('customScaleBar');
-  if(el) el.textContent = `📏 ${txt}`;
+  if (el) el.style.display = 'none';
+
+function niceScaleLength(mpp) {
+  // Target ~120px wide bar; pick nicest round meter value
+  const target = mpp * 120;
+  const candidates = [1,2,5,10,20,50,100,200,500,1000,2000,5000,10000];
+  return candidates.reduce((best, v) => Math.abs(v - target) < Math.abs(best - target) ? v : best);
 }
 
 // Initialize

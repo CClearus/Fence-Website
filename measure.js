@@ -137,11 +137,6 @@ document.addEventListener('input', function(e) {
         document.getElementById('distFontVal').textContent = e.target.value;
         allLines.forEach(ld => { redrawLineLabels(ld); if (ld.branches) redrawBranchLabels(ld); });
     }
-    if (e.target.id === 'poleScaleSlider') {
-        window._poleScale = parseFloat(e.target.value);
-        document.getElementById('poleScaleVal').textContent = parseFloat(e.target.value).toFixed(1);
-        if (typeof runFenceCalc === 'function') runFenceCalc();
-    }
 });
 
 // Close dropdown when clicking outside
@@ -1161,10 +1156,9 @@ map.on('click', function (e) {
             _redrawCurrentPolyline();
         }
 
-    } else if (!eraserActive) {
-        const newMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
-        newMarker.bindPopup(`Coordinates:<br>Lat: ${e.latlng.lat.toFixed(4)}<br>Lng: ${e.latlng.lng.toFixed(4)}`);
-    }
+} else if (!eraserActive) {
+    // Disabled: map click no longer drops a marker
+}
 });
 
 function _redrawCurrentPolyline() {

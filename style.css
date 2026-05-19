@@ -334,6 +334,7 @@ body {
     display: flex;
     gap: 10px;
     align-items: flex-start;
+    .top-right-controls { position: relative; }
 }
 
 .control-btn {
@@ -1179,48 +1180,92 @@ FORM SPACING & INPUT FIXES
 .plan-line-item label { flex:1; cursor:pointer; color:#333; }
 
 /* Custom Scale Bar */
-#customScaleBar { 
-  position:absolute; top:75px; right:20px; 
-  background:#fff; padding:6px 10px; border-radius:8px; 
-  box-shadow:0 2px 8px rgba(0,0,0,0.15); z-index:1000; 
-  font-size:12px; font-weight:600; color:#333; pointer-events:auto;
+#customScaleBar {
+  position: relative;
+  display: none;
+  background: transparent;
+  padding: 6px 10px 16px;
+  z-index: 1000;
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: 'Arial', sans-serif;
+  min-width: 160px;
+  margin-top: 6px;
+  user-select: none;
+  /*filter:
+    drop-shadow(0 0 2px rgba(0,0,0,0.95))
+    drop-shadow(0 0 4px rgba(0,0,0,0.7))
+    drop-shadow(0 0 1px #000);*/
 }
-
-/* Engineering Dimension Labels */
-.plan-dim-text { 
-  background:#fff; padding:2px 5px; border:1px solid #000; 
-  font-size:10px; color:#000; font-weight:bold; white-space:nowrap; 
-  box-shadow:1px 1px 2px rgba(0,0,0,0.15);
+.psb-title {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.5px; color: #000;
+  margin-bottom: 5px; text-transform: uppercase;
+  text-shadow:
+    -1px -1px 0 #fff, 1px -1px 0 #fff,
+    -1px  1px 0 #fff, 1px  1px 0 #fff,
+     0 0 6px #fff, 0 0 10px rgba(255,255,255,0.8);
 }
-.plan-dim-line { opacity:0.85; }
-
-/* Plan Mode UI Toggles */
-/* plan-mode-active: hide all normal sidebar content, show plan panel */
-.left-sidebar.plan-mode-active #planModePanel {
-  display: block !important;
+.psb-bar-row { display: flex; justify-content: flex-start; }
+.psb-track {
+  position: relative; height: 12px;
+  border: 2px solid #000;
+  outline: 1px solid #fff;          /* white outer stroke for contrast */
+  min-width: 80px; max-width: 220px;
+  overflow: visible;
+  box-shadow:
+    0 0 0 1px #000,
+    inset 0 0 0 1px rgba(255,255,255,0.3);
 }
-
-/* Soft white page background for plan mode */
-#map.plan-bg {
-  background: #f8f9fa !important;
+.psb-fill {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    to right,
+    #000 0%, #000 50%,
+    #fff 50%, #fff 100%
+  );
+  background-size: 50% 100%;
 }
-#map.plan-bg .leaflet-tile-pane,
-#map.plan-bg .leaflet-control-zoom {
-  opacity: 0;
+.psb-ticks {
+  position: absolute; top: 15px; left: 0; right: 0;
+  font-size: 9px; font-weight: 700; color: #000;
+  font-family: 'Arial', sans-serif;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  text-shadow:
+    -1px -1px 0 #fff, 1px -1px 0 #fff,
+    -1px  1px 0 #fff, 1px  1px 0 #fff,
+     0 0 4px #fff;
+}
+.psb-tick-label {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
-.left-sidebar.plan-mode-active .sb-tab-bar,
-.left-sidebar.plan-mode-active #sbPage1,
-.left-sidebar.plan-mode-active #sbPage2 {
-    display: none !important;
+/* Ratio picker — frosted glass dark */
+#psbPicker {
+  position: absolute; right: 0; top: 100%;
+  margin-top: 6px;
+  background: rgba(15, 15, 15, 0.55);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  z-index: 2000;
+  min-width: 180px;
+  /*box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.3);*/
+  padding: 6px 0;
+  filter: none;
 }
-
-/* Plan mode panel — shown only when active */
-#planModePanel {
-    display: none;
+.psb-pick-title {
+  font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.45);
+  padding: 4px 14px 6px; text-transform: uppercase; letter-spacing: 1px;
+  border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 4px;
+  font-family: 'Arial', sans-serif;
 }
-.left-sidebar.plan-mode-active #planModePanel {
-    display: block;
+.psb-pick-opt {
+  padding: 7px 14px; font-size: 12px; font-family: 'Courier New', monospace;
+  cursor: pointer; color: rgba(255,255,255,0.88); transition: background 0.12s;
 }
+.psb-pick-opt:hover { background: rgba(255,255,255,0.08); }
+.psb-pick-opt.active { font-weight: 700; color: #93c5fd; }

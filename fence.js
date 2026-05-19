@@ -319,17 +319,16 @@ function drawFence(linePoints, m, n, splitAtStart, doubleCorner, lineColor) {
         // - DC blue at start → blue box is first pillar at DOUBLE_CORNER_OFFSET
         // - Normal corner/endpoint → n/2
         // - Free endpoint (si=0, no corner) → 0
-        const leftOff  = startIsDC ? DOUBLE_CORNER_OFFSET
-                       : (B_i >= 1 ? n / 2 : 0);
+const leftOff  = startIsDC ? DOUBLE_CORNER_OFFSET : 0;
 
         // rightOff: distance from p1 back to the last pillar
         // - DC blue at end → blue box is last pillar at DOUBLE_CORNER_OFFSET
         // - DC red at end (endsAtDC but blue faces other way) → red sits at apex, 0 extra offset
         // - Normal corner/endpoint → n/2
         const endsAtDC = doubleCorner && isCornerPoint(p1);
-        const rightOff = endIsDC   ? DOUBLE_CORNER_OFFSET
-                       : endsAtDC  ? 0
-                       : (B_i >= 2 || (B_i >= 1 && si === numSegs - 1) ? n / 2 : 0);
+const rightOff = endIsDC  ? DOUBLE_CORNER_OFFSET
+               : endsAtDC ? 0
+               : 0;
 
         // Usable = space between first and last pillar where interior posts go
         // Total available for panels = A_i - leftOff - rightOff
@@ -345,7 +344,7 @@ function drawFence(linePoints, m, n, splitAtStart, doubleCorner, lineColor) {
 
         // Calculate panel layout — blue box is the first pillar so panels start fresh from it
 // Calculate panel layout — pole width n is factored into spacing
-        const calc = calcPanels(panelSpace, m, n);
+const calc = calcPanels(panelSpace, m);
 
         grandTotal += A_i;
 
@@ -433,80 +432,56 @@ L.polyline(pts, { color: lineColor, weight: 5, opacity: 0.75, lineJoin: 'round' 
 // Calculate panel layout for a given usable space.
 // Returns ticks (interior post positions), standardCount, splitCount.
 // Panels: full-m ones first, then adjusted ones at end if remainder exists.
-function calcPanels(space, m, n) {
-    // m = desired CLEAR GAP between pole faces (user input "ระยะห่าง")
-    // n = pole length along fence axis (meters)
-    // space = total usable distance between the two endpoint/corner pole faces
-    //
-    // Layout: [gap] [pole] [gap] [pole] ... [gap]
-    // With k interior poles:
-    //   total = (k+1)*gap_avg + k*n  = space
-    //   (k+1)*gap_avg = space - k*n
-    //   gap_avg = (space - k*n) / (k+1)
-    //
-    // We want gap_avg to be as close to m as possible and always >= 1 and <= 3.
-    // Find best k: k = floor((space - m) / (m + n))
-    // Then adjust split panels so the remainder distributes evenly.
-
-    n = n || 0;
+function calcPanels(space, m) {
     if (space < 1e-4) return { ticks: [], standardCount: 0, splitCount: 0 };
 
-    // Minimum and maximum allowed gap
     const GAP_MIN = 1.0;
     const GAP_MAX = 3.0;
 
-    // How many interior poles fit at desired gap m?
-    // (k+1)*m + k*n = space  =>  k*(m+n) = space - m  =>  k = (space-m)/(m+n)
-    let k = Math.max(0, Math.floor((space - m) / (m + n) + 1e-9));
+    // Determine number of interior poles k and clamp gap to valid range
+    const fullCount0    = Math.floor(space / m + 1e-9);
+    const remainder0    = space - fullCount0 * m;
+    const totalPanels   = remainder0 < 1e-4 ? fullCount0 : fullCount0 + 1;
+    let k               = Math.max(0, totalPanels - 1);
+    const totalGapSpace = space;
 
-    // With k interior poles, actual gap = (space - k*n) / (k+1)
-    let gap = (space - k * n) / (k + 1);
+    // Full panels at exactly m
+    const fullCount = Math.floor(totalGapSpace / m + 1e-9);
+const remainder = totalGapSpace - fullCount * m;  // 0 <= remainder < m
 
-    // If gap is too large (> GAP_MAX), add more poles
-    while (gap > GAP_MAX + 1e-6 && k < 1000) {
-        k++;
-        gap = (space - k * n) / (k + 1);
+    const gaps = [];
+
+    if (remainder < m * 0.01) {  // treat as perfect fit if remainder < 1% of spacing
+        // Perfect fit — all panels exactly m
+        for (let i = 0; i < totalPanels; i++) gaps.push(m);
+    } else if (totalPanels <= 2) {
+        // Not enough panels to do the standard+2 split — spread evenly
+        const evenGap = totalGapSpace / totalPanels;
+        for (let i = 0; i < totalPanels; i++) gaps.push(evenGap);
+    } else {
+        // Standard panels: (fullCount - 1) at exactly m
+        const stdCount = fullCount - 1;
+        for (let i = 0; i < stdCount; i++) gaps.push(m);
+        // Last 2 panels: absorb (m + remainder) equally
+        const endSize = (m + remainder) / 2;
+        gaps.push(endSize);
+        gaps.push(endSize);
     }
 
-    // If gap is too small (< GAP_MIN), remove poles
-    while (gap < GAP_MIN - 1e-6 && k > 0) {
-        k--;
-        gap = (space - k * n) / (k + 1);
-    }
+const standardCount = remainder < m * 0.01 ? totalPanels : Math.max(0, fullCount - 1);
+    const splitCount    = remainder < m * 0.01 ? 0 : Math.min(2, totalPanels);
 
-    // Now we have k interior poles with uniform gap.
-    // Apply the split logic: if gap is not exactly m, distribute evenly.
-    // Standard panels = full-m gaps, split panels = shorter/longer adjusted gaps.
-    // Since we derived gap directly, all panels are the same size (gap).
-    // We use a = 0 splits (all panels equal) unless the remainder needs adjustment.
-
-    // Build tick positions: interior poles at positions n/2 + gap + n/2, etc.
-    // i.e. after each gap, place a pole of width n, then next gap.
-    // Pole CENTER positions from left face of first gap:
-    //   pos_i = (i+1)*gap + (i + 0.5)*n   for i = 0..k-1
-    // But space is measured face-to-face of the bounding poles (already in panelSpace),
-    // so we place ticks at cumulative (gap + n) steps:
-    //   tick_0 = gap + n/2  ... wait, ticks are pole CENTERS.
-    // Actually in drawFence, ticks are offsets from leftOff (the left bounding pole center face).
-    // So tick center positions within space:
-    //   tick_i = gap + n/2 + i*(gap + n)   for i=0..k-1
-    // Verify last tick + n/2 + gap = space:
-    //   gap + n/2 + (k-1)*(gap+n) + n/2 + gap = k*gap + k*n = space ✓ (when gap exact)
-
+    // Build interior pole tick positions
     const ticks = [];
+    let cursor = 0;
     for (let i = 0; i < k; i++) {
-        const pos = gap + n / 2 + i * (gap + n);
-        if (pos > 1e-4 && pos < space - 1e-4) {
-            ticks.push({ pos, isSplit: false });
+        cursor += gaps[i];
+        if (cursor > 1e-4 && cursor < space - 1e-4) {
+            ticks.push({ pos: cursor, isSplit: i >= standardCount - 1 });
         }
     }
 
-    // standardCount = number of full-m gaps, splitCount = adjusted gaps
-    // For UI/cost display we count panels as gaps (k+1 total)
-    const standardCount = k + 1;
-    const splitCount = 0;
-
-    return { ticks, standardCount, splitCount, splitSize: gap, m: gap };
+    return { ticks, standardCount, splitCount, splitSize: gaps[gaps.length - 1], m };
 }
 
 // Draw a post:
@@ -514,8 +489,8 @@ function calcPanels(space, m, n) {
 // - 'endpoint' → slightly larger circle
 // - 'corner' → square (drawn separately by drawDoubleCornerPost, this handles single fallback)
 function drawPost(latlng, b, type) {
-    const postW = (parseFloat(document.getElementById('postSizeWidth')?.value)  || 6) * 0.0254;
-    const postL = (parseFloat(document.getElementById('postSizeLength')?.value) || 6) * 0.0254;
+const postW = 0.15; // Fixed display size ~15cm, visually represents 1m×1m pole
+const postL = 0.15;
 
     // Make displayed square slightly bigger than actual pole for visibility
     const userScale = window._poleScale || 1.0;
@@ -636,11 +611,7 @@ function runFenceCalc() {
     if (typeof allLines === 'undefined' || allLines.length === 0) return;
 
     // Read post dimensions from inputs (in inches → meters)
-    const postWidthInput = document.getElementById('postSizeWidth');
-    const postLengthInput = document.getElementById('postSizeLength');
-    const postW = postWidthInput ? parseFloat(postWidthInput.value) || 6 : 6;
-    const postL = postLengthInput ? parseFloat(postLengthInput.value) || 6 : 6;
-    const n = postL * 0.0254;  // inches → meters, only the along-fence dimension matters
+const n = 0; // Post size excluded from spacing calculation; visual only
     
     const layersInput = document.getElementById('beamSelect');
     const layers = layersInput ? parseInt(layersInput.value) || 2 : 2;
@@ -692,9 +663,7 @@ function runFenceCalc() {
         const m_brick = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
         
         // Get brick post size
-        const brickPostInput = document.getElementById('postSizeWidthBrick');
-        const brickPostSize = brickPostInput ? parseFloat(brickPostInput.value) || 6 : 6;
-        const n_brick = brickPostSize * 0.0254;
+const n_brick = 0;
 
         buildCornerMap(brickLines.map(ld => ld.points));
 
@@ -713,9 +682,7 @@ function runFenceCalc() {
         const m_barbed = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
         
         // Get barbed wire post size
-        const barbedPostInput = document.getElementById('postSizeWidthBarbed');
-        const barbedPostSize = barbedPostInput ? parseFloat(barbedPostInput.value) || 6 : 6;
-        const n_barbed = barbedPostSize * 0.0254;
+const n_barbed = 0;
         
         const nBraceSolo = document.getElementById('nBraceSolo')?.checked ?? false;
         const nBraceDual = document.getElementById('nBraceDual')?.checked ?? false;
@@ -878,7 +845,7 @@ function _drawNBraceCross(pt, b) {
 // "คำนวนวัสดุ" — calculate and draw
 
 // "สร้างแผน" — clear
-document.getElementById('clearFenceBtn').addEventListener('click', function() {
+document.getElementById('clearFenceBtn')?.addEventListener('click', function() {
     fenceLayerGroup.clearLayers();
     swappedCorners.clear();
     ['resTotal','resPosts','resBeams','resPrice'].forEach(id => document.getElementById(id).value='');

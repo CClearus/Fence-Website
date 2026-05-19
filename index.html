@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Map with Search</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-    <link rel="stylesheet" href="style.css?v=1">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="angle_dial.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -136,14 +137,6 @@
                     </div>
                 </div>
 
-                <div class="sb-section-label" style="margin-top:12px;">ขนาดเสา (นิ้ว)</div>
-                <div class="sb-input-row" style="margin-bottom:6px;">
-                    <input type="number" class="sb-number-input" id="postSizeWidth" value="6" min="1" max="24"
-                        step="0.5" style="width:100%;" placeholder="ขนาดด้านละ (นิ้ว)">
-                    <span class="sb-input-unit">นิ้ว</span>
-                </div>
-                <input type="hidden" id="postSizeLength" value="6">
-
                 <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
                 <div class="sb-spacing-pills" id="spacingPills">
                     <button class="sp-pill" data-val="2.0" onclick="setSpacing(2.0)">2.0</button>
@@ -164,12 +157,6 @@
 
             <!-- ── BARBED WIRE OPTIONS (separate div) ── -->
             <div id="p1BarbedOpts" style="display:none;">
-                <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (นิ้ว)</div>
-                <div class="sb-input-row" style="margin-bottom:6px;">
-                    <input type="number" class="sb-number-input" id="postSizeWidthBarbed" value="4" min="1" max="12"
-                        step="0.5" style="width:100%;" placeholder="ขนาดด้านละ (นิ้ว)">
-                    <span class="sb-input-unit">นิ้ว</span>
-                </div>
 
                 <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
                 <div class="sb-spacing-pills" id="spacingPillsBarbed">
@@ -198,12 +185,7 @@
 
             <!-- ── BRICK OPTIONS ── -->
             <div id="p1BrickOpts" style="display:none;">
-                <div class="sb-section-label">ขนาดเสา (นิ้ว)</div>
-                <div class="sb-input-row" style="margin-bottom:6px;">
-                    <input type="number" class="sb-number-input" id="postSizeWidthBrick" value="6" min="1" max="24"
-                        step="0.5" style="width:100%;" placeholder="ขนาดด้านละ (นิ้ว)">
-                    <span class="sb-input-unit">นิ้ว</span>
-                </div>
+
 
                 <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
                 <div class="sb-spacing-pills" id="spacingPillsBrick">
@@ -265,24 +247,14 @@
         <!-- Plan Mode Panel — lives outside sbPage1 so CSS can show it independently -->
         <div id="planModePanel" style="display:none; padding:14px 16px 20px;">
             <div style="font-family:'Courier New',monospace;font-size:14px;font-weight:bold;color:#1f2937;border-bottom:2px solid #1f2937;padding-bottom:8px;margin-bottom:14px;">PLAN VIEW</div>
-            <div class="form-section">
-                <label class="form-label">หน่วยมาตราส่วน</label>
-                <select id="planUnitSelect" class="form-select">
-                    <option value="cm_km" selected>1 cm = ? km</option>
-                    <option value="m_m">1 cm = ? m</option>
-                    <option value="mm_cm">1 cm = ? cm</option>
-                </select>
-            </div>
             <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">รายการเส้น</div>
             <div id="planLineList" style="max-height:260px;overflow-y:auto;"></div>
             <button onclick="togglePlanMode()" style="margin-top:16px;width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">✕ ออกจากโหมดแผน</button>
         </div>
 
         <!-- ── PAGE 2: Draw mode / data entry (old sidebar content) ── -->
-        <!-- ── PAGE 2: DISABLED for now ── -->
-        <div class="sidebar-content" id="sbPage2" style="display:none;">
-            <div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px;">man</div>
-        </div>
+
+<div class="sidebar-content" id="sbPage2" style="display:none;"></div>
         <div class="sb-fence-hint" style="margin-top:12px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 style="flex-shrink:0;margin-top:1px;">
@@ -290,7 +262,6 @@
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <span>เลือกประเภทรั้วและตั้งค่าจากหน้า "เลือกรั้ว" ก่อนวาด</span>
         </div>
     </div>
 
@@ -309,7 +280,17 @@
     </div>
 
     <!-- ======== TOP RIGHT CONTROLS ======== -->
-    <div class="top-right-controls">
+<div class="top-right-controls" id="topRightControls">
+        <!-- Scale bar — shown only in plan mode, sits here under layer button -->
+        <div id="customScaleBar" style="display:none;">
+            <div class="psb-title" id="psbTitle">SCALE 1:—</div>
+            <div class="psb-bar-row"><div class="psb-track" id="psbTrack"><div class="psb-fill"></div><div class="psb-ticks"><span class="psb-tick-label" style="left:0">0</span><span id="psbMid" class="psb-tick-label"></span><span id="psbEnd" class="psb-tick-label" style="right:0"></span></div></div></div>
+            <!-- Ratio picker dropdown -->
+            <div id="psbPicker" style="display:none;">
+                <div class="psb-pick-title">เลือกมาตราส่วน</div>
+                <div class="psb-pick-options" id="psbOptions"></div>
+            </div>
+        </div>
         <div class="custom-label-control">
             <button class="control-btn small-btn" id="toggleLabelsBtn" title="Toggle Labels">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -343,12 +324,6 @@
                     <span class="label-slider-label">m size</span>
                     <input type="range" id="distFontSlider" min="8" max="24" value="11" step="1" class="label-slider">
                     <span class="label-slider-val" id="distFontVal">11</span>
-                </div>
-                <div class="label-slider-row" id="poleSizeRow">
-                    <span class="label-slider-label">pole</span>
-                    <input type="range" id="poleScaleSlider" min="0.3" max="3.0" value="1.0" step="0.1"
-                        class="label-slider">
-                    <span class="label-slider-val" id="poleScaleVal">1.0</span>
                 </div>
             </div>
         </div>
@@ -422,19 +397,48 @@
     <script src="map.js"></script>
     <script src="measure.js"></script>
     <script src="fence.js"></script>
-    <script src="plan_mode.js"></script> i
+    <script src="input_mode.js"></script>
+    <script src="plan_mode.js"></script> 
 
     <!-- Hidden inputs -->
     <input type="hidden" id="resPrice">
 
     <script>
         // ── Tab switcher ──
-        function switchSbTab(n) {
-            document.getElementById('sbPage1').style.display = n === 1 ? '' : 'none';
-            document.getElementById('sbPage2').style.display = n === 2 ? '' : 'none';
-            document.getElementById('sbTab1').classList.toggle('sb-tab-active', n === 1);
-            document.getElementById('sbTab2').classList.toggle('sb-tab-active', n === 2);
+// ── Tab switcher ──
+function switchSbTab(n) {
+    document.getElementById('sbPage1').style.display = n === 1 ? '' : 'none';
+    document.getElementById('sbPage2').style.display = n === 2 ? '' : 'none';
+    document.getElementById('sbTab1').classList.toggle('sb-tab-active', n === 1);
+    document.getElementById('sbTab2').classList.toggle('sb-tab-active', n === 2);
+
+    // When entering input mode (Tab 2): disable all draw tools
+    const measureBtn = document.getElementById('measureBtn');
+    const eraserBtn  = document.getElementById('eraserBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    if (n === 2) {
+        // Stop any active drawing first
+        if (typeof measureActive !== 'undefined' && measureActive) {
+            if (measureBtn) measureBtn.click();
         }
+        // Visually disable draw buttons
+        [measureBtn, eraserBtn, clearAllBtn].forEach(function(btn) {
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.3'; btn.style.pointerEvents = 'none'; }
+        });
+        // Disable map click drawing
+        if (typeof map !== 'undefined') {
+            map.getContainer().style.cursor = 'default';
+        }
+    } else {
+        // Re-enable draw buttons when back on Tab 1
+        [measureBtn, eraserBtn, clearAllBtn].forEach(function(btn) {
+            if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+        });
+        if (typeof map !== 'undefined') {
+            map.getContainer().style.cursor = '';
+        }
+    }
+}
 
         // ── Spacing pills ──
         function setSpacing(val) {
@@ -452,10 +456,7 @@
         }
 
         // Keep postSizeLength in sync with postSizeWidth (square post)
-        // Keep postSizeLength in sync with postSizeWidth (square post)
-        document.getElementById('postSizeWidth').addEventListener('input', function () {
-            document.getElementById('postSizeLength').value = this.value;
-        });
+
 
         // Beam select → show matching spec row
         document.getElementById('beamSelect').addEventListener('change', function () {

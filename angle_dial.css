@@ -1,0 +1,163 @@
+/* ============================================
+   ANGLE DIAL POPUP — angle_dial.css
+   Unit-circle bearing picker for input_mode.js
+   ============================================ */
+
+/* ── Popup container ──────────────────────────── */
+#imAngleDialPopup {
+    position: fixed;
+    z-index: 9999;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow:
+        0 4px 6px -1px rgba(0,0,0,0.07),
+        0 12px 36px -4px rgba(0,0,0,0.16),
+        0 0 0 1px rgba(0,0,0,0.04);
+    padding: 14px 14px 12px;
+    user-select: none;
+    width: 292px;
+}
+
+/* ── Header ───────────────────────────────────── */
+.im-dial-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-align: center;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+/* ── SVG wrapper ─────────────────────────────── */
+.im-dial-svg-wrap {
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fafafa;
+    border: 1px solid #f3f4f6;
+    line-height: 0; /* kill gap below inline svg */
+}
+
+/* ── Readout bar below the circle ────────────── */
+.im-dial-readout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding: 0 2px;
+}
+
+.im-dial-prev-label {
+    font-size: 10px;
+    color: #9ca3af;
+    font-weight: 500;
+}
+
+.im-dial-deg-badge {
+    font-size: 14px;
+    font-weight: 800;
+    color: #111;
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
+    letter-spacing: 0.5px;
+    background: #f3f4f6;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1.5px solid #e5e7eb;
+    min-width: 52px;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.im-dial-deg-badge.im-dial-forbidden {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+}
+
+/* ── Action buttons ──────────────────────────── */
+.im-dial-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.im-dial-btn {
+    flex: 1;
+    padding: 9px 0;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+    letter-spacing: 0.3px;
+    border: none;
+}
+
+.im-dial-btn-confirm {
+    background: #111;
+    color: #fff;
+}
+.im-dial-btn-confirm:hover { background: #374151; }
+.im-dial-btn-confirm:disabled,
+.im-dial-btn-confirm.im-dial-confirm-blocked {
+    background: #fee2e2;
+    color: #dc2626;
+    cursor: not-allowed;
+}
+
+.im-dial-btn-cancel {
+    background: #f9fafb;
+    color: #374151;
+    border: 1.5px solid #e5e7eb;
+}
+.im-dial-btn-cancel:hover { background: #f3f4f6; }
+
+/* ── Forbidden hint text ─────────────────────── */
+.im-dial-forbidden-hint {
+    font-size: 10px;
+    color: #dc2626;
+    text-align: center;
+    margin-top: 4px;
+    min-height: 14px;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.im-dial-forbidden-hint.visible { opacity: 1; }
+
+/* ── Angle display input (inline in side row) ── */
+.im-angle-display-input {
+    width: 44px;
+    font-size: 11px;
+    text-align: center;
+    padding: 3px 4px;
+    border: 1.5px solid #d1d5db;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #374151;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    /* hide spin buttons */
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.im-angle-display-input::-webkit-inner-spin-button,
+.im-angle-display-input::-webkit-outer-spin-button { display: none; }
+.im-angle-display-input:hover,
+.im-angle-display-input:focus {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    outline: none;
+}
+
+/* ── Shake animation for blocked confirm ─────── */
+@keyframes imDialShake {
+    0%   { transform: translateX(0); }
+    20%  { transform: translateX(-5px); }
+    40%  { transform: translateX(5px); }
+    60%  { transform: translateX(-4px); }
+    80%  { transform: translateX(4px); }
+    100% { transform: translateX(0); }
+}

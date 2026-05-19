@@ -1,0 +1,103 @@
+<!--
+  angle_dial.html
+  ─────────────────────────────────────────────
+  HTML template for the unit-circle angle picker popup.
+  This is a REFERENCE / PARTIAL — the actual popup is
+  created dynamically in openAngleDial() inside input_mode.js.
+
+  To wire it in:
+    1. Add <link rel="stylesheet" href="angle_dial.css"> to index.html
+    2. The JS in openAngleDial builds this structure via innerHTML;
+       the markup below shows the final rendered shape.
+
+  Variable slots shown as {{…}} for documentation only.
+  ─────────────────────────────────────────────
+-->
+
+<div id="imAngleDialPopup">
+
+  <!-- Header -->
+  <div class="im-dial-header">
+    ด้านที่ {{idx + 1}} — เลือกทิศทาง
+  </div>
+
+  <!-- SVG wrapper — renderDial() fills this -->
+  <div class="im-dial-svg-wrap">
+    <div id="imDialInner">
+      <!--
+        SVG injected here by renderDial(bearing).
+        Structure:
+          <svg id="imDialSvg" …>
+            axis lines (x/y cross, #ccc)
+            forbidden arc (red tint behind reverse bearing)
+            main ring circle
+            tick marks (major at 90°, minor at step°)
+            dots at 0/90/180/270
+            cardinal degree labels  (0° 90° 180° 270°)
+            intercardinal labels    (45° 135° … if step ≤ 45)
+            previous-direction dashed indicator
+            arrow line + arrowhead
+            center dot
+          </svg>
+          <div class="im-dial-readout">
+            <span class="im-dial-prev-label">จากทิศ {{prevBearing}}°</span>
+            <span class="im-dial-deg-badge [im-dial-forbidden]">{{snapped}}°</span>
+          </div>
+      -->
+    </div>
+  </div>
+
+  <!-- Forbidden hint — shown when selected bearing is in red zone -->
+  <div class="im-dial-forbidden-hint" id="imDialForbidHint">
+    ⚠ ทิศนี้จะทับเส้นก่อนหน้า
+  </div>
+
+  <!-- Confirm / Cancel -->
+  <div class="im-dial-actions">
+    <button id="imDialConfirm" class="im-dial-btn im-dial-btn-confirm">
+      ✓ ตกลง
+    </button>
+    <button id="imDialCancel" class="im-dial-btn im-dial-btn-cancel">
+      ยกเลิก
+    </button>
+  </div>
+
+</div>
+
+
+<!--
+  ══════════════════════════════════════════════
+  INTEGRATION NOTES
+  ══════════════════════════════════════════════
+
+  1. index.html — add before </head>:
+       <link rel="stylesheet" href="angle_dial.css">
+
+  2. Side row HTML (renderSideList in input_mode.js):
+     Each row now contains:
+       <input  class="im-angle-display-input sb-number-input"
+               data-idx="N" value="{{absB}}" readonly …>
+       <span   style="font-size:10px;color:#9ca3af">°</span>
+       <button class="im-angle-dial-btn" data-idx="N"
+               data-bearing="{{absB}}">⊙</button>
+
+     Clicking EITHER the input OR the button calls openAngleDial(idx, btn).
+
+  3. Forbidden logic (isForbidden inside openAngleDial):
+     Blocks the exact reverse bearing ±step° of the previous segment
+     so a new line cannot double back and overlap.
+
+     function isForbidden(deg) {
+         if (prevBearing === null) return false;
+         const reverse = (prevBearing + 180) % 360;
+         const diff = Math.abs(((deg - reverse + 540) % 360) - 180);
+         return diff < step;
+     }
+
+  4. renderDial no longer renders a big degree number inside the SVG.
+     The current bearing is shown only in .im-dial-deg-badge (below circle).
+
+  5. Confirm button is blocked (with shake animation) when isForbidden(snapped).
+
+  ══════════════════════════════════════════════
+-->
