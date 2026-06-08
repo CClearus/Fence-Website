@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="angle_dial.css">
+    <link rel="stylesheet" href="brick_picker.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -138,11 +139,13 @@
                 </div>
 
                 <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
-                <div class="sb-spacing-pills" id="spacingPills">
-                    <button class="sp-pill" data-val="2.0" onclick="setSpacing(2.0)">2.0</button>
-                    <button class="sp-pill sp-active" data-val="2.5" onclick="setSpacing(2.5)">2.5</button>
-                    <button class="sp-pill" data-val="custom" onclick="setSpacing('custom')">กำหนดเอง</button>
-                </div>
+                <select class="sb-number-input" id="spacingSelect"
+                    style="width:100%;padding:6px 8px;font-size:12px;"
+                    onchange="setSpacing(this.value)">
+                    <option value="2.0">2.0 ม.</option>
+                    <option value="2.5" selected>2.5 ม.</option>
+                    <option value="custom">กำหนดเอง…</option>
+                </select>
                 <input type="number" class="sb-number-input" id="postSpacing" value="2.5" min="1" max="3" step="0.1"
                     style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
 
@@ -159,12 +162,14 @@
             <div id="p1BarbedOpts" style="display:none;">
 
                 <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
-                <div class="sb-spacing-pills" id="spacingPillsBarbed">
-                    <button class="sp-pill" data-val="2.0" onclick="setSpacingBarbed(2.0)">2.0</button>
-                    <button class="sp-pill sp-active" data-val="2.5" onclick="setSpacingBarbed(2.5)">2.5</button>
-                    <button class="sp-pill" data-val="3.0" onclick="setSpacingBarbed(3.0)">3.0</button>
-                    <button class="sp-pill" data-val="custom" onclick="setSpacingBarbed('custom')">กำหนดเอง</button>
-                </div>
+                <select class="sb-number-input" id="spacingSelectBarbed"
+                    style="width:100%;padding:6px 8px;font-size:12px;"
+                    onchange="setSpacingBarbed(this.value)">
+                    <option value="2.0">2.0 ม.</option>
+                    <option value="2.5" selected>2.5 ม.</option>
+                    <option value="3.0">3.0 ม.</option>
+                    <option value="custom">กำหนดเอง…</option>
+                </select>
                 <input type="number" class="sb-number-input" id="postSpacingBarbed" value="2.5" min="1" max="3"
                     step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
 
@@ -186,16 +191,106 @@
             <!-- ── BRICK OPTIONS ── -->
             <div id="p1BrickOpts" style="display:none;">
 
+                <!-- Fence Height -->
+                <div class="sb-section-label" style="margin-top:10px;">ความสูงรั้ว</div>
+                <select class="sb-number-input" id="brickHeightSelect"
+                    style="width:100%;padding:6px 8px;font-size:12px;"
+                    onchange="setBrickHeight(this.value)">
+                    <option value="1.5">1.5 ม.</option>
+                    <option value="1.8" selected>1.8 ม.</option>
+                    <option value="2.0">2.0 ม.</option>
+                    <option value="2.5">2.5 ม.</option>
+                    <option value="custom">กำหนดเอง…</option>
+                </select>
+<input type="number" class="sb-number-input" id="brickFenceHeight" value="1.8" min="0.5" max="5"
+    step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุความสูง (ม.)"
+    oninput="syncBeamCheckboxesToHeight(parseFloat(this.value)||1.8); if(typeof runFenceCalc==='function') runFenceCalc();">
 
-                <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
-                <div class="sb-spacing-pills" id="spacingPillsBrick">
-                    <button class="sp-pill" data-val="2.0" onclick="setSpacingBrick(2.0)">2.0</button>
-                    <button class="sp-pill sp-active" data-val="2.5" onclick="setSpacingBrick(2.5)">2.5</button>
-                    <button class="sp-pill" data-val="3.0" onclick="setSpacingBrick(3.0)">3.0</button>
-                    <button class="sp-pill" data-val="custom" onclick="setSpacingBrick('custom')">กำหนดเอง</button>
-                </div>
-                <input type="number" class="sb-number-input" id="postSpacingBrick" value="2.5" min="1" max="3"
+                <!-- Pillar Spacing -->
+                <div class="sb-section-label" style="margin-top:10px;">ระยะห่างเสา</div>
+                <select class="sb-number-input" id="brickSpacingSelect"
+                    style="width:100%;padding:6px 8px;font-size:12px;"
+                    onchange="setSpacingBrick(this.value)">
+                    <option value="2.0">2.0 ม.</option>
+                    <option value="2.5" selected>2.5 ม.</option>
+                    <option value="3.0">3.0 ม.</option>
+                    <option value="custom">กำหนดเอง…</option>
+                </select>
+                <input type="number" class="sb-number-input" id="postSpacingBrick" value="2.5" min="1" max="5"
                     step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+
+
+                <!-- Pillar Size -->
+<!-- Pillar Size -->
+<div class="sb-section-label" style="margin-top:10px;">ขนาดเสา</div>
+<select class="sb-number-input" id="brickPillarSize"
+    style="width:100%;padding:6px 8px;font-size:12px;"
+    onchange="onPillarSizeChange(this.value)">
+    <option value="10x10">10×10 ซม. (default)</option>
+    <option value="15x15">15×15 ซม.</option>
+    <option value="custom">กำหนดเอง…</option>
+</select>
+<input type="number" class="sb-number-input" id="brickPillarCustom"
+    value="" min="5" max="50" step="1"
+    style="width:100%;margin-top:6px;display:none;" placeholder="ขนาดเสา (ซม.) เช่น 20 = 20×20">
+<div id="brickPillarCustomLabel" style="display:none;font-size:10px;color:#9ca3af;margin-top:3px;">
+    กรอก ซม. เช่น 20 = 20×20 ซม.
+</div>
+
+                <!-- Brick Type Picker (Page 1) -->
+                <div class="sb-section-label" style="margin-top:10px;">ประเภทอิฐ</div>
+                <input type="hidden" id="brickType" value="mong2">
+                <button type="button" class="brick-picker-trigger" id="p1BrickPickerTrigger" onclick="openBrickPickerP1()">
+                    <div class="bpt-left">
+                        <div class="bpt-swatch" id="p1BptSwatch">
+                            <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
+                                <rect x="3" y="5" width="42" height="38" rx="3" fill="#e8aa60"/>
+                                <rect x="4" y="6" width="19" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                                <rect x="25" y="6" width="20" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                                <rect x="4" y="17" width="11" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                                <rect x="17" y="17" width="14" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                                <rect x="33" y="17" width="12" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                                <rect x="4" y="28" width="19" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                                <rect x="25" y="28" width="20" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                            </svg>
+                        </div>
+                        <div class="bpt-info">
+<div class="bpt-name" id="p1BptName">อิฐมอญ 2 ช่อง</div>
+<div class="bpt-meta" id="p1BptMeta">3×6×15 ซม.<br><span style="color:#6b7280;">฿1.05/ก้อน · 135 ก้อน/ม²</span></div>
+                        </div>
+                    </div>
+                    <span class="bpt-chevron">▼</span>
+                </button>
+
+                <!-- Custom brick price override -->
+                <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+                    <span style="font-size:11px;color:#6b7280;white-space:nowrap;">ราคา/ก้อน (฿)</span>
+                    <input type="number" class="sb-number-input-sm" id="brickPricePerPiece" value="1.05"
+                        min="0" step="0.05" style="flex:1;" placeholder="ราคา/ก้อน">
+                    <span style="font-size:11px;color:#6b7280;white-space:nowrap;">ก้อน/ม²</span>
+                    <input type="number" class="sb-number-input-sm" id="brickPpm2" value="135"
+                        min="1" step="0.1" style="flex:1;" placeholder="ก้อน/ม²">
+                </div>
+
+<div class="sb-section-label" style="margin-top:10px;">คานทับหลัง (n)</div>
+<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="beamCbTop"
+            style="width:15px;height:15px;accent-color:#ea580c;cursor:pointer;"
+            onchange="onBeamCbChange()">
+        <span style="font-size:12px;font-weight:600;color:#ea580c;">● คานบน (Top beam)</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="beamCbCenter"
+            style="width:15px;height:15px;accent-color:#d97706;cursor:pointer;"
+            onchange="onBeamCbChange()">
+        <span style="font-size:12px;font-weight:600;color:#d97706;">● คานกลาง (Center beam)</span>
+    </label>
+</div>
+<div id="beamAutoLabel" style="font-size:10px;color:#9ca3af;margin-top:4px;"></div>
+<!-- Hidden input that fence.js reads -->
+<input type="hidden" id="imBrickBeamMode" value="auto">
+
             </div>
 
             <div class="sb-divider"></div>
@@ -227,6 +322,21 @@
                         <span class="sbr-unit">อัน</span>
                     </div>
                 </div>
+                <!-- Brick-specific results (shown only for brick mode) -->
+                <div class="sbr-row-item" id="resBrickRow" style="display:none;">
+                    <div class="sbr-label">จำนวนอิฐ (รวม +5%)</div>
+                    <div class="sbr-field-row">
+                        <input type="text" class="sbr-input" id="resBrickCount" readonly placeholder="—">
+                        <span class="sbr-unit">ก้อน</span>
+                    </div>
+                </div>
+                <div class="sbr-row-item" id="resBrickBayRow" style="display:none;">
+                    <div class="sbr-label">จำนวนช่อง (r) / ระยะจริง (d')</div>
+                    <div class="sbr-field-row">
+                        <input type="text" class="sbr-input" id="resBrickBays" readonly placeholder="—">
+                        <span class="sbr-unit">ช่อง</span>
+                    </div>
+                </div>
                 <div class="sbr-row-item">
                     <div class="sbr-label">ราคาโดยประมาณ</div>
                     <div class="sbr-field-row">
@@ -250,19 +360,12 @@
             <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">รายการเส้น</div>
             <div id="planLineList" style="max-height:260px;overflow-y:auto;"></div>
             <button onclick="togglePlanMode()" style="margin-top:16px;width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">✕ ออกจากโหมดแผน</button>
+            
         </div>
 
         <!-- ── PAGE 2: Draw mode / data entry (old sidebar content) ── -->
 
 <div class="sidebar-content" id="sbPage2" style="display:none;"></div>
-        <div class="sb-fence-hint" style="margin-top:12px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                style="flex-shrink:0;margin-top:1px;">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-        </div>
     </div>
 
     <!-- ======== SEARCH BAR ======== -->
@@ -443,16 +546,8 @@ function switchSbTab(n) {
         // ── Spacing pills ──
         function setSpacing(val) {
             const input = document.getElementById('postSpacing');
-            document.querySelectorAll('.sp-pill').forEach(p => p.classList.remove('sp-active'));
-            if (val === 'custom') {
-                input.style.display = '';
-                input.focus();
-                document.querySelector('.sp-pill[data-val="custom"]').classList.add('sp-active');
-            } else {
-                input.value = val;
-                input.style.display = 'none';
-                document.querySelector(`.sp-pill[data-val="${val}"]`).classList.add('sp-active');
-            }
+            if (val === 'custom') { input.style.display = ''; input.focus(); }
+            else { input.value = val; input.style.display = 'none'; }
         }
 
         // Keep postSizeLength in sync with postSizeWidth (square post)
@@ -519,17 +614,40 @@ function switchSbTab(n) {
         }
 
         // ── Calc button: trigger simulate mode which runs runFenceCalc ──
-        function doCalc() {
-            if (typeof setAppMode === 'function') setAppMode('simulate');
-            // Immediately recalc with current inputs
-            if (typeof runFenceCalc === 'function') runFenceCalc();
-            // Show price
-            var price = parseFloat(document.getElementById('resTotal').value) * 850;
-            if (!isNaN(price)) {
-                document.getElementById('resPrice').value = price.toLocaleString('th-TH', { maximumFractionDigits: 0 });
-                document.getElementById('resPriceDisplay').value = price.toLocaleString('th-TH', { maximumFractionDigits: 0 });
-            }
+function doCalc() {
+    if (typeof setAppMode === 'function') setAppMode('simulate');
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+
+    const activeCard = document.querySelector('.sb-fence-card.active');
+    const activeFenceType = activeCard ? activeCard.getAttribute('data-type') : 'cowboy';
+
+    if (activeFenceType === 'brick') {
+        const br = window._brickCalcResult;
+        if (br) {
+            const brickPrice = parseFloat(document.getElementById('brickPricePerPiece')?.value) || 1.05;
+            const brickCount = Math.ceil(br.brickCount * 1.05);
+            const totalPrice = brickCount * brickPrice;
+            document.getElementById('resPriceDisplay').value =
+                totalPrice.toLocaleString('th-TH', { maximumFractionDigits: 0 });
         }
+        document.getElementById('resBrickRow').style.display = 'none';
+        document.getElementById('resBrickBayRow').style.display = 'none'; // ← removed from calc view
+        document.getElementById('resBeams').closest('.sbr-row-item').style.display = '';
+    } else {
+        document.getElementById('resBrickRow').style.display = 'none';
+        document.getElementById('resBrickBayRow').style.display = 'none';
+        document.getElementById('resBeams').closest('.sbr-row-item').style.display = '';
+        const beamsLabel = document.getElementById('resBeams')?.closest('.sbr-row-item')?.querySelector('.sbr-label');
+        const beamsUnit  = document.getElementById('resBeams')?.closest('.sbr-row-item')?.querySelector('.sbr-unit');
+        if (beamsLabel) beamsLabel.textContent = 'จำนวนคานที่ต้องใช้';
+        if (beamsUnit)  beamsUnit.textContent  = 'อัน';
+        const price = parseFloat(document.getElementById('resTotal').value) * 850;
+        if (!isNaN(price)) {
+            document.getElementById('resPriceDisplay').value =
+                price.toLocaleString('th-TH', { maximumFractionDigits: 0 });
+        }
+    }
+}
 
         // ── Show/hide sidebar sections (called by dock cards too) ──
         function applyFenceTypeUI(type) {
@@ -601,32 +719,102 @@ function switchSbTab(n) {
 
         function setSpacingBarbed(val) {
             const input = document.getElementById('postSpacingBarbed');
-            document.querySelectorAll('#spacingPillsBarbed .sp-pill').forEach(p => p.classList.remove('sp-active'));
-            if (val === 'custom') {
-                input.style.display = '';
-                input.focus();
-                document.querySelector('#spacingPillsBarbed .sp-pill[data-val="custom"]').classList.add('sp-active');
-            } else {
-                input.value = val;
-                input.style.display = 'none';
-                document.querySelector(`#spacingPillsBarbed .sp-pill[data-val="${val}"]`).classList.add('sp-active');
-            }
+            if (val === 'custom') { input.style.display = ''; input.focus(); }
+            else { input.value = val; input.style.display = 'none'; }
         }
 
         function setSpacingBrick(val) {
-            const input = document.getElementById('postSpacingBrick');
-            document.querySelectorAll('#spacingPillsBrick .sp-pill').forEach(p => p.classList.remove('sp-active'));
+            const customInput = document.getElementById('postSpacingBrick');
             if (val === 'custom') {
-                input.style.display = '';
-                input.focus();
-                document.querySelector('#spacingPillsBrick .sp-pill[data-val="custom"]').classList.add('sp-active');
+                customInput.style.display = '';
+                customInput.focus();
             } else {
-                input.value = val;
-                input.style.display = 'none';
-                document.querySelector(`#spacingPillsBrick .sp-pill[data-val="${val}"]`).classList.add('sp-active');
+                customInput.value = val;
+                customInput.style.display = 'none';
             }
         }
+
+function setBrickHeight(val) {
+    const customInput = document.getElementById('brickFenceHeight');
+    if (val === 'custom') {
+        if (customInput) { customInput.style.display = ''; customInput.focus(); }
+    } else {
+        const h = parseFloat(val);
+        if (customInput) { customInput.value = h; customInput.style.display = 'none'; }
+        syncBeamCheckboxesToHeight(h);
+        syncPillarSizeOptions(h);
+        if (typeof runFenceCalc === 'function') runFenceCalc();
+    }
+}
+
+        // ── Page 1 brick picker (uses shared BRICK_CATALOGUE from input_mode.js) ──
+        function _p1GetBrick(value) {
+            const cat = window.BRICK_CATALOGUE;
+            if (!cat) return null;
+            for (const g of cat) {
+                const b = g.bricks.find(b => b.value === value);
+                if (b) return b;
+            }
+            return null;
+        }
+
+        function updateBrickDefaults() {
+            const val = document.getElementById('brickType')?.value || 'mong2';
+            const brick = _p1GetBrick(val);
+            if (!brick) return;
+            const p = document.getElementById('brickPricePerPiece');
+            const m = document.getElementById('brickPpm2');
+            if (p) p.value = brick.price;
+            if (m) m.value = brick.ppm2;
+        }
+
+        window.openBrickPickerP1 = function () {
+            if (typeof openBrickPickerFor === 'function') openBrickPickerFor('p1');
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(updateBrickDefaults, 200);
+        });
     </script>
+    <style>
+        /* PDF Download Button Styling */
+#btnDownloadPDF {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: #1f2937;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 8px;
+}
+
+#btnDownloadPDF:hover {
+    background: #111827;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+}
+
+#btnDownloadPDF:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+#btnDownloadPDF:disabled {
+    background: #6b7280;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+    </style>
 </body>
 
 </html>

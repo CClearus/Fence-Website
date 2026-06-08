@@ -947,11 +947,13 @@ function setIMFenceType(type) {
             <div class="sb-select-icon">▼</div>
         </div>
 <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
-        <div class="sb-spacing-pills" id="imSpacingPills">
-            <button class="sp-pill" data-val="2.0" onclick="imSetSpacing(2.0)">2.0</button>
-            <button class="sp-pill sp-active" data-val="2.5" onclick="imSetSpacing(2.5)">2.5</button>
-            <button class="sp-pill" data-val="custom" onclick="imSetSpacing('custom')">กำหนดเอง</button>
-        </div>
+        <select class="sb-number-input" id="imSpacingSelect"
+            style="width:100%;padding:6px 8px;font-size:12px;"
+            onchange="imSetSpacing(this.value)">
+            <option value="2.0">2.0 ม.</option>
+            <option value="2.5" selected>2.5 ม.</option>
+            <option value="custom">กำหนดเอง…</option>
+        </select>
         <input type="number" class="sb-number-input" id="imPostSpacing"
             value="2.5" min="1" max="3" step="0.1"
             style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
@@ -967,12 +969,14 @@ function setIMFenceType(type) {
     <!-- BARBED opts -->
 <div id="imBarbedOpts" style="display:none;">
         <div class="sb-section-label">ระยะห่างระหว่างเสา (เมตร)</div>
-        <div class="sb-spacing-pills" id="imSpacingPillsBarbed">
-            <button class="sp-pill" data-val="2.0" onclick="imSetSpacingBarbed(2.0)">2.0</button>
-            <button class="sp-pill sp-active" data-val="2.5" onclick="imSetSpacingBarbed(2.5)">2.5</button>
-            <button class="sp-pill" data-val="3.0" onclick="imSetSpacingBarbed(3.0)">3.0</button>
-            <button class="sp-pill" data-val="custom" onclick="imSetSpacingBarbed('custom')">กำหนดเอง</button>
-        </div>
+        <select class="sb-number-input" id="imSpacingSelectBarbed"
+            style="width:100%;padding:6px 8px;font-size:12px;"
+            onchange="imSetSpacingBarbed(this.value)">
+            <option value="2.0">2.0 ม.</option>
+            <option value="2.5" selected>2.5 ม.</option>
+            <option value="3.0">3.0 ม.</option>
+            <option value="custom">กำหนดเอง…</option>
+        </select>
         <input type="number" class="sb-number-input" id="imPostSpacingBarbed"
             value="2.5" min="1" max="3" step="0.1"
             style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
@@ -992,17 +996,147 @@ function setIMFenceType(type) {
     </div>
 
 <!-- BRICK opts -->
-    <div id="imBrickOpts" style="display:none;">
-        <div class="sb-section-label">ระยะห่างระหว่างเสา (เมตร)</div>
-        <div class="sb-spacing-pills" id="imSpacingPillsBrick">
-            <button class="sp-pill" data-val="2.0" onclick="imSetSpacingBrick(2.0)">2.0</button>
-            <button class="sp-pill sp-active" data-val="2.5" onclick="imSetSpacingBrick(2.5)">2.5</button>
-            <button class="sp-pill" data-val="3.0" onclick="imSetSpacingBrick(3.0)">3.0</button>
-            <button class="sp-pill" data-val="custom" onclick="imSetSpacingBrick('custom')">กำหนดเอง</button>
+<div id="imBrickOpts" style="display:none;">
+
+    <!-- Fence Height -->
+    <div class="sb-section-label" style="margin-top:10px;">ความสูงรั้ว</div>
+    <select class="sb-number-input" id="imBrickHeightSelect"
+        style="width:100%;padding:6px 8px;font-size:12px;"
+        onchange="imSetBrickHeight(this.value)">
+        <option value="1.5">1.5 ม.</option>
+        <option value="1.8" selected>1.8 ม.</option>
+        <option value="2.0">2.0 ม.</option>
+        <option value="2.5">2.5 ม.</option>
+        <option value="custom">กำหนดเอง…</option>
+    </select>
+    <input type="number" class="sb-number-input" id="imBrickFenceHeight"
+        value="1.8" min="0.5" max="5" step="0.1"
+        style="width:100%;margin-top:6px;display:none;" placeholder="ระบุความสูง (ม.)"
+        oninput="imSyncBeamCheckboxesToHeight(parseFloat(this.value)||1.8); if(typeof runFenceCalc==='function') runFenceCalc();">
+
+    <!-- Pillar Spacing -->
+    <div class="sb-section-label" style="margin-top:10px;">ระยะห่างเสา CENTER-TO-CENTER (D)</div>
+    <select class="sb-number-input" id="imSpacingSelectBrick"
+        style="width:100%;padding:6px 8px;font-size:12px;"
+        onchange="imSetSpacingBrick(this.value)">
+        <option value="2.0">2.0 ม.</option>
+        <option value="2.5" selected>2.5 ม.</option>
+        <option value="3.0">3.0 ม.</option>
+        <option value="custom">กำหนดเอง…</option>
+    </select>
+    <input type="number" class="sb-number-input" id="imPostSpacingBrick"
+        value="2.5" min="1" max="5" step="0.1"
+        style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+
+    <!-- Pillar Size -->
+    <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา</div>
+    <select class="sb-number-input" id="imBrickPillarSize"
+        style="width:100%;padding:6px 8px;font-size:12px;"
+        onchange="imOnPillarSizeChange(this.value)">
+        <option value="10x10">10×10 ซม. (default)</option>
+        <option value="15x15">15×15 ซม.</option>
+        <option value="custom">กำหนดเอง…</option>
+    </select>
+    <input type="number" class="sb-number-input" id="imBrickPillarCustom"
+        value="" min="5" max="50" step="1"
+        style="width:100%;margin-top:6px;display:none;" placeholder="ขนาดเสา (ซม.) เช่น 20 = 20×20">
+    <div id="imBrickPillarCustomLabel" style="display:none;font-size:10px;color:#9ca3af;margin-top:3px;">
+        กรอก ซม. เช่น 20 = 20×20 ซม.
+    </div>
+
+    <!-- Brick Type -->
+    <div class="sb-section-label" style="margin-top:10px;">ประเภทอิฐ</div>
+    <input type="hidden" id="imBrickType" value="mong2">
+    <button type="button" class="brick-picker-trigger" id="brickPickerTrigger" onclick="openBrickPicker()">
+        <div class="bpt-left">
+            <div class="bpt-swatch" id="bptSwatch">
+                <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
+                    <rect x="3" y="5" width="42" height="38" rx="3" fill="#e8aa60"/>
+                    <rect x="4" y="6" width="19" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                    <rect x="25" y="6" width="20" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                    <rect x="4" y="17" width="11" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                    <rect x="17" y="17" width="14" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                    <rect x="33" y="17" width="12" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                    <rect x="4" y="28" width="19" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                    <rect x="25" y="28" width="20" height="9" rx="1.5" fill="#d97706" opacity="0.78"/>
+                </svg>
+            </div>
+            <div class="bpt-info">
+                <div class="bpt-name" id="bptName">อิฐมอญ 2 ช่อง</div>
+                <div class="bpt-meta" id="bptMeta">3×6×15 ซม.<br><span style="color:#6b7280;">฿1.05/ก้อน · 135 ก้อน/ม²</span></div>
+            </div>
         </div>
-        <input type="number" class="sb-number-input" id="imPostSpacingBrick"
-            value="2.5" min="1" max="3" step="0.1"
-            style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+        <span class="bpt-chevron" id="bptChevron">▼</span>
+    </button>
+
+    <!-- Price override row -->
+    <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+        <span style="font-size:11px;color:#6b7280;white-space:nowrap;">ราคา/ก้อน (฿)</span>
+        <input type="number" class="sb-number-input-sm" id="imBrickPrice"
+            value="1.05" min="0" step="0.05" style="flex:1;">
+        <span style="font-size:11px;color:#6b7280;white-space:nowrap;">ก้อน/ม²</span>
+        <input type="number" class="sb-number-input-sm" id="imBrickPpm2"
+            value="135" min="1" step="0.1" style="flex:1;">
+    </div>
+
+    <!-- คานทับหลัง (N) — checkbox style matching draw mode -->
+    <div class="sb-section-label" style="margin-top:10px;">คานทับหลัง (N)</div>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="imBeamCbTop"
+                style="width:15px;height:15px;accent-color:#ea580c;cursor:pointer;"
+                onchange="imOnBeamCbChange()">
+            <span style="font-size:12px;font-weight:600;color:#ea580c;">● คานบน (Top beam)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="imBeamCbCenter"
+                style="width:15px;height:15px;accent-color:#d97706;cursor:pointer;"
+                onchange="imOnBeamCbChange()">
+            <span style="font-size:12px;font-weight:600;color:#d97706;">● คานกลาง (Center beam)</span>
+        </label>
+    </div>
+    <div id="imBeamAutoLabel" style="font-size:10px;color:#9ca3af;margin-top:4px;"></div>
+    <!-- Hidden input that fence.js reads -->
+    <input type="hidden" id="imBrickBeamMode" value="auto">
+
+</div>
+
+<div class="sb-divider" style="margin-top:12px;"></div>
+
+    <!-- ── Calculate button ── -->
+    <button class="sb-calc-btn-sm" id="imCalcBtn" onclick="imDoCalc()" style="width:100%;margin-bottom:8px;">คำนวณวัสดุ</button>
+
+    <div class="fw-box" id="imFenceWarnings" style="display:none"></div>
+
+    <div class="sb-result-stack" id="imSbResults">
+        <div class="sbr-row-item">
+            <div class="sbr-label">ความยาวทั้งหมด</div>
+            <div class="sbr-field-row">
+                <input type="text" class="sbr-input" id="imResTotal" readonly placeholder="—">
+                <span class="sbr-unit">เมตร</span>
+            </div>
+        </div>
+        <div class="sbr-row-item">
+            <div class="sbr-label">จำนวนเสาที่ต้องใช้</div>
+            <div class="sbr-field-row">
+                <input type="text" class="sbr-input" id="imResPosts" readonly placeholder="—">
+                <span class="sbr-unit">ต้น</span>
+            </div>
+        </div>
+        <div class="sbr-row-item" id="imResBeamsRow">
+            <div class="sbr-label">จำนวนคานที่ต้องใช้</div>
+            <div class="sbr-field-row">
+                <input type="text" class="sbr-input" id="imResBeams" readonly placeholder="—">
+                <span class="sbr-unit">อัน</span>
+            </div>
+        </div>
+        <div class="sbr-row-item">
+            <div class="sbr-label">ราคาโดยประมาณ</div>
+            <div class="sbr-field-row">
+                <input type="text" class="sbr-input" id="imResPriceDisplay" readonly placeholder="—">
+                <span class="sbr-unit">บาท</span>
+            </div>
+        </div>
     </div>
 
 </div><!-- /.im-root -->
@@ -1052,10 +1186,17 @@ function setIMFenceType(type) {
 .im-side-list {
     max-height: 180px;
     overflow-y: auto;
-    border: 1px solid #e5e7eb;
+    overflow-x: hidden;
+    border: 1.5px solid #e5e7eb;
     border-radius: 8px;
     background: #f9fafb;
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
 }
+.im-side-list::-webkit-scrollbar { width: 4px; }
+.im-side-list::-webkit-scrollbar-track { background: transparent; border-radius: 99px; margin: 4px 0; }
+.im-side-list::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
+.im-side-list::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 .im-side-row {
     display: flex;
     align-items: center;
@@ -1150,39 +1291,311 @@ function setIMFenceType(type) {
     // ============================================
     window.imSetSpacing = function (val) {
         const input = document.getElementById('imPostSpacing');
-        document.querySelectorAll('#imSpacingPills .sp-pill').forEach(p => p.classList.remove('sp-active'));
         if (val === 'custom') {
             if (input) { input.style.display = ''; input.focus(); }
-            document.querySelector('#imSpacingPills .sp-pill[data-val="custom"]').classList.add('sp-active');
         } else {
             if (input) { input.value = val; input.style.display = 'none'; }
-            document.querySelector(`#imSpacingPills .sp-pill[data-val="${val}"]`).classList.add('sp-active');
         }
     };
 
     window.imSetSpacingBarbed = function (val) {
         const input = document.getElementById('imPostSpacingBarbed');
-        document.querySelectorAll('#imSpacingPillsBarbed .sp-pill').forEach(p => p.classList.remove('sp-active'));
         if (val === 'custom') {
             if (input) { input.style.display = ''; input.focus(); }
-            document.querySelector('#imSpacingPillsBarbed .sp-pill[data-val="custom"]').classList.add('sp-active');
         } else {
             if (input) { input.value = val; input.style.display = 'none'; }
-            document.querySelector(`#imSpacingPillsBarbed .sp-pill[data-val="${val}"]`).classList.add('sp-active');
         }
     };
 
     window.imSetSpacingBrick = function (val) {
         const input = document.getElementById('imPostSpacingBrick');
-        document.querySelectorAll('#imSpacingPillsBrick .sp-pill').forEach(p => p.classList.remove('sp-active'));
         if (val === 'custom') {
             if (input) { input.style.display = ''; input.focus(); }
-            document.querySelector('#imSpacingPillsBrick .sp-pill[data-val="custom"]').classList.add('sp-active');
         } else {
             if (input) { input.value = val; input.style.display = 'none'; }
-            document.querySelector(`#imSpacingPillsBrick .sp-pill[data-val="${val}"]`).classList.add('sp-active');
         }
     };
+
+window.imSetBrickHeight = function (val) {
+    const input = document.getElementById('imBrickFenceHeight');
+    if (val === 'custom') {
+        if (input) { input.style.display = ''; input.focus(); }
+    } else {
+        const h = parseFloat(val);
+        if (input) { input.value = h; input.style.display = 'none'; }
+        imSyncBeamCheckboxesToHeight(h);
+        imSyncPillarSizeOptions(h);
+        if (typeof runFenceCalc === 'function') runFenceCalc();
+    }
+};
+
+window.imDoCalc = function () {
+    _pushToAllLines();
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
+window.imOnBeamCbChange = function () {
+    const cbTop    = document.getElementById('imBeamCbTop');
+    const cbCenter = document.getElementById('imBeamCbCenter');
+    const hidden   = document.getElementById('imBrickBeamMode');
+    const label    = document.getElementById('imBeamAutoLabel');
+    const top    = cbTop    ? cbTop.checked    : false;
+    const center = cbCenter ? cbCenter.checked : false;
+    let mode = 'none';
+    if (top && center) mode = 'center+top';
+    else if (top)      mode = 'top';
+    else if (center)   mode = 'center';
+    if (hidden) hidden.value = mode;
+    if (label)  label.textContent = '';
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
+window.imSyncBeamCheckboxesToHeight = function (h) {
+    const cbTop    = document.getElementById('imBeamCbTop');
+    const cbCenter = document.getElementById('imBeamCbCenter');
+    const hidden   = document.getElementById('imBrickBeamMode');
+    const label    = document.getElementById('imBeamAutoLabel');
+    let mode, hint;
+    if      (h <= 1.2) { mode = 'none';       hint = 'อัตโนมัติ: ไม่มีคาน'; }
+    else if (h <  1.8) { mode = 'top';        hint = 'อัตโนมัติ: 1 คาน (บน)'; }
+    else if (h <  2.2) { mode = 'center';     hint = 'อัตโนมัติ: 1 คาน (กลาง)'; }
+    else               { mode = 'center+top'; hint = 'อัตโนมัติ: 2 คาน (กลาง+บน)'; }
+    if (cbTop)    cbTop.checked    = (mode === 'top'    || mode === 'center+top');
+    if (cbCenter) cbCenter.checked = (mode === 'center' || mode === 'center+top');
+    if (hidden)   hidden.value     = mode;
+    if (label)    label.textContent = hint;
+};
+
+window.imSyncPillarSizeOptions = function (h) {
+    const sel = document.getElementById('imBrickPillarSize');
+    if (!sel) return;
+    imOnPillarSizeChange(sel.value);
+};
+
+window.imOnPillarSizeChange = function (val) {
+    const customInput = document.getElementById('imBrickPillarCustom');
+    const customLabel = document.getElementById('imBrickPillarCustomLabel');
+    if (val === 'custom') {
+        if (customInput) { customInput.style.display = ''; customInput.focus(); }
+        if (customLabel) customLabel.style.display = '';
+    } else {
+        if (customInput) customInput.style.display = 'none';
+        if (customLabel) customLabel.style.display = 'none';
+    }
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
+    // Also update beam hint when the custom height input is typed
+document.addEventListener('DOMContentLoaded', function() {
+    const customH = document.getElementById('imBrickFenceHeight');
+    if (customH) customH.addEventListener('input', function() {
+        const h = parseFloat(this.value);
+        if (isNaN(h)) return;
+        imSyncBeamCheckboxesToHeight(h);
+        if (typeof runFenceCalc === 'function') runFenceCalc();
+    });
+    // Init checkboxes to match default height (1.8m)
+    imSyncBeamCheckboxesToHeight(1.8);
+});
+
+window.BRICK_CATALOGUE = [
+    {
+        group: 'อิฐมอญ',
+        bricks: [
+            { value: 'mong2',    name: 'อิฐมอญ 2 ช่อง',      size: '3×6×15 ซม.',     price: 1.05,  ppm2: 135,  bg: '#e8aa60', fg: '#d97706' },
+            { value: 'mong3',    name: 'อิฐมอญ 3 ช่อง',      size: '6×10×20 ซม.',    price: 2.50,  ppm2: 42,   bg: '#e8aa60', fg: '#d97706' },
+            { value: 'mong4',    name: 'อิฐมอญ 4 ช่อง',      size: '5×16×15 ซม.',    price: 1.20,  ppm2: 95,   bg: '#e8aa60', fg: '#d97706' },
+            { value: 'monghand', name: 'อิฐมอญตันทำมือ',     size: '3×6×14 ซม.',     price: 1.20,  ppm2: 145,  bg: '#e8aa60', fg: '#d97706' },
+            { value: 'mongstd',  name: 'อิฐมอญ มอก.77-2565', size: '4×6.5×14 ซม.',   price: 1.50,  ppm2: 125,  bg: '#e8aa60', fg: '#d97706' },
+        ]
+    },
+    {
+        group: 'อิฐมวลเบา (AAC)',
+        bricks: [
+            { value: 'aac75',  name: 'อิฐมวลเบา 7.5 ซม.', size: '20×60×7.5 ซม.', price: 23,   ppm2: 8.3, bg: '#d1fae5', fg: '#059669' },
+            { value: 'aac100', name: 'อิฐมวลเบา 10 ซม.',  size: '20×60×10 ซม.',  price: 31,   ppm2: 8.3, bg: '#d1fae5', fg: '#059669' },
+        ]
+    },
+    {
+        group: 'อิฐบล็อก (มอก.)',
+        bricks: [
+            { value: 'block7',  name: 'อิฐบล็อก มอก. 7 ซม.',  size: 'มาตรฐาน มอก.', price: 9.50,  ppm2: 12.5, bg: '#eff6ff', fg: '#2563eb' },
+            { value: 'block9',  name: 'อิฐบล็อก มอก. 9 ซม.',  size: 'มาตรฐาน มอก.', price: 12,    ppm2: 12.5, bg: '#eff6ff', fg: '#2563eb' },
+            { value: 'block14', name: 'อิฐบล็อก มอก. 14 ซม.', size: 'มาตรฐาน มอก.', price: 20.50, ppm2: 12.5, bg: '#eff6ff', fg: '#2563eb' },
+        ]
+    }
+];
+ 
+// Get brick data by value
+function _getBrick(value) {
+    for (const g of BRICK_CATALOGUE) {
+        const b = g.bricks.find(b => b.value === value);
+        if (b) return b;
+    }
+    return BRICK_CATALOGUE[0].bricks[0];
+}
+ 
+// Brick SVG swatch (mini brick pattern, tinted to brick colour)
+function _brickSwatchSVG(bg, fg) {
+    return `<svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+        <rect x="2" y="4" width="44" height="40" rx="4" fill="${bg}"/>
+        <rect x="3" y="6" width="20" height="10" rx="1.5" fill="${fg}" opacity="0.75"/>
+        <rect x="25" y="6" width="20" height="10" rx="1.5" fill="${fg}" opacity="0.75"/>
+        <rect x="3" y="19" width="11" height="10" rx="1.5" fill="${fg}" opacity="0.75"/>
+        <rect x="17" y="19" width="14" height="10" rx="1.5" fill="${fg}" opacity="0.75"/>
+        <rect x="34" y="19" width="11" height="10" rx="1.5" fill="${fg}" opacity="0.75"/>
+        <rect x="3" y="32" width="20" height="10" rx="1.5" fill="${fg}" opacity="0.75"/>
+        <rect x="25" y="32" width="20" height="10" rx="1.5" fill="${fg}" opacity="0.75"/>
+    </svg>`;
+}
+ 
+// ── Unified brick picker — works for both Page 1 (p1) and Page 2 (p2) ──
+// page = 'p1'  → hidden input: #brickType,   trigger: #p1BrickPickerTrigger,
+//                name: #p1BptName, meta: #p1BptMeta, swatch: #p1BptSwatch,
+//                price: #brickPricePerPiece, ppm2: #brickPpm2
+// page = 'p2'  → hidden input: #imBrickType, trigger: #brickPickerTrigger,
+//                name: #bptName,   meta: #bptMeta,   swatch: #bptSwatch,
+//                price: #imBrickPrice,       ppm2: #imBrickPpm2
+
+const _BP_CFG = {
+    p1: { hidden: 'brickType',   trigger: 'p1BrickPickerTrigger', name: 'p1BptName', meta: 'p1BptMeta', swatch: 'p1BptSwatch', price: 'brickPricePerPiece', ppm2: 'brickPpm2' },
+    p2: { hidden: 'imBrickType', trigger: 'brickPickerTrigger',   name: 'bptName',   meta: 'bptMeta',   swatch: 'bptSwatch',   price: 'imBrickPrice',       ppm2: 'imBrickPpm2' }
+};
+
+window.openBrickPickerFor = function (page) {
+    closeBrickPicker();
+
+    const cfg = _BP_CFG[page] || _BP_CFG.p2;
+    const trigger     = document.getElementById(cfg.trigger);
+    const currentValue = document.getElementById(cfg.hidden)?.value || 'mong2';
+
+    // Store which page opened this popup (for selectBrick)
+    window._brickPickerPage = page;
+
+    // Backdrop
+    const backdrop = document.createElement('div');
+    backdrop.className = 'brick-picker-backdrop';
+    backdrop.id = 'brickPickerBackdrop';
+    backdrop.addEventListener('click', closeBrickPicker);
+    document.body.appendChild(backdrop);
+
+    // Popup
+    const popup = document.createElement('div');
+    popup.className = 'brick-picker-popup';
+    popup.id = 'brickPickerPopup';
+
+    let bodyHTML = '';
+    for (const group of BRICK_CATALOGUE) {
+        bodyHTML += `<div class="bpp-group-label">${group.group}</div>`;
+        for (const b of group.bricks) {
+            const sel = b.value === currentValue ? ' selected' : '';
+            bodyHTML += `
+            <div class="bpp-card${sel}" data-value="${b.value}" onclick="selectBrick('${b.value}')">
+                <div class="bpp-card-swatch" style="background:${b.bg};">
+                    ${_brickSwatchSVG(b.bg, b.fg)}
+                </div>
+<div class="bpp-card-body">
+                    <div class="bpp-card-name">${b.name}</div>
+                    <div class="bpp-card-size">${b.size}</div>
+                    <div class="bpp-card-size" style="margin-top:2px;">฿${b.price}/ก้อน &nbsp;·&nbsp; ${b.ppm2} ก้อน/ม²</div>
+                </div>
+                <div class="bpp-card-check">✓</div>
+            </div>`;
+        }
+    }
+
+    popup.innerHTML = `
+        <div class="bpp-header">
+            <div class="bpp-title">ประเภทอิฐ <span>${BRICK_CATALOGUE.reduce((a,g)=>a+g.bricks.length,0)} ชนิด</span></div>
+            <button class="bpp-close" onclick="closeBrickPicker()" title="ปิด">✕</button>
+        </div>
+        <div class="bpp-body">${bodyHTML}</div>`;
+
+    document.body.appendChild(popup);
+
+    // Position near trigger
+    if (trigger) {
+        const r = trigger.getBoundingClientRect();
+        const PW = 340, PH = Math.min(window.innerHeight * 0.72, 520);
+        let top  = r.bottom + 6;
+        let left = r.left;
+        if (left + PW > window.innerWidth - 8) left = window.innerWidth - PW - 8;
+        if (left < 8) left = 8;
+        if (top + PH > window.innerHeight - 8) top = r.top - PH - 6;
+        if (top < 8) top = 8;
+        popup.style.top  = top  + 'px';
+        popup.style.left = left + 'px';
+        trigger.classList.add('open');
+    } else {
+        popup.style.top  = '50%';
+        popup.style.left = '50%';
+        popup.style.transform = 'translate(-50%,-50%)';
+    }
+
+    requestAnimationFrame(() => {
+        backdrop.classList.add('visible');
+        popup.classList.add('visible');
+    });
+
+    setTimeout(() => {
+        const selCard = popup.querySelector('.bpp-card.selected');
+        if (selCard) selCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 180);
+};
+
+// Keep the old name working (called from Page 2 trigger button)
+window.openBrickPicker = function () { window.openBrickPickerFor('p2'); };
+
+// Close popup
+window.closeBrickPicker = function () {
+    const backdrop = document.getElementById('brickPickerBackdrop');
+    const popup    = document.getElementById('brickPickerPopup');
+    // Remove open class from both possible triggers
+    ['brickPickerTrigger','p1BrickPickerTrigger'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('open');
+    });
+    if (popup)    { popup.classList.remove('visible');    setTimeout(() => popup.remove(), 260); }
+    if (backdrop) { backdrop.classList.remove('visible'); setTimeout(() => backdrop.remove(), 260); }
+};
+
+// Select a brick card — updates the correct page's fields
+window.selectBrick = function (value) {
+    const page   = window._brickPickerPage || 'p2';
+    const cfg    = _BP_CFG[page] || _BP_CFG.p2;
+    const brick  = _getBrick(value);
+
+    // Update hidden input
+    const hiddenEl = document.getElementById(cfg.hidden);
+    if (hiddenEl) hiddenEl.value = value;
+
+    // Update trigger display
+    const nameEl   = document.getElementById(cfg.name);
+    const metaEl   = document.getElementById(cfg.meta);
+    const swatchEl = document.getElementById(cfg.swatch);
+if (nameEl)   nameEl.textContent   = brick.name;
+if (metaEl)   metaEl.innerHTML     = brick.size + '<br><span style="color:#6b7280;">฿' + brick.price + '/ก้อน · ' + brick.ppm2 + ' ก้อน/ม²</span>';
+    if (swatchEl) swatchEl.innerHTML   = _brickSwatchSVG(brick.bg, brick.fg);
+
+    // Sync price/ppm2 inputs
+    const priceEl = document.getElementById(cfg.price);
+    const ppm2El  = document.getElementById(cfg.ppm2);
+    if (priceEl) priceEl.value = brick.price;
+    if (ppm2El)  ppm2El.value  = brick.ppm2;
+
+    setTimeout(closeBrickPicker, 140);
+};
+
+// Keep old name working
+window.imUpdateBrickDefaults = function () {
+    const val   = document.getElementById('imBrickType')?.value || 'mong2';
+    const brick = _getBrick(val);
+    const p = document.getElementById('imBrickPrice');
+    const m = document.getElementById('imBrickPpm2');
+    if (p) p.value = brick.price;
+    if (m) m.value = brick.ppm2;
+};
+
 
     // ============================================
     // SYNC: when Page 1 fence type changes, mirror to Page 2

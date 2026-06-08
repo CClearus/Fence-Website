@@ -36,13 +36,18 @@ body {
     width: 400px;
     max-height: calc(100vh - 28px);
     background: rgba(255,255,255,0.97);
-    border: 2px solid rgba(255,255,255,0.85);
+    border: 1.5px solid rgba(229,231,235,0.9);
     border-radius: 18px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.55), 0 2px 12px rgba(0,0,0,0.3);
+    box-shadow:
+        0 0 0 1px rgba(0,0,0,0.04),
+        0 4px 16px rgba(0,0,0,0.10),
+        0 12px 48px rgba(0,0,0,0.22);
     z-index: 1000;
     overflow-y: auto;
-    backdrop-filter: blur(6px);
+    overflow-x: hidden;
+    backdrop-filter: blur(8px);
 }
+
 
 .left-sidebar.active {
     left: 0;
@@ -698,32 +703,50 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
 }
 
-/* Scrollbar Styling */
+/* ── Sleek floating-pill scrollbar ── */
+.left-sidebar,
+.line-info-content,
+.search-results,
+.im-side-list,
+.line-summary-stack {
+    scrollbar-width: thin;
+    scrollbar-color: #9ca3af #e5e7eb;
+}
+
 .left-sidebar::-webkit-scrollbar,
 .line-info-content::-webkit-scrollbar,
-.search-results::-webkit-scrollbar {
+.search-results::-webkit-scrollbar,
+.im-side-list::-webkit-scrollbar,
+.line-summary-stack::-webkit-scrollbar {
     width: 6px;
 }
-
 .left-sidebar::-webkit-scrollbar-track,
 .line-info-content::-webkit-scrollbar-track,
-.search-results::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 10px;
+.search-results::-webkit-scrollbar-track,
+.im-side-list::-webkit-scrollbar-track,
+.line-summary-stack::-webkit-scrollbar-track {
+    background: #e5e7eb;
+    border-radius: 99px;
+    margin: 20px 0;
 }
-
 .left-sidebar::-webkit-scrollbar-thumb,
 .line-info-content::-webkit-scrollbar-thumb,
-.search-results::-webkit-scrollbar-thumb {
-    background: #cbd5e0;
-    border-radius: 10px;
+.search-results::-webkit-scrollbar-thumb,
+.im-side-list::-webkit-scrollbar-thumb,
+.line-summary-stack::-webkit-scrollbar-thumb {
+    background: #9ca3af;
+    border-radius: 99px;
+    min-height: 32px;
+    border: 1.5px solid #e5e7eb;
 }
-
 .left-sidebar::-webkit-scrollbar-thumb:hover,
 .line-info-content::-webkit-scrollbar-thumb:hover,
-.search-results::-webkit-scrollbar-thumb:hover {
-    background: #a0aec0;
+.search-results::-webkit-scrollbar-thumb:hover,
+.im-side-list::-webkit-scrollbar-thumb:hover,
+.line-summary-stack::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
 }
+
 
 /* Leaflet Attribution */
 .leaflet-control-attribution {
@@ -1093,6 +1116,24 @@ FORM SPACING & INPUT FIXES
   transition: border-color 0.2s;
 }
 .sb-number-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+
+/* Compact variant for inline price/ppm² rows */
+.sb-number-input-sm {
+  padding: 5px 7px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 7px;
+  font-size: 12px;
+  background: #fff;
+  color: #374151;
+  transition: border-color 0.2s;
+  -moz-appearance: textfield;
+  appearance: textfield;
+  min-width: 0;
+}
+.sb-number-input-sm::-webkit-inner-spin-button,
+.sb-number-input-sm::-webkit-outer-spin-button { display: none; }
+.sb-number-input-sm:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.12); }
+
 .sb-input-unit { font-size: 12px; color: #6b7280; white-space: nowrap; }
 
 /* Spacing pills */

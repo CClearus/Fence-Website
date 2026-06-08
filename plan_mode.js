@@ -77,51 +77,57 @@ function applyLockedRatio(ratio) {
 }
 
 async function downloadPlanPDF() {
-  const btn = document.getElementById('btnDownloadPDF');
-  if(!btn) return;
-  const origText = btn.textContent;
-  btn.textContent = '⏳ กำลังสร้าง PDF...';
-  btn.disabled = true;
+    const btn = document.getElementById('btnDownloadPDF');
+    if(!btn) return;
+    const origText = btn.innerHTML; // Use innerHTML to restore icon
+    btn.innerHTML = '⏳ กำลังสร้าง...';
+    btn.disabled = true;
 
-  try {
-    const mapEl = document.getElementById('map');
-    // Ensure white background & tiles hidden
-    mapEl.classList.add('plan-bg');
-    await new Promise(res => setTimeout(res, 300));
+    try {
+        const mapEl = document.getElementById('map');
+        
+        // Ensure tiles are hidden & white bg is applied
+        mapEl.classList.add('plan-bg');
+        map.invalidateSize();
+        await new Promise(res => setTimeout(res, 500)); // Wait for render
 
-    if(typeof html2canvas === 'undefined') throw new Error('html2canvas not loaded');
-    if(typeof jspdf === 'undefined') throw new Error('jsPDF not loaded');
+        if(typeof html2canvas === 'undefined' || typeof jspdf === 'undefined') {
+            throw new Error('PDF/Canvas libraries not loaded');
+        }
 
-    const canvas = await html2canvas(mapEl, { 
-      scale: 2, 
-      backgroundColor: '#ffffff', 
-      logging: false,
-      ignoreElements: (el) => el.id === 'customScaleBar' // Hide scale bar in PDF
-    });
-    const imgData = canvas.toDataURL('image/png');
-    
-    // Create PDF (A4)
-    const { jsPDF } = jspdf;
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pw = pdf.internal.pageSize.getWidth();
-    const ph = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    const maxW = pw - margin * 2;
-    const maxH = ph - margin * 2;
-    
-    const ratio = canvas.width / canvas.height;
-    let w = maxW, h = maxW / ratio;
-    if (h > maxH) { h = maxH; w = maxH * ratio; }
-    
-    pdf.addImage(imgData, 'PNG', margin, margin, w, h);
-    pdf.save('fence-plan.pdf');
-  } catch(e) { 
-    console.error(e); 
-    alert('เกิดข้อผิดพลาด: กรุณาเชื่อมต่ออินเทอร์เน็ตเพื่อโหลดไลบรารี PDF'); 
-  } finally { 
-    btn.textContent = origText; 
-    btn.disabled = false; 
-  }
+        const canvas = await html2canvas(mapEl, { 
+            scale: 2, 
+            backgroundColor: '#ffffff', 
+            logging: false,
+            useCORS: true,
+            ignoreElements: (el) => el.id === 'customScaleBar' || el.classList.contains('leaflet-control')
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pw = pdf.internal.pageSize.getWidth();
+        const ph = pdf.internal.pageSize.getHeight();
+        const margin = 12;
+        const maxW = pw - margin * 2;
+        const maxH = ph - margin * 2;
+        const ratio = canvas.width / canvas.height;
+        let w = maxW, h = maxW / ratio;
+        if (h > maxH) { h = maxH; w = maxH * ratio; }
+
+        // Center on A4
+        const x = (pw - w) / 2;
+        const y = (ph - h) / 2;
+
+        pdf.addImage(imgData, 'PNG', x, y, w, h);
+        pdf.save('fence-plan.pdf');
+    } catch(e) {
+        console.error(e);
+        alert('เกิดข้อผิดพลาด: ' + e.message);
+    } finally {
+        btn.innerHTML = origText;
+        btn.disabled = false;
+    }
 }
 
 function togglePlanMode() {
@@ -279,16 +285,23 @@ function drawPlanLine(lineData, idx) {
     const pts = lineData.points;
     if (!pts || pts.length < 2) return;
 
-    // Main black line
+    const fenceType = lineData.fenceType || 'cowboy';
+
+    // ── BRICK fence in plan mode ──
+    if (fenceType === 'brick') {
+        _drawPlanBrickLine(lineData, idx);
+        return;
+    }
+
+    // ── COWBOY / default fence (existing logic) ──
     L.polyline(pts, { color: '#1a1a1a', weight: 3, opacity: 1 }).addTo(planLayerGroup);
 
-    // Line Label (Professional Black & White Style)
     L.marker(pts[0], {
         icon: L.divIcon({
             className: '',
             html: `<div style="font-size:12px;font-weight:bold;color:#000;background:#ffffff;padding:4px 8px;border:2px solid #000;white-space:nowrap;border-radius:2px;box-shadow:2px 2px 0px rgba(0,0,0,0.1);">Line ${idx + 1}</div>`,
             iconSize: [0, 0],
-            iconAnchor: [-15, -15] // Push label to top-left so it doesn't cover the corner
+            iconAnchor: [-15, -15]
         }),
         zIndexOffset: 1600
     }).addTo(planLayerGroup);
@@ -313,26 +326,153 @@ function drawPlanLine(lineData, idx) {
         }
         poleDists.push(segLen);
 
-        // Draw Posts
         poleDists.forEach((dist, pIdx) => {
             const pt = interp(pts, dAcc + dist);
             const isCorner = (i === 0 && pIdx === 0) || (i === pts.length - 2 && pIdx === poleDists.length - 1);
             drawPlanPost(pt, b, isCorner, n);
         });
 
-        // Draw Measurements
         if (showDetails) {
-            // Sub-segments (Offset 0.35m)
             for (let j = 0; j < poleDists.length - 1; j++) {
                 const sPt = interp(pts, dAcc + poleDists[j]);
                 const ePt = interp(pts, dAcc + poleDists[j + 1]);
                 const spanLen = hav(sPt, ePt);
                 drawDimLine(sPt, ePt, 0.35, spanLen.toFixed(2) + 'm', '#000');
             }
-            // Main segment (Offset 0.75m)
             drawDimLine(p0, p1, 0.75, segLen.toFixed(2) + 'm', '#000');
         }
         dAcc += segLen;
+    }
+}
+
+function _drawPlanBrickLine(lineData, idx) {
+    const pts = lineData.points;
+    if (!pts || pts.length < 2) return;
+
+    // Read brick params (same sources as fence.js)
+    const d = parseFloat(
+        (document.getElementById('postSpacingBrick') || document.getElementById('imPostSpacingBrick'))?.value
+    ) || 2.5;
+    const h = parseFloat(
+        (document.getElementById('brickFenceHeight') || document.getElementById('imBrickFenceHeight'))?.value
+    ) || 1.8;
+
+    // Determine beam mode from hidden input or auto
+    const beamSel = document.getElementById('imBrickBeamMode');
+    const beamOverride = beamSel ? beamSel.value : 'auto';
+    let beamMode;
+    if      (beamOverride === '0')           beamMode = 'none';
+    else if (beamOverride === 'top')         beamMode = 'top';
+    else if (beamOverride === 'center')      beamMode = 'center';
+    else if (beamOverride === 'center+top')  beamMode = 'center+top';
+    else {
+        // auto
+        if      (h <= 1.2) beamMode = 'none';
+        else if (h < 1.8)  beamMode = 'top';
+        else if (h < 2.2)  beamMode = 'center';
+        else               beamMode = 'center+top';
+    }
+
+    // Line label
+    L.marker(pts[0], {
+        icon: L.divIcon({
+            className: '',
+            html: `<div style="font-size:12px;font-weight:bold;color:#92400e;background:#fff7ed;padding:4px 8px;border:2px solid #b45309;white-space:nowrap;border-radius:2px;box-shadow:2px 2px 0px rgba(0,0,0,0.1);">Line ${idx + 1} (อิฐ)</div>`,
+            iconSize: [0, 0],
+            iconAnchor: [-15, -15]
+        }),
+        zIndexOffset: 1600
+    }).addTo(planLayerGroup);
+
+    let cumulDist = 0;
+    const numSegs = pts.length - 1;
+    const standardLen = hav(pts[0], pts[1]);
+
+    for (let si = 0; si < numSegs; si++) {
+        const p0 = pts[si], p1 = pts[si + 1];
+        const A_i = hav(p0, p1);
+        const segB = bearing(p0, p1);
+
+        // Bay count: ⌈A_i / d⌉, actual spacing = A_i / r_i
+        const r_i = Math.max(1, Math.ceil(A_i / d));
+        const d_prime = A_i / r_i;
+
+        // Draw wall (thick brown line)
+        const steps = Math.max(2, Math.ceil(A_i * 4));
+        const wallPts = [];
+        for (let s = 0; s <= steps; s++) wallPts.push(interp(pts, cumulDist + A_i * s / steps));
+        L.polyline(wallPts, { color: '#92400e', weight: 5, opacity: 1 }).addTo(planLayerGroup);
+
+        // Draw pillars and beam symbols per bay
+        for (let bi = 0; bi < r_i; bi++) {
+            const distStart = cumulDist + bi * d_prime;
+            const distEnd   = cumulDist + (bi + 1) * d_prime;
+            const ptStart   = interp(pts, distStart);
+            const ptEnd     = interp(pts, Math.min(distEnd, cumulDist + A_i));
+
+            // Pillar square (plan style)
+            const isCorner = (si === 0 && bi === 0) || (si === numSegs - 1 && bi === r_i - 1);
+            drawPlanPost(ptStart, segB, isCorner, 0.15);
+
+            // Beam symbol — plan version (perpendicular ticks)
+            if (beamMode !== 'none') {
+                _drawPlanBeamSymbol(ptStart, ptEnd, segB, beamMode);
+            }
+        }
+        // Final pillar at segment end
+        const isLastCorner = si === numSegs - 1;
+        drawPlanPost(interp(pts, cumulDist + A_i), segB, isLastCorner, 0.15);
+
+        // Dimension line for each segment (plan engineering style)
+        const isDifferent = Math.abs(A_i - standardLen) > 0.05;
+        if (si < 2 || isDifferent) {
+            drawDimLine(p0, p1, 0.75, A_i.toFixed(2) + 'm', '#92400e');
+        }
+
+        cumulDist += A_i;
+    }
+}
+
+// Plan-mode beam symbol — uses planLayerGroup instead of fenceLayerGroup
+// top beam = orange solid  |  center beam = amber dashed
+function _drawPlanBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
+    const midLat = (bayStartPt[0] + bayEndPt[0]) / 2;
+    const midLon = (bayStartPt[1] + bayEndPt[1]) / 2;
+    const mid    = [midLat, midLon];
+    const perpB  = segBearing + 90;
+    const tickHalf = 0.55;
+
+    const drawTick = (pt, color, dashed) => {
+        const t1 = offPt(pt, perpB,       tickHalf);
+        const t2 = offPt(pt, perpB + 180, tickHalf);
+        L.polyline([t1, t2], {
+            color, weight: 2.5, opacity: 0.95,
+            dashArray: dashed ? '4,3' : null
+        }).addTo(planLayerGroup);
+        L.circleMarker(pt, {
+            radius: 2.5, color, fillColor: color, fillOpacity: 1, weight: 1.5
+        }).addTo(planLayerGroup);
+        // Small color-coded label
+        L.marker(offPt(pt, perpB, tickHalf + 0.25), {
+            icon: L.divIcon({
+                className: '',
+                html: `<div style="font-size:9px;font-weight:700;color:${color};background:rgba(255,255,255,0.9);padding:1px 3px;border-radius:2px;white-space:nowrap;">${dashed ? 'กลาง' : 'บน'}</div>`,
+                iconSize: [0, 0], iconAnchor: [0, 0]
+            }),
+            zIndexOffset: 1500
+        }).addTo(planLayerGroup);
+    };
+
+    if (mode === 'top') {
+        drawTick(mid, '#ea580c', false);
+    } else if (mode === 'center') {
+        drawTick(mid, '#d97706', true);
+    } else if (mode === 'center+top') {
+        const offset = 0.28;
+        const ptA = offPt(mid, segBearing,       offset);
+        const ptB = offPt(mid, segBearing + 180, offset);
+        drawTick(ptA, '#d97706', true);   // center — amber dashed
+        drawTick(ptB, '#ea580c', false);  // top — orange solid
     }
 }
 

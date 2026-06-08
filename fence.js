@@ -659,21 +659,164 @@ const n = 0; // Post size excluded from spacing calculation; visual only
 
     // ── Process BRICK lines ──
     if (brickLines.length > 0) {
-        const spacingInput = document.getElementById('postSpacingBrick');
-        const m_brick = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
-        
-        // Get brick post size
-const n_brick = 0;
+        // Support both sidebar (page1) IDs and input_mode IDs
+        const readVal = (id1, id2, fallback) => {
+            const el = document.getElementById(id1) || document.getElementById(id2);
+            return parseFloat(el ? el.value : fallback) || parseFloat(fallback);
+        };
+
+        const d = readVal('postSpacingBrick', 'imPostSpacingBrick', '2.5');
+        const h = readVal('brickFenceHeight',  'imBrickFenceHeight',  '1.8');
+
+        const brickPrice = readVal('brickPricePerPiece', 'imBrickPrice', '1.05');
+        const ppm2       = readVal('brickPpm2',          'imBrickPpm2',  '135');
+
+        // Beam mode: check user override first (imBrickBeamMode), then auto from h
+        let n_beam, beamMode;
+        const beamSel = document.getElementById('imBrickBeamMode');
+        const beamOverride = beamSel ? beamSel.value : 'auto';
+
+        if (beamOverride === '0') {
+            n_beam = 0; beamMode = 'none';
+        } else if (beamOverride === 'top') {
+            n_beam = 1; beamMode = 'top';
+        } else if (beamOverride === 'center') {
+            n_beam = 1; beamMode = 'center';
+        } else if (beamOverride === 'center+top') {
+            n_beam = 2; beamMode = 'center+top';
+        } else {
+            // 'auto' — derive from h
+            if (h <= 1.2)      { n_beam = 0; beamMode = 'none'; }
+            else if (h < 1.8)  { n_beam = 1; beamMode = 'top'; }
+            else if (h < 2.2)  { n_beam = 1; beamMode = 'center'; }
+            else               { n_beam = 2; beamMode = 'center+top'; }
+        }
+
+
+        let totalBrickArea = 0;
+        let totalBays = 0;
+        let totalSpacingSum = 0;
+        let totalPillarCount = 0;
+        let segCount = 0;
 
         buildCornerMap(brickLines.map(ld => ld.points));
 
+        // Map scale: we represent beam heights as lateral offsets perpendicular to fence.
+        // On a 2D map, "height" can't be shown literally — instead we draw beam indicator
+        // lines as SHORT perpendicular tick-dashes centered on the fence line at each bay,
+        // resembling structural cross marks. Style varies by beamMode.
+        //
+        // Visual language:
+        //   top beam    → small ▲ perpendicular tick at each bay center (orange)
+        //   center beam → small ─ perpendicular tick at each bay center (amber)
+        //   2 beams     → both symbols stacked (two ticks, different colors)
+
+function drawBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
+    const midLat = (bayStartPt[0] + bayEndPt[0]) / 2;
+    const midLon = (bayStartPt[1] + bayEndPt[1]) / 2;
+    const mid = [midLat, midLon];
+    const perpB = segBearing + 90;
+    const tickHalf = 0.65;
+
+    // top beam  = solid ORANGE  #ea580c  weight 3
+    // center beam = solid BLUE  #2563eb  weight 3  (distinct from top)
+    const drawTick = (pt, color, weight) => {
+        const t1 = offPt(pt, perpB,       tickHalf);
+        const t2 = offPt(pt, perpB + 180, tickHalf);
+        L.polyline([t1, t2], { color, weight, opacity: 0.95, dashArray: null })
+            .addTo(fenceLayerGroup);
+        L.circleMarker(pt, {
+            radius: 3, color, fillColor: color, fillOpacity: 1, weight: 1.5
+        }).addTo(fenceLayerGroup);
+    };
+
+    if (mode === 'top') {
+        // single solid orange tick at midpoint
+        drawTick(mid, '#ea580c', 3);
+    } else if (mode === 'center') {
+        // single solid blue tick at midpoint
+        drawTick(mid, '#2563eb', 3);
+    } else if (mode === 'center+top') {
+        // two ticks offset slightly along the fence so both are visible
+        const offset = 0.32;
+        const ptTop    = offPt(mid, segBearing,       offset); // top beam (orange)
+        const ptCenter = offPt(mid, segBearing + 180, offset); // center beam (blue)
+        drawTick(ptTop,    '#ea580c', 3); // orange = top
+        drawTick(ptCenter, '#2563eb', 3); // blue   = center
+    }
+}
+
         brickLines.forEach(ld => {
-            const res = drawFence(ld.points, m_brick, n_brick, true, false, ld.color);
-            grandTotal += res.grandTotal;
-            grandPosts += res.totalPosts;
-            grandBeams += res.totalBeams;
-            if (res.warnings) allWarnings.push(...res.warnings);
+            const pts = ld.points;
+            const numSegs = pts.length - 1;
+            let cumulDist = 0;
+
+            for (let si = 0; si < numSegs; si++) {
+                const p0 = pts[si], p1 = pts[si + 1];
+                const A_i = hav(p0, p1);
+                grandTotal += A_i;
+
+                // r_i = ⌈A_i / d⌉  →  d' = A_i / r_i
+                const r_i = Math.max(1, Math.ceil(A_i / d));
+                const d_prime = A_i / r_i;
+
+                totalBays += r_i;
+                totalSpacingSum += d_prime;
+                totalPillarCount += (r_i + 1);
+                totalBrickArea += A_i * h;
+                segCount++;
+
+                const segB = bearing(p0, p1);
+
+                // Draw wall line
+                const steps = Math.max(2, Math.ceil(A_i * 4));
+                const linePts = [];
+                for (let s = 0; s <= steps; s++) {
+                    linePts.push(interp(pts, cumulDist + A_i * s / steps));
+                }
+                L.polyline(linePts, { color: ld.color || '#b45309', weight: 5, opacity: 0.85 }).addTo(fenceLayerGroup);
+
+                // Draw pillars + beam symbols per bay
+                for (let bi = 0; bi < r_i; bi++) {
+                    const distStart = cumulDist + bi * d_prime;
+                    const distEnd   = cumulDist + (bi + 1) * d_prime;
+                    const ptStart   = interp(pts, distStart);
+                    const ptEnd     = interp(pts, Math.min(distEnd, cumulDist + A_i));
+
+                    // Pillar at bay start
+                    drawPost(ptStart, segB, bi === 0 ? 'endpoint' : 'normal');
+
+                    // Beam symbol inside this bay (if any beams)
+                    if (beamMode !== 'none') {
+                        drawBeamSymbol(ptStart, ptEnd, segB, beamMode);
+                    }
+                }
+                // Final pillar at segment end
+                drawPost(interp(pts, cumulDist + A_i), segB,
+                    si === numSegs - 1 ? 'endpoint' : 'normal');
+
+                cumulDist += A_i;
+            }
+
+            grandPosts += totalPillarCount;
         });
+
+        const brickCount    = totalBrickArea * ppm2;
+        const beamCount     = totalBays * n_beam;
+        grandBeams         += beamCount;
+
+        const brickTotalPrice = brickCount * 1.05 * brickPrice;
+
+        window._brickCalcResult = {
+            totalPrice:  brickTotalPrice,
+            brickCount:  brickCount,
+            totalBays:   totalBays,
+            avgSpacing:  segCount > 0 ? totalSpacingSum / segCount : d,
+            beamCount:   beamCount,
+            n_beam,
+            beamMode,
+            h
+        };
     }
 
     // ── Process BARBED WIRE lines ──
@@ -701,22 +844,80 @@ const n_barbed = 0;
         });
     }
 
-    const totalInput = document.getElementById('resTotal');
-    if (totalInput) totalInput.value = grandTotal.toFixed(2);
-    const postsInput = document.getElementById('resPosts');
-    if (postsInput) postsInput.value = grandPosts;
-    const beamsInput = document.getElementById('resBeams');
-    if (beamsInput) beamsInput.value = grandBeams;
+const hasBrick = brickLines.length > 0;
 
-    const warnEl = document.getElementById('fenceWarnings');
-    if (warnEl) {
-        if (allWarnings.length > 0) {
-            warnEl.innerHTML = allWarnings.map(w=>`<div class="fw-item">${w}</div>`).join('');
-            warnEl.style.display = 'block';
+    // ── Helper: write results to a given set of element IDs ──
+    function writeResults(ids) {
+        const totalInput = document.getElementById(ids.total);
+        if (totalInput) totalInput.value = grandTotal.toFixed(2);
+
+        const postsInput = document.getElementById(ids.posts);
+        if (postsInput) postsInput.value = grandPosts;
+
+        const beamsInput = document.getElementById(ids.beams);
+        const beamsRow   = document.getElementById(ids.beamsRow);
+        const beamsLabel = beamsInput?.closest('.sbr-row-item')?.querySelector('.sbr-label');
+        const beamsUnit  = beamsInput?.closest('.sbr-field-row')?.querySelector('.sbr-unit');
+
+        if (hasBrick && window._brickCalcResult) {
+            const br = window._brickCalcResult;
+            const brickCountWithWaste = Math.ceil(br.brickCount * 1.05);
+            if (beamsInput)  beamsInput.value = brickCountWithWaste.toLocaleString('th-TH');
+            if (beamsLabel)  beamsLabel.textContent = 'จำนวนอิฐ (รวม +5%)';
+            if (beamsUnit)   beamsUnit.textContent  = 'ก้อน';
         } else {
-            warnEl.style.display = 'none';
+            if (beamsInput)  beamsInput.value = grandBeams;
+            if (beamsLabel)  beamsLabel.textContent = 'จำนวนคานที่ต้องใช้';
+            if (beamsUnit)   beamsUnit.textContent  = 'อัน';
+        }
+
+        // Price
+        const priceInput = document.getElementById(ids.price);
+        if (priceInput) {
+            if (hasBrick && window._brickCalcResult) {
+                const br = window._brickCalcResult;
+                const brickPrice = parseFloat(
+                    (document.getElementById('brickPricePerPiece') || document.getElementById('imBrickPrice'))?.value
+                ) || 1.05;
+                const brickCount = Math.ceil(br.brickCount * 1.05);
+                priceInput.value = (brickCount * brickPrice).toLocaleString('th-TH', { maximumFractionDigits: 0 });
+            } else {
+                const price = grandTotal * 850;
+                priceInput.value = price.toLocaleString('th-TH', { maximumFractionDigits: 0 });
+            }
+        }
+
+        // Warnings
+        const warnEl = document.getElementById(ids.warnings);
+        if (warnEl) {
+            if (allWarnings.length > 0) {
+                warnEl.innerHTML = allWarnings.map(w => `<div class="fw-item">${w}</div>`).join('');
+                warnEl.style.display = 'block';
+            } else {
+                warnEl.style.display = 'none';
+            }
         }
     }
+
+    // Write to Page 1 (draw mode)
+    writeResults({
+        total:    'resTotal',
+        posts:    'resPosts',
+        beams:    'resBeams',
+        beamsRow: null,
+        price:    'resPriceDisplay',
+        warnings: 'fenceWarnings'
+    });
+
+    // Write to Page 2 (input mode)
+    writeResults({
+        total:    'imResTotal',
+        posts:    'imResPosts',
+        beams:    'imResBeams',
+        beamsRow: 'imResBeamsRow',
+        price:    'imResPriceDisplay',
+        warnings: 'imFenceWarnings'
+    });
 }
 
 // ============================================
@@ -850,4 +1051,126 @@ document.getElementById('clearFenceBtn')?.addEventListener('click', function() {
     swappedCorners.clear();
     ['resTotal','resPosts','resBeams','resPrice'].forEach(id => document.getElementById(id).value='');
     document.getElementById('fenceWarnings').style.display = 'none';
+});
+
+// ============================================
+// คานทับหลัง — checkbox UI sync
+// ============================================
+function onBeamCbChange() {
+    const cbTop    = document.getElementById('beamCbTop');
+    const cbCenter = document.getElementById('beamCbCenter');
+    const hidden   = document.getElementById('imBrickBeamMode');
+    const label    = document.getElementById('beamAutoLabel');
+    if (!cbTop || !cbCenter || !hidden) return;
+
+    const top    = cbTop.checked;
+    const center = cbCenter.checked;
+
+    let mode;
+    if (top && center)   mode = 'center+top';
+    else if (top)        mode = 'top';
+    else if (center)     mode = 'center';
+    else                 mode = '0';
+
+    hidden.value = mode;
+    if (label) label.textContent = '(ปรับด้วยตนเอง — ยกเลิกอัตโนมัติ)';
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+}
+
+// Auto-tick checkboxes based on brick fence height — call after height changes
+function syncBeamCheckboxesToHeight(h) {
+    const cbTop    = document.getElementById('beamCbTop');
+    const cbCenter = document.getElementById('beamCbCenter');
+    const hidden   = document.getElementById('imBrickBeamMode');
+    const label    = document.getElementById('beamAutoLabel');
+    if (!cbTop || !cbCenter) return;
+
+    let mode;
+    if (h <= 1.2)      { mode = '0';          cbTop.checked = false; cbCenter.checked = false; }
+    else if (h < 1.8)  { mode = 'top';        cbTop.checked = true;  cbCenter.checked = false; }
+    else if (h < 2.2)  { mode = 'center';     cbTop.checked = false; cbCenter.checked = true;  }
+    else               { mode = 'center+top'; cbTop.checked = true;  cbCenter.checked = true;  }
+
+    if (hidden) hidden.value = mode;
+
+    syncPillarSizeOptions(h);
+}
+
+function syncPillarSizeOptions(h) {
+    const sel = document.getElementById('brickPillarSize');
+    if (!sel) return;
+    const prev = sel.value;
+    let opts;
+    if (h <= 1.5) {
+        opts = [
+            { value: '10x10', label: '10×10 ซม. (default)' },
+            { value: '15x15', label: '15×15 ซม.' },
+            { value: 'custom', label: 'กำหนดเอง…' }
+        ];
+    } else {
+        opts = [
+            { value: '15x15', label: '15×15 ซม. (default)' },
+            { value: '20x20', label: '20×20 ซม.' },
+            { value: 'custom', label: 'กำหนดเอง…' }
+        ];
+    }
+    sel.innerHTML = opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    // Restore previous selection if it still exists in new list
+    if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+    onPillarSizeChange(sel.value);
+}
+
+function onPillarSizeChange(val) {
+    const customInput = document.getElementById('brickPillarCustom');
+    const customLabel = document.getElementById('brickPillarCustomLabel');
+    if (customInput) customInput.style.display = val === 'custom' ? '' : 'none';
+    if (customLabel) customLabel.style.display = val === 'custom' ? '' : 'none';
+}
+
+// Init beam checkboxes on load
+document.addEventListener('DOMContentLoaded', () => {
+    const h = parseFloat(document.getElementById('brickFenceHeight')?.value) || 1.8;
+    syncBeamCheckboxesToHeight(h);
+});
+
+function getDefaultPillarSize(h) {
+    return h <= 1.5 ? '10x10' : '15x15';
+}
+
+function syncPillarSizeOptions(h) {
+    const sel = document.getElementById('brickPillarSize');
+    if (!sel) return;
+    const current = sel.value;
+    let opts;
+    if (h <= 1.5) {
+        opts = [
+            { value: '10x10', label: '10×10 ซม. (default)' },
+            { value: '15x15', label: '15×15 ซม.' },
+            { value: 'custom', label: 'กำหนดเอง…' }
+        ];
+    } else {
+        opts = [
+            { value: '15x15', label: '15×15 ซม. (default)' },
+            { value: '20x20', label: '20×20 ซม.' },
+            { value: 'custom', label: 'กำหนดเอง…' }
+        ];
+    }
+    sel.innerHTML = opts.map(o =>
+        `<option value="${o.value}">${o.label}</option>`
+    ).join('');
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    onPillarSizeChange(sel.value);
+}
+
+function onPillarSizeChange(val) {
+    const customInput = document.getElementById('brickPillarCustom');
+    const customLabel = document.getElementById('brickPillarCustomLabel');
+    if (customInput) customInput.style.display = val === 'custom' ? '' : 'none';
+    if (customLabel) customLabel.style.display = val === 'custom' ? '' : 'none';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const h = parseFloat(document.getElementById('brickFenceHeight')?.value) || 1.8;
+    syncBeamCheckboxesToHeight(h);
+    syncPillarSizeOptions(h);
 });
