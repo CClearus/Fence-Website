@@ -658,6 +658,7 @@ const n = 0; // Post size excluded from spacing calculation; visual only
     }
 
     // ── Process BRICK lines ──
+    // ── Process BRICK lines ──
     if (brickLines.length > 0) {
         // Support both sidebar (page1) IDs and input_mode IDs
         const readVal = (id1, id2, fallback) => {
@@ -692,7 +693,6 @@ const n = 0; // Post size excluded from spacing calculation; visual only
             else               { n_beam = 2; beamMode = 'center+top'; }
         }
 
-
         let totalBrickArea = 0;
         let totalBays = 0;
         let totalSpacingSum = 0;
@@ -701,50 +701,34 @@ const n = 0; // Post size excluded from spacing calculation; visual only
 
         buildCornerMap(brickLines.map(ld => ld.points));
 
-        // Map scale: we represent beam heights as lateral offsets perpendicular to fence.
-        // On a 2D map, "height" can't be shown literally — instead we draw beam indicator
-        // lines as SHORT perpendicular tick-dashes centered on the fence line at each bay,
-        // resembling structural cross marks. Style varies by beamMode.
-        //
-        // Visual language:
-        //   top beam    → small ▲ perpendicular tick at each bay center (orange)
-        //   center beam → small ─ perpendicular tick at each bay center (amber)
-        //   2 beams     → both symbols stacked (two ticks, different colors)
+        function drawBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
+            const midLat = (bayStartPt[0] + bayEndPt[0]) / 2;
+            const midLon = (bayStartPt[1] + bayEndPt[1]) / 2;
+            const mid = [midLat, midLon];
+            const perpB = segBearing + 90;
+            const tickHalf = 0.65;
+            const drawTick = (pt, color, weight) => {
+                const t1 = offPt(pt, perpB,       tickHalf);
+                const t2 = offPt(pt, perpB + 180, tickHalf);
+                L.polyline([t1, t2], { color, weight, opacity: 0.95, dashArray: null })
+                    .addTo(fenceLayerGroup);
+                L.circleMarker(pt, {
+                    radius: 3, color, fillColor: color, fillOpacity: 1, weight: 1.5
+                }).addTo(fenceLayerGroup);
+            };
 
-function drawBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
-    const midLat = (bayStartPt[0] + bayEndPt[0]) / 2;
-    const midLon = (bayStartPt[1] + bayEndPt[1]) / 2;
-    const mid = [midLat, midLon];
-    const perpB = segBearing + 90;
-    const tickHalf = 0.65;
-
-    // top beam  = solid ORANGE  #ea580c  weight 3
-    // center beam = solid BLUE  #2563eb  weight 3  (distinct from top)
-    const drawTick = (pt, color, weight) => {
-        const t1 = offPt(pt, perpB,       tickHalf);
-        const t2 = offPt(pt, perpB + 180, tickHalf);
-        L.polyline([t1, t2], { color, weight, opacity: 0.95, dashArray: null })
-            .addTo(fenceLayerGroup);
-        L.circleMarker(pt, {
-            radius: 3, color, fillColor: color, fillOpacity: 1, weight: 1.5
-        }).addTo(fenceLayerGroup);
-    };
-
-    if (mode === 'top') {
-        // single solid orange tick at midpoint
-        drawTick(mid, '#ea580c', 3);
-    } else if (mode === 'center') {
-        // single solid blue tick at midpoint
-        drawTick(mid, '#2563eb', 3);
-    } else if (mode === 'center+top') {
-        // two ticks offset slightly along the fence so both are visible
-        const offset = 0.32;
-        const ptTop    = offPt(mid, segBearing,       offset); // top beam (orange)
-        const ptCenter = offPt(mid, segBearing + 180, offset); // center beam (blue)
-        drawTick(ptTop,    '#ea580c', 3); // orange = top
-        drawTick(ptCenter, '#2563eb', 3); // blue   = center
-    }
-}
+            if (mode === 'top') {
+                drawTick(mid, '#ea580c', 3);
+            } else if (mode === 'center') {
+                drawTick(mid, '#2563eb', 3);
+            } else if (mode === 'center+top') {
+                const offset = 0.32;
+                const ptTop    = offPt(mid, segBearing,       offset);
+                const ptCenter = offPt(mid, segBearing + 180, offset);
+                drawTick(ptTop,    '#ea580c', 3);
+                drawTick(ptCenter, '#2563eb', 3);
+            }
+        }
 
         brickLines.forEach(ld => {
             const pts = ld.points;
@@ -756,13 +740,26 @@ function drawBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
                 const A_i = hav(p0, p1);
                 grandTotal += A_i;
 
-                // r_i = ⌈A_i / d⌉  →  d' = A_i / r_i
-                const r_i = Math.max(1, Math.ceil(A_i / d));
-                const d_prime = A_i / r_i;
+                // Use calcPanels logic to avoid equal spreading
+                const fullCount = Math.floor(A_i / d + 1e-9);
+                const remainder = A_i - fullCount * d;
+                const gaps = [];
+                
+                if (remainder < d * 0.01) {
+                    for (let i = 0; i < fullCount; i++) gaps.push(d);
+                } else if (fullCount + 1 <= 2) {
+                    const evenGap = A_i / (fullCount + 1);
+                    for (let i = 0; i < fullCount + 1; i++) gaps.push(evenGap);
+                } else {
+                    for (let i = 0; i < fullCount - 1; i++) gaps.push(d);
+                    const endSize = (d + remainder) / 2;
+                    gaps.push(endSize);
+                    gaps.push(endSize);
+                }
 
-                totalBays += r_i;
-                totalSpacingSum += d_prime;
-                totalPillarCount += (r_i + 1);
+                totalBays += gaps.length;
+                totalSpacingSum += A_i; // Sum of gaps is exactly A_i (fixes avgSpacing calculation)
+                totalPillarCount += gaps.length + 1;
                 totalBrickArea += A_i * h;
                 segCount++;
 
@@ -777,19 +774,22 @@ function drawBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
                 L.polyline(linePts, { color: ld.color || '#b45309', weight: 5, opacity: 0.85 }).addTo(fenceLayerGroup);
 
                 // Draw pillars + beam symbols per bay
-                for (let bi = 0; bi < r_i; bi++) {
-                    const distStart = cumulDist + bi * d_prime;
-                    const distEnd   = cumulDist + (bi + 1) * d_prime;
+                let cursor = cumulDist;
+                for (let bi = 0; bi < gaps.length; bi++) {
+                    const distStart = cursor;
+                    const distEnd   = cursor + gaps[bi];
                     const ptStart   = interp(pts, distStart);
-                    const ptEnd     = interp(pts, Math.min(distEnd, cumulDist + A_i));
+                    const ptEnd     = interp(pts, distEnd);
 
                     // Pillar at bay start
-                    drawPost(ptStart, segB, bi === 0 ? 'endpoint' : 'normal');
+                    drawPost(ptStart, segB, (si === 0 && bi === 0) ? 'endpoint' : 'normal');
 
                     // Beam symbol inside this bay (if any beams)
                     if (beamMode !== 'none') {
                         drawBeamSymbol(ptStart, ptEnd, segB, beamMode);
                     }
+                    
+                    cursor = distEnd;
                 }
                 // Final pillar at segment end
                 drawPost(interp(pts, cumulDist + A_i), segB,
@@ -807,11 +807,11 @@ function drawBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
 
         const brickTotalPrice = brickCount * 1.05 * brickPrice;
 
-        window._brickCalcResult = {
+        window._brickCalcResult = { 
             totalPrice:  brickTotalPrice,
             brickCount:  brickCount,
             totalBays:   totalBays,
-            avgSpacing:  segCount > 0 ? totalSpacingSum / segCount : d,
+            avgSpacing:  segCount > 0 ? totalSpacingSum / totalBays : d,
             beamCount:   beamCount,
             n_beam,
             beamMode,
@@ -820,28 +820,41 @@ function drawBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
     }
 
     // ── Process BARBED WIRE lines ──
+// ── Process BARBED WIRE lines ──
+// ── Process BARBED WIRE lines ──
     if (barbedLines.length > 0) {
-        const spacingInput = document.getElementById('postSpacingBarbed');
+        const spacingInput = document.getElementById('postSpacingBarbed') || document.getElementById('imPostSpacingBarbed');
         const m_barbed = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
-        
-        // Get barbed wire post size
-const n_barbed = 0;
-        
-        const nBraceSolo = document.getElementById('nBraceSolo')?.checked ?? false;
-        const nBraceDual = document.getElementById('nBraceDual')?.checked ?? false;
-        const nBraceAngle = document.getElementById('nBraceAngle')?.checked ?? false;
-        
+
+        const n_barbed = 0;
+
+        const nBraceSolo  = (document.getElementById('nBraceSolo')  || document.getElementById('imNBraceSolo') )?.checked ?? false;
+        const nBraceDual  = (document.getElementById('nBraceDual')  || document.getElementById('imNBraceDual') )?.checked ?? false;
+        const nBraceAngle = (document.getElementById('nBraceAngle') || document.getElementById('imNBraceAngle'))?.checked ?? false;
+
+        let totalSharpAngles = 0;
+        let totalExtraSections = 0;
+        let totalExtraLength = 0;
+
         barbedLines.forEach(ld => {
-            const res = drawBarbedWireFence(ld.points, { 
-                nBraceSolo, 
-                nBraceDual, 
+            const res = drawBarbedWireFence(ld.points, {
+                nBraceSolo,
+                nBraceDual,
                 nBraceAngle,
                 postSize: n_barbed,
                 spacing: m_barbed
             });
-            grandTotal += res.grandTotal;
-            grandPosts += res.totalPosts;
+            grandTotal += res.grandTotal + (res.extraLength || 0); // include extra sections in total length
+            grandPosts += res.totalPosts;                           // already includes extra posts
+            totalSharpAngles   += (res.sharpCorners || []).length;
+            totalExtraSections += res.extraSections || 0;
+            totalExtraLength   += res.extraLength   || 0;
         });
+
+        // Show a small non-intrusive toast instead of a warning banner
+        if (totalSharpAngles > 0) {
+            _showSharpAngleToast(totalSharpAngles, totalExtraSections, m_barbed);
+        }
     }
 
 const hasBrick = brickLines.length > 0;
@@ -920,6 +933,7 @@ const hasBrick = brickLines.length > 0;
     });
 }
 
+
 // ============================================
 // BARBED WIRE FENCE — รั้วลวดหนาม
 // ============================================
@@ -937,6 +951,23 @@ function drawBarbedWireFence(linePoints, options) {
     const m = spacing || Math.min(3, Math.max(1, parseFloat(document.getElementById('postSpacingBarbed')?.value) || 2.5));
     const total = totalLen(linePoints);
 
+    // ── Compute interior angle at each vertex (for sharp-angle detection) ──
+    // Returns the turn angle in degrees [0..180] at point index i
+    function interiorAngleAt(i) {
+        if (i <= 0 || i >= linePoints.length - 1) return 180;
+        const bIn  = bearing(linePoints[i - 1], linePoints[i]);
+        const bOut = bearing(linePoints[i],     linePoints[i + 1]);
+        let diff = ((bOut - bIn + 540) % 360) - 180; // signed turn [-180..180]
+        return 180 - Math.abs(diff);                  // interior angle
+    }
+
+    // Collect sharp-angle corner indices (interior angle < 60°)
+    const sharpCorners = [];
+    for (let i = 1; i < linePoints.length - 1; i++) {
+        const ang = interiorAngleAt(i);
+        if (ang < 60) sharpCorners.push({ idx: i, angle: ang });
+    }
+
     // Draw the wire lines (3 strands)
     const strandOffsets = [-0.3, 0, 0.3];
     strandOffsets.forEach((_, si) => {
@@ -951,7 +982,21 @@ function drawBarbedWireFence(linePoints, options) {
         }).addTo(fenceLayerGroup);
     });
 
-    // Draw regular line posts along the fence
+    // ── Draw sharp-angle arc markers on the map ──
+// ── Draw sharp-angle markers on the map (orange circle only, no label) ──
+    sharpCorners.forEach(({ idx }) => {
+        const pt = linePoints[idx];
+        L.circleMarker(pt, {
+            radius: 10,
+            color: '#f97316',
+            weight: 3,
+            fillColor: '#fed7aa',
+            fillOpacity: 0.55,
+            opacity: 1
+        }).addTo(fenceLayerGroup);
+    });
+
+    // ── Draw regular line posts along the fence ──
     let d = 0;
     let postCount = 0;
     while (d <= total + 1e-4) {
@@ -961,6 +1006,28 @@ function drawBarbedWireFence(linePoints, options) {
         d += m;
         postCount++;
     }
+
+    // ── Add extra intermediate pillar at each sharp corner ──
+    // One extra post is placed 'm' meters back along the incoming segment
+    // (the corner itself already gets the regular post; this shortens that span)
+    let extraPosts = 0;
+    let extraLength = 0; // total extra section length added
+    sharpCorners.forEach(({ idx }) => {
+        // Compute cumulative distance to this corner
+        let distToCorner = 0;
+        for (let k = 0; k < idx; k++) distToCorner += hav(linePoints[k], linePoints[k + 1]);
+
+        // Extra post placed 'm' meters before the corner (incoming side)
+        const extraDist = Math.max(0, distToCorner - m);
+        if (extraDist > 1e-3) {
+            const pt = interp(linePoints, extraDist);
+            const b  = bearingAt(linePoints, extraDist);
+            drawPost(pt, b, 'normal');
+            extraPosts++;
+            extraLength += m; // one extra spacing-length section
+        }
+    });
+    postCount += extraPosts;
 
     // N-BRACE SOLO — arrow markers at start and end
     if (nBraceSolo) {
@@ -989,7 +1056,58 @@ function drawBarbedWireFence(linePoints, options) {
         }
     }
 
-    return { grandTotal: total, totalPosts: postCount };
+    return {
+        grandTotal: total,
+        totalPosts: postCount,
+        sharpCorners,          // array of { idx, angle } for calc display
+        extraSections: extraPosts,
+        extraLength
+    };
+}
+
+// ── Sharp-angle toast notification ──────────────────────────────
+let _sharpToastTimer = null;
+function _showSharpAngleToast(count, extraPosts, spacing) {
+    // Remove existing toast
+    const old = document.getElementById('sharpAngleToast');
+    if (old) old.remove();
+    if (_sharpToastTimer) clearTimeout(_sharpToastTimer);
+
+    const toast = document.createElement('div');
+    toast.id = 'sharpAngleToast';
+    toast.innerHTML = `
+        <span style="font-size:15px;line-height:1;">🔶</span>
+        <span>พบมุม &lt;60° จำนวน <strong>${count}</strong> มุม<br>
+        เพิ่มเสา <strong>${extraPosts}</strong> ต้น · เพิ่มระยะ <strong>${(extraPosts * spacing).toFixed(1)}</strong> ม.</span>
+        <button onclick="document.getElementById('sharpAngleToast').remove()"
+            style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;
+            color:#92400e;padding:0;margin-left:4px;flex-shrink:0;">✕</button>
+    `;
+    toast.style.cssText = `
+        position:fixed; bottom:24px; right:24px; z-index:9999;
+        display:flex; align-items:center; gap:10px;
+        background:#fffbeb; border:1.5px solid #f59e0b;
+        border-radius:10px; padding:10px 14px;
+        box-shadow:0 4px 16px rgba(0,0,0,0.13);
+        font-size:12px; color:#92400e; max-width:240px;
+        animation: sharpToastIn 0.25s ease;
+    `;
+    document.body.appendChild(toast);
+
+    // Inject keyframe once
+    if (!document.getElementById('sharpToastStyle')) {
+        const s = document.createElement('style');
+        s.id = 'sharpToastStyle';
+        s.textContent = `@keyframes sharpToastIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }`;
+        document.head.appendChild(s);
+    }
+
+    // Auto-dismiss after 6 seconds
+    _sharpToastTimer = setTimeout(() => {
+        const t = document.getElementById('sharpAngleToast');
+        if (t) t.style.cssText += 'transition:opacity 0.4s;opacity:0;';
+        setTimeout(() => { const t2 = document.getElementById('sharpAngleToast'); if (t2) t2.remove(); }, 400);
+    }, 6000);
 }
 
 // Draw a directional support-post arrow (N-brace solo indicator)

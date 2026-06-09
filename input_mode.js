@@ -273,8 +273,18 @@ function renderSideList() {
             emptyDiv.textContent = 'ยังไม่มีด้านใดถูกเพิ่ม';
             list.appendChild(emptyDiv);
         }
-        imSides.forEach((s, i) => {
+imSides.forEach((s, i) => {
             const absB = s.bearingAbs !== undefined ? ((s.bearingAbs % 360) + 360) % 360 : 0;
+
+            // Compute interior angle for this vertex (turn from previous side)
+            let interiorAngle = 180;
+            if (i > 0 && i < imSides.length) {
+                const prevB = imSides[i - 1].bearingAbs;
+                const diff = ((absB - prevB + 540) % 360) - 180;
+                interiorAngle = 180 - Math.abs(diff);
+            }
+            const isSharp = interiorAngle < 60;
+
             const row = document.createElement('div');
             row.className = 'im-side-row';
             row.innerHTML = `
@@ -283,16 +293,23 @@ function renderSideList() {
                     data-idx="${i}" value="${s.length.toFixed(1)}"
                     min="0.1" step="0.1" style="flex:1;min-width:0;">
                 <span style="font-size:12px;color:#374151;margin-left:4px;">ม.</span>
-<span style="font-size:11px;color:#6b7280;margin-left:2px;">มุม:</span>
-<input type="number" class="im-angle-display-input sb-number-input" data-idx="${i}"
-    value="${absB}" min="0" max="359" step="${angleStepFor(imFenceType)}"
-    style="width:52px;flex:none;font-size:13px;text-align:center;" readonly
-    title="ทิศทาง (°)">
-<span style="font-size:10px;color:#9ca3af;margin:0 1px;">°</span>
-<button class="im-angle-dial-btn" data-idx="${i}" title="ตั้งมุม"
-    style="margin-left:2px;width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;
-    background:#f9fafb;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;
-    justify-content:center;" data-bearing="${absB}">⊙</button>
+                <span style="font-size:11px;color:${isSharp ? '#f97316' : '#6b7280'};margin-left:2px;">มุม:</span>
+                <input type="number" class="im-angle-display-input sb-number-input" data-idx="${i}"
+                    value="${absB}" min="0" max="359" step="${angleStepFor(imFenceType)}"
+                    style="width:52px;flex:none;font-size:13px;text-align:center;
+                           background:${isSharp ? '#fff7ed' : ''};
+                           border-color:${isSharp ? '#f97316' : ''};
+                           color:${isSharp ? '#ea580c' : ''};" readonly
+                    title="${isSharp ? `⚠️ มุมแหลม ${interiorAngle.toFixed(0)}° < 60° — ต้องการเสาเพิ่ม` : 'ทิศทาง (°)'}">
+                <span style="font-size:10px;color:${isSharp ? '#f97316' : '#9ca3af'};margin:0 1px;">°
+                    ${isSharp ? `<span title="มุมแหลม < 60°" style="color:#f97316;font-weight:700;">⚠️</span>` : ''}
+                </span>
+                <button class="im-angle-dial-btn" data-idx="${i}" title="ตั้งมุม"
+                    style="margin-left:2px;width:26px;height:26px;border-radius:50%;
+                    border:1.5px solid ${isSharp ? '#f97316' : '#d1d5db'};
+                    background:${isSharp ? '#fff7ed' : '#f9fafb'};
+                    cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;
+                    justify-content:center;" data-bearing="${absB}">⊙</button>
                 <button class="im-del-btn" data-idx="${i}" title="ลบด้านนี้" style="margin-left:4px;">✕</button>
             `;
             list.appendChild(row);

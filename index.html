@@ -9,8 +9,11 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="angle_dial.css">
     <link rel="stylesheet" href="brick_picker.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- html2canvas for capturing the map -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- jsPDF for generating the PDF file -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 </head>
 
 <body>
@@ -360,7 +363,10 @@
             <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">รายการเส้น</div>
             <div id="planLineList" style="max-height:260px;overflow-y:auto;"></div>
             <button onclick="togglePlanMode()" style="margin-top:16px;width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">✕ ออกจากโหมดแผน</button>
-            
+            <button id="btnDownloadPDF" style="width:100%; margin-top:10px; padding:10px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; font-size:14px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+    ดาวน์โหลดแบบแปลน (PDF)
+</button>
         </div>
 
         <!-- ── PAGE 2: Draw mode / data entry (old sidebar content) ── -->
@@ -501,7 +507,7 @@
     <script src="measure.js"></script>
     <script src="fence.js"></script>
     <script src="input_mode.js"></script>
-    <script src="plan_mode.js"></script> 
+    <script src="plan_mode.js?v=222"></script> 
 
     <!-- Hidden inputs -->
     <input type="hidden" id="resPrice">
