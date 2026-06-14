@@ -22,10 +22,10 @@
     // ── Constants ──────────────────────────────────
     const CLOSE_THRESHOLD = 0.5; // metres — auto-close snap distance
 const ANGLE_RULES = {
-        cowboy: { step: 90,  label: '90°' },
-        barbed: { step: 1,   label: '1°'  },
-        brick:  { step: 45,  label: '45°' },
-    };
+    cowboy: { step: 90,  label: '90°' },
+    barbed: { step: 1,   label: '1°'  },
+    brick:  { step: 90,  label: '90°' },
+};
     const DEFAULT_ANGLE_STEP = 1; // degrees (no restriction)
 
     // ── State ──────────────────────────────────────
@@ -139,6 +139,7 @@ if (!ld) {
                 segLabelLayer: L.layerGroup().addTo(map),
                 color: col,
                 fenceType: imFenceType,
+                fenceOptions: (typeof captureFenceOptions === 'function') ? captureFenceOptions(imFenceType) : {},
                 closed: false,
                 active: false
             };
@@ -148,6 +149,7 @@ if (!ld) {
             ld.points = drawPts;
             ld.color = col;
             ld.fenceType = imFenceType;
+ld.fenceOptions = (typeof captureFenceOptions === 'function') ? captureFenceOptions(imFenceType) : {};
             ld.closed = false;
             ld.markers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
             ld.markers = [];
@@ -384,7 +386,7 @@ function openAngleDial(idx, anchorEl) {
 function isForbidden(deg) {
     if (prevBearing === null) return false;
     const d = ((deg % 360) + 360) % 360;
-    if (imFenceType === 'cowboy') {
+if (imFenceType === 'cowboy' || imFenceType === 'brick') {
         const reverse = (prevBearing + 180) % 360;
         return d === reverse;
     }
@@ -745,16 +747,13 @@ function _pushToAllLines() {
                 points:    finalPts,
                 polyline:  poly,
                 fenceType: imFenceType,
+fenceOptions: (typeof captureFenceOptions === 'function') ? captureFenceOptions(imFenceType) : {},
                 color:     color,
                 markers:   []
             });
 
-            // Trigger fence calculation in simulate mode
-            if (typeof setAppMode === 'function') {
-                setAppMode('simulate');
-            } else if (typeof runFenceCalc === 'function') {
-                runFenceCalc();
-            }
+// Recalculate immediately so the fence preview/result updates live
+if (typeof runFenceCalc === 'function') runFenceCalc();
         }
 
         // Clear preview and state

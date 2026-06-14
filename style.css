@@ -1310,3 +1310,33 @@ FORM SPACING & INPUT FIXES
 }
 .psb-pick-opt:hover { background: rgba(255,255,255,0.08); }
 .psb-pick-opt.active { font-weight: 700; color: #93c5fd; }
+
+/* ── Plan Mode: disable draw/input UI in sidebar ── */
+.left-sidebar.plan-mode-active #sbPage1 {
+    pointer-events: none;
+    opacity: 0.38;
+    user-select: none;
+}
+
+/* Keep the plan panel itself fully interactive */
+.left-sidebar.plan-mode-active #planModePanel {
+    pointer-events: auto !important;
+    opacity: 1 !important;
+}
+
+/* Keep the tab bar interactive so user can switch tabs */
+.left-sidebar.plan-mode-active .sb-tab-bar {
+    pointer-events: auto !important;
+    opacity: 1 !important;
+}
+
+.line-summary-item .line-summary-fence {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    background: #eef2f7;
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+}

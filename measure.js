@@ -97,7 +97,7 @@ eraserBtn.addEventListener('click', function () {
             measureActive = false;
             measureBtn.classList.remove('active');
             finishCurrentLine();
-        }
+        }   
     } else {
         this.classList.remove('active');
         map.getContainer().style.cursor = '';
@@ -897,8 +897,6 @@ function getSnapPoint(startPoint, currentPoint, prevPoint) {
     }
 }
 
-// Update line info box
-// Update line info box
 function updateLineInfoBox() {
     const stack = document.getElementById('lineSummaryStack');
     const measureInfo = document.getElementById('measureInfo');
@@ -906,6 +904,7 @@ function updateLineInfoBox() {
 
     if (allLines.length === 0) {
         measureInfo.classList.remove('active');
+        if (typeof scheduleFenceRecalc === 'function') scheduleFenceRecalc();
         return;
     }
 
@@ -939,6 +938,9 @@ function updateLineInfoBox() {
 
     // Always scroll to top when a new card is added
     stack.scrollTop = 0;
+
+    // Auto-recalculate the fence (posts, beams, totals) on every drawing change
+    if (typeof scheduleFenceRecalc === 'function') scheduleFenceRecalc();
 }
 
 
@@ -1102,7 +1104,7 @@ map.on('click', function (e) {
 
             // Cowboy: snap connection to 90° relative to previous segment
             let connectPoint = dotPoint;
-            if (isCowboyFence() && currentLine.points.length >= 2) {
+if ((isCowboyFence() || selectedFenceType === 'brick') && currentLine.points.length >= 2) {
                 const refPt  = currentLine.points[currentLine.points.length - 1];
                 const prevPt = currentLine.points[currentLine.points.length - 2];
                 const snapped = getSnapPoint(refPt, dotPoint, prevPt);
@@ -1112,21 +1114,27 @@ map.on('click', function (e) {
             }
 
             // Check if closing own shape
-            const ownFirst = currentLine.points[0];
-            const isClosing = Math.abs(dotPoint[0]-ownFirst[0]) < 0.0001 && Math.abs(dotPoint[1]-ownFirst[1]) < 0.0001;
+// Check if closing own shape
+// Check if closing own shape
+const ownFirst = currentLine.points[0];
+const isClosing = Math.abs(dotPoint[0]-ownFirst[0]) < 0.0001 && Math.abs(dotPoint[1]-ownFirst[1]) < 0.0001;
 
-            if (isClosing && currentLine.points.length >= 3) {
-                currentLine.points.push(ownFirst);
-                currentLine.closed = true;
-                if (currentLine.polyline) map.removeLayer(currentLine.polyline);
-                currentLine.polyline = L.polygon(currentLine.points, { color: currentLine.color, weight: 3, opacity: 0.8, fillOpacity: 0.2 }).addTo(map);
-                redrawLineLabels(currentLine);
-                const td = calculateTotalDistance(currentLine.points);
-                currentLine.polyline.bindPopup(`Distance: ${formatDistance(td)} / ${metersToInches(td).toFixed(2)} in<br>Enclosed Shape`);
-                updateLineInfoBox();
-                finishCurrentLine();
-                return;
-            }
+if (isClosing && currentLine.points.length >= 3) {
+    // Cowboy & brick: do NOT snap to the start point — it would break the forced 90° angle.
+    // Instead, block the close-by-dot-click entirely; user finishes naturally via 90° snap.
+    if (isCowboyFence() || selectedFenceType === 'brick') return;
+
+    currentLine.points.push(ownFirst);
+    currentLine.closed = true;
+    if (currentLine.polyline) map.removeLayer(currentLine.polyline);
+    currentLine.polyline = L.polygon(currentLine.points, { color: currentLine.color, weight: 3, opacity: 0.8, fillOpacity: 0.2 }).addTo(map);
+    redrawLineLabels(currentLine);
+    const td = calculateTotalDistance(currentLine.points);
+    currentLine.polyline.bindPopup(`Distance: ${formatDistance(td)} / ${metersToInches(td).toFixed(2)} in<br>Enclosed Shape`);
+    updateLineInfoBox();
+    finishCurrentLine();
+    return;
+}
 
             if (!isClosing) {
                 if (!isHitEndpoint) return;
@@ -1145,7 +1153,8 @@ map.on('click', function (e) {
             const refPt = currentLine.points.length > 0 ? currentLine.points[currentLine.points.length - 1] : null;
 
             // Cowboy: force 90° from 2nd segment onward (relative to prev segment); Shift: always snap
-            if (refPt && (shiftPressed || (isCowboyFence() && currentLine.points.length >= 2))) {
+// AFTER:
+if (refPt && (shiftPressed || ((isCowboyFence() || selectedFenceType === 'brick') && currentLine.points.length >= 2))) {
                 const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
                 clickPoint = getSnapPoint(refPt, clickPoint, prevPt);
             }
@@ -1193,7 +1202,7 @@ map.on('mousemove', function (e) {
             ? currentLine.points[currentLine.points.length - 1] : null;
 
         // Snap: cowboy forces 90° from 2nd segment (relative to prev segment), Shift always snaps
-        if (referencePoint && (shiftPressed || (isCowboyFence() && currentLine.points.length >= 2))) {
+if (referencePoint && (shiftPressed || ((isCowboyFence() || selectedFenceType === 'brick') && currentLine.points.length >= 2))) {
             const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
             previewPoint = getSnapPoint(referencePoint, previewPoint, prevPt);
         }
