@@ -182,10 +182,14 @@ function runFenceCalc() {
     const activeCard = document.querySelector('.sb-fence-card.active');
     const activeFenceType = activeCard ? activeCard.getAttribute('data-type') : 'cowboy';
 
-const validLines = allLines.filter(ld => ld.points && ld.points.length >= 2);
-    const cowboyLines = validLines.filter(ld => (ld.fenceType || activeFenceType) !== 'brick' && (ld.fenceType || activeFenceType) !== 'barbed');
-    const brickLines  = validLines.filter(ld => (ld.fenceType || activeFenceType) === 'brick');
-    const barbedLines = validLines.filter(ld => (ld.fenceType || activeFenceType) === 'barbed');
+    const validLines = allLines.filter(ld => ld.points && ld.points.length >= 2);
+    const concreteLines = validLines.filter(ld => (ld.fenceType || activeFenceType) === 'concrete');
+    const brickLines    = validLines.filter(ld => (ld.fenceType || activeFenceType) === 'brick');
+    const barbedLines   = validLines.filter(ld => (ld.fenceType || activeFenceType) === 'barbed');
+    const cowboyLines   = validLines.filter(ld => {
+        const t = ld.fenceType || activeFenceType;
+        return t !== 'brick' && t !== 'barbed' && t !== 'concrete';
+    });
 
     // Pre-scan: auto-enable double corner silently if any segment needs shortening
     if (cowboyLines.length > 0) {
@@ -222,6 +226,14 @@ const validLines = allLines.filter(ld => ld.points && ld.points.length >= 2);
         allWarnings.push(...res.warnings);
     }
 
+    if (concreteLines.length > 0) {
+        const spacingInput = document.getElementById('postSpacing') || document.getElementById('imPostSpacing');
+        const m_concrete = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
+        const res = calcConcrete(concreteLines, m_concrete, 0, doubleCorner, layers);
+        grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
+        allWarnings.push(...res.warnings);
+    }
+
     if (brickLines.length > 0) {
         const res = calcBrick(brickLines);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
@@ -232,10 +244,9 @@ const validLines = allLines.filter(ld => ld.points && ld.points.length >= 2);
     if (barbedLines.length > 0) {
         const spacingInput = document.getElementById('postSpacingBarbed') || document.getElementById('imPostSpacingBarbed');
         const m_barbed = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
-        const nBraceSolo = (document.getElementById('nBraceSolo') || document.getElementById('imNBraceSolo'))?.checked ?? false;
-        const nBraceDual = (document.getElementById('nBraceDual') || document.getElementById('imNBraceDual'))?.checked ?? false;
+        const nBraceSolo  = (document.getElementById('nBraceSolo')  || document.getElementById('imNBraceSolo'))?.checked  ?? false;
+        const nBraceDual  = (document.getElementById('nBraceDual')  || document.getElementById('imNBraceDual'))?.checked  ?? false;
         const nBraceAngle = (document.getElementById('nBraceAngle') || document.getElementById('imNBraceAngle'))?.checked ?? false;
-        
         const res = calcBarbed(barbedLines, m_barbed, 0, nBraceSolo, nBraceDual, nBraceAngle);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
         allWarnings.push(...res.warnings);
@@ -250,18 +261,18 @@ const validLines = allLines.filter(ld => ld.points && ld.points.length >= 2);
 
         const beamsInput = document.getElementById(ids.beams);
         const beamsLabel = beamsInput?.closest('.sbr-row-item')?.querySelector('.sbr-label');
-        const beamsUnit = beamsInput?.closest('.sbr-field-row')?.querySelector('.sbr-unit');
+        const beamsUnit  = beamsInput?.closest('.sbr-field-row')?.querySelector('.sbr-unit');
 
         if (hasBrick && window._brickCalcResult) {
             const br = window._brickCalcResult;
             const brickCountWithWaste = Math.ceil(br.brickCount * 1.05);
             if (beamsInput) beamsInput.value = brickCountWithWaste.toLocaleString('th-TH');
             if (beamsLabel) beamsLabel.textContent = 'จำนวนอิฐ (รวม +5%)';
-            if (beamsUnit) beamsUnit.textContent = 'ก้อน'; 
+            if (beamsUnit)  beamsUnit.textContent  = 'ก้อน';
         } else {
             if (beamsInput) beamsInput.value = grandBeams;
             if (beamsLabel) beamsLabel.textContent = 'จำนวนคานที่ต้องใช้';
-            if (beamsUnit) beamsUnit.textContent = 'อัน';
+            if (beamsUnit)  beamsUnit.textContent  = 'อัน';
         }
 
         const priceInput = document.getElementById(ids.price);
@@ -287,8 +298,8 @@ const validLines = allLines.filter(ld => ld.points && ld.points.length >= 2);
         }
     }
 
-    writeResults({ total: 'resTotal', posts: 'resPosts', beams: 'resBeams', beamsRow: null, price: 'resPriceDisplay', warnings: 'fenceWarnings' });
-    writeResults({ total: 'imResTotal', posts: 'imResPosts', beams: 'imResBeams', beamsRow: 'imResBeamsRow', price: 'imResPriceDisplay', warnings: 'imFenceWarnings' });
+    writeResults({ total: 'resTotal', posts: 'resPosts', beams: 'resBeams', price: 'resPriceDisplay', warnings: 'fenceWarnings' });
+    writeResults({ total: 'imResTotal', posts: 'imResPosts', beams: 'imResBeams', price: 'imResPriceDisplay', warnings: 'imFenceWarnings' });
 }
 
 // Shared UI Helpers
@@ -385,6 +396,17 @@ function captureFenceOptions(fenceType) {
             nBraceAngle: checked('nBraceAngle', 'imNBraceAngle')
         };
     }
+    if (fenceType === 'concrete') {
+        const spacingSel    = document.getElementById('imSpacingSelectConcrete') || document.getElementById('spacingSelectConcrete');
+        const spacingCustom = document.getElementById('imPostSpacingConcrete')   || document.getElementById('postSpacingConcrete');
+        const spacing = (spacingSel?.value === 'custom')
+            ? parseFloat(spacingCustom?.value) || 2.5
+            : parseFloat(spacingSel?.value)    || 2.5;
+        const layers      = parseInt(document.getElementById('imConcreteLayerSelect')?.value  || document.getElementById('concreteLayerSelect')?.value)  || 4;
+        const doubleCorner = (document.getElementById('imConcreteDoubleCorner') || document.getElementById('concreteDoubleCorner'))?.checked || false;
+        return { postSpacing: spacing, layers, doubleCorner };
+    }   
+
     if (fenceType === 'brick') {
         return {
             spacing: val('postSpacingBrick', 'imPostSpacingBrick'),

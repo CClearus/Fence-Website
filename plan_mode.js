@@ -206,7 +206,7 @@ async function downloadPlanPDF() {
                           (_geoOffset(s,perpB,0)[1]+_geoOffset(e,perpB,0)[1])/2];
             const [mx,my] = project(mid);
             pdf.setFontSize(4.5);
-            pdf.setFont('helvetica', 'bold');
+            pdf.setFont('Sarabun', 'bold');
             const [tr,tg,tb] = hexRgb(strokeHex);
             pdf.setTextColor(tr,tg,tb);
             const tw = pdf.getTextWidth(label);
@@ -356,7 +356,7 @@ async function downloadPlanPDF() {
             const typeNames = { cowboy:'คาวบอย', concrete:'คอนกรีต', barbed:'ลวดหนาม', brick:'อิฐ' };
             const label = `Line ${idx+1} (${typeNames[fenceType]||fenceType})  L=${total.toFixed(1)}m`;
             pdf.setFontSize(5.5);
-            pdf.setFont('helvetica', 'bold');
+            pdf.setFont('Sarabun', 'bold');
             const [cr,cg,cb2] = hexRgb(colours[fenceType]||'#000000');
             pdf.setTextColor(cr,cg,cb2);
             const lw2 = pdf.getTextWidth(label);
@@ -373,12 +373,12 @@ async function downloadPlanPDF() {
         pdf.rect(0, 0, PW, MARGIN + 2, 'F');
         pdf.setTextColor(255,255,255);
         pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'bold');
+        pdf.setFont('Sarabun', 'bold');
         pdf.text('FENCE PLAN — แบบแปลนรั้ว', PW/2, 8, { align: 'center' });
 
         const dateStr = new Date().toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' });
         pdf.setFontSize(6);
-        pdf.setFont('helvetica', 'normal');
+        pdf.setFont('Sarabun', 'normal');
         pdf.text(`วันที่: ${dateStr}`, MARGIN, 12.5);
 
         const scaleEl = document.querySelector('#psbTitle');
@@ -393,8 +393,8 @@ async function downloadPlanPDF() {
         pdf.line(0, FY, PW, FY);
         pdf.setTextColor(100, 116, 139);
         pdf.setFontSize(5.5);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text('ระบบคำนวณรั้วอัตโนมัติ', PW/2, FY + 6.5, { align: 'center' });
+        pdf.setFont('Sarabun', 'normal');
+        pdf.text('Maybe i should put some text here', PW/2, FY + 6.5, { align: 'center' });
 
         let grandTotal = 0;
         allLines.forEach(ld => { grandTotal += _geoTotalLen(ld.points || []); });
@@ -407,7 +407,7 @@ async function downloadPlanPDF() {
         pdf.line(naX, naY, naX + 2.5, naY + 5);
         pdf.setFillColor(30,41,59);
         pdf.triangle(naX, naY, naX-2.5, naY+5, naX+2.5, naY+5, 'F');
-pdf.setFontSize(6); pdf.setFont('helvetica','bold');
+pdf.setFontSize(6); pdf.setFont('Sarabun','bold');
         pdf.setTextColor(30,41,59);
         pdf.text('N', naX, naY - 1.5, { align:'center' });
 
@@ -445,7 +445,7 @@ pdf.setFontSize(6); pdf.setFont('helvetica','bold');
         pdf.setLineDashPattern([],0);
         pdf.rect(LX, legendTop, BW, BH, 'FD');
 
-        pdf.setFontSize(5); pdf.setFont('helvetica','bold');
+        pdf.setFontSize(5); pdf.setFont('Sarabun','bold');
         pdf.setTextColor(30,41,59);
         pdf.text('LEGEND', LX + BW/2, legendTop + 4, { align:'center' });
 
@@ -531,13 +531,13 @@ pdf.setFontSize(6); pdf.setFont('helvetica','bold');
                     pdf.setFillColor(255,255,255); pdf.setLineWidth(0.2);
                     const dw = 6;
                     pdf.rect(symCx-dw/2, symCy-1.5, dw, 3, 'FD');
-                    pdf.setFontSize(3); pdf.setFont('helvetica','normal');
+                    pdf.setFontSize(3); pdf.setFont('Sarabun','normal');
                     pdf.setTextColor(0,0,0);
                     pdf.text('2.50m', symCx, symCy+0.8, {align:'center'}); break;
             }
 
             // Row label
-            pdf.setFontSize(4.2); pdf.setFont('helvetica','normal');
+            pdf.setFontSize(4.2); pdf.setFont('Sarabun','normal');
             pdf.setTextColor(30,41,59);
             pdf.text(entry.label, LX + 2 + SYM + 2, symCy + 1.2);
         });
@@ -709,8 +709,10 @@ function drawPlanLine(lineData, idx) {
         drawPlanBarbedLine(lineData, idx);
     } else if (fenceType === 'brick') {
         drawPlanBrickLine(lineData, idx);
+    } else if (fenceType === 'concrete') {
+        drawPlanConcreteLine(lineData, idx);
     } else {
-        // cowboy or concrete
+        // cowboy (default)
         drawPlanCowboyLine(lineData, idx);
     }
 }
@@ -873,15 +875,15 @@ function _drawPlanLegend() {
 
     const entries = [];
 
-    // Posts
     entries.push({ kind: 'post-normal', label: 'เสาทั่วไป (Normal post)' });
     entries.push({ kind: 'post-corner', label: 'เสามุม / ปลาย (Corner / End post)' });
 
-    // Cowboy / Concrete
-    if (types.has('cowboy') || types.has('concrete'))
-        entries.push({ kind: 'line-cowboy', label: 'รั้วคาวบอย / คอนกรีต' });
+    if (types.has('cowboy'))
+        entries.push({ kind: 'line-cowboy', label: 'รั้วคาวบอย' });
 
-    // Barbed wire
+    if (types.has('concrete'))
+        entries.push({ kind: 'line-concrete', label: 'รั้วคอนกรีตสำเร็จรูป' });
+
     if (types.has('barbed')) {
         entries.push({ kind: 'line-barbed',    label: 'ลวดหนาม — สายลวด (Wire strands)' });
         entries.push({ kind: 'sharp-corner',   label: 'มุมแหลม <60° (Sharp corner)' });
@@ -890,14 +892,12 @@ function _drawPlanLegend() {
         entries.push({ kind: 'brace-solo',     label: 'N-Brace ปลาย ↗ (Solo end brace)' });
     }
 
-    // Brick
     if (types.has('brick')) {
         entries.push({ kind: 'line-brick',   label: 'รั้วอิฐ (Brick wall)' });
         entries.push({ kind: 'beam-top',     label: 'คานบน — สีส้ม (Top beam)' });
         entries.push({ kind: 'beam-center',  label: 'คานกลาง — สีน้ำเงิน (Centre beam)' });
     }
 
-    // Always
     entries.push({ kind: 'dim', label: 'เส้นมิติ (Dimension line)' });
 
     const svgMap = {
@@ -913,6 +913,12 @@ function _drawPlanLegend() {
             `<svg width="32" height="16" viewBox="0 0 32 16">
                 <line x1="2" y1="8" x2="30" y2="8" stroke="#1a1a1a" stroke-width="3"/>
                 <rect x="12" y="4" width="8" height="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+            </svg>`,
+        'line-concrete':
+            `<svg width="32" height="16" viewBox="0 0 32 16">
+                <line x1="2" y1="8" x2="30" y2="8" stroke="#1a1a1a" stroke-width="3"/>
+                <rect x="2" y="4" width="8" height="8" fill="#9ca3af" stroke="#1a1a1a" stroke-width="1.5"/>
+                <rect x="22" y="4" width="8" height="8" fill="#9ca3af" stroke="#1a1a1a" stroke-width="1.5"/>
             </svg>`,
         'line-barbed':
             `<svg width="32" height="16" viewBox="0 0 32 16">
@@ -982,11 +988,17 @@ function _drawPlanLegend() {
         </div>
         ${rows}
     `;
+    // Position below the scale bar (top:100%) so it grows downward and stays on screen,
+    // instead of bottom:100% which grows upward off the top of the viewport since
+    // customScaleBar sits in the top-right corner.
+    // Anchor to the RIGHT edge of the scale bar (mirrors #psbPicker's right:0 in style.css).
+    // customScaleBar sits near the right edge of the viewport (.top-right-controls { right:20px }),
+    // so left:0 made the legend grow rightward off-screen. right:0 grows it leftward, staying visible.
     box.style.cssText = `
         position:absolute;
         top:100%;
         margin-top:6px;
-        left:0;
+        right:0;
         background:#fff;
         border:2px solid #1a1a1a;
         padding:8px 10px;
@@ -994,6 +1006,8 @@ function _drawPlanLegend() {
         z-index:1000;
         pointer-events:none;
         min-width:220px;
+        max-height:80vh;
+        overflow-y:auto;
     `;
 
     const scaleBar = document.getElementById('customScaleBar');

@@ -4,18 +4,16 @@
 
 function calcCowboyPanels(space, m) {
     if (space < 1e-4) return { ticks: [], standardCount: 0, splitCount: 0, needsDoubleCorner: false };
-    
+
     const fullCount = Math.floor(space / m + 1e-9);
     const remainder = space - fullCount * m;
 
     // Perfect fit — no short panels needed
     if (remainder < m * 0.01) {
-        const gaps = [];
-        for (let i = 0; i < fullCount; i++) gaps.push(m);
         const ticks = [];
         let cursor = 0;
         for (let i = 0; i < fullCount - 1; i++) {
-            cursor += gaps[i];
+            cursor += m;
             if (cursor > 1e-4 && cursor < space - 1e-4)
                 ticks.push({ pos: cursor, isSplit: false });
         }
@@ -23,19 +21,21 @@ function calcCowboyPanels(space, m) {
     }
 
     // Find smallest a (1, 2, ...) such that r >= m/2
-    // Formula: r = (space - m * (fullCount - a + 1)) / a
     let chosenA = 1;
+    let splitSize = m / 2;
     for (let a = 1; a <= fullCount; a++) {
         const r = (space - m * (fullCount - a + 1)) / a;
         if (r >= m / 2 - 1e-9) {
             chosenA = a;
+            splitSize = r;
             break;
         }
     }
 
-    const splitSize = (space - m * (fullCount - chosenA + 1)) / chosenA;
-    const stdPanels = fullCount - chosenA;
-    
+    const stdPanels = fullCount - chosenA + 1;  // ← fixed: image2 formula gives (fullCount - a + 1) std panels
+
+    // Split panels go FIRST, then standard panels
+// Split panels go LAST, then standard panels first
     const gaps = [];
     for (let i = 0; i < stdPanels; i++) gaps.push(m);
     for (let i = 0; i < chosenA; i++) gaps.push(splitSize);
@@ -46,7 +46,7 @@ function calcCowboyPanels(space, m) {
     for (let i = 0; i < totalPanels - 1; i++) {
         cursor += gaps[i];
         if (cursor > 1e-4 && cursor < space - 1e-4)
-            ticks.push({ pos: cursor, isSplit: i >= stdPanels });
+            ticks.push({ pos: cursor, isSplit: i >= stdPanels - 1 });
     }
 
     return { ticks, standardCount: stdPanels, splitCount: chosenA, splitSize, m, needsDoubleCorner: true };

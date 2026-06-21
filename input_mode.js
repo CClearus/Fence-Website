@@ -112,23 +112,23 @@ function buildPoints() {
     // ============================================
     // DRAW PREVIEW
     // ============================================
-function redrawPreview() {
+    function redrawPreview() {
     ensureLayer();
     imLayerGroup.clearLayers();
     if (imSides.length === 0) return;
 
-const pts = buildPoints();
+    const pts = buildPoints();
     // Only close if shape is actually closed (last pt ≈ first pt)
     const drawPts = isClosedShape() ? [...pts, pts[0]] : [...pts];
 
-    const colors = { cowboy: '#d97706', barbed: '#4b5563', brick: '#e8aa60' };
+    const colors = { cowboy: '#d97706', barbed: '#4b5563', brick: '#e8aa60', concrete: '#9ca3af' };
     const col = colors[imFenceType] || '#3b82f6';
 
     // Build a fake lineData object exactly like measure.js uses, then call redrawLineLabels
     if (typeof redrawLineLabels === 'function' && typeof allLines !== 'undefined') {
         // Re-use existing IM lineData slot if it exists, else create one
         let ld = (imLineIndex >= 0 && imLineIndex < allLines.length) ? allLines[imLineIndex] : null;
-if (!ld) {
+    if (!ld) {
             ld = {
                 points: drawPts,
                 polyline: null,
@@ -763,10 +763,15 @@ if (typeof runFenceCalc === 'function') runFenceCalc();
         if (typeof switchSbTab === 'function') switchSbTab(1);
     }
 
-    function _imLineColor() {
-        const colors = { cowboy: '#d97706', barbed: '#4b5563', brick: '#e8aa60' };
-        return colors[imFenceType] || '#3b82f6';
-    }
+function _imLineColor() {
+    const colors = {
+        cowboy:   '#d97706',
+        barbed:   '#4b5563',
+        brick:    '#e8aa60',
+        concrete: '#9ca3af',   // ← ADD
+    };
+    return colors[imFenceType] || '#3b82f6';
+}
 
     // ============================================
     // CLEAR
@@ -819,9 +824,11 @@ function setIMFenceType(type) {
     const cowDiv = document.getElementById('imCowboyOpts');
     const barDiv = document.getElementById('imBarbedOpts');
     const briDiv = document.getElementById('imBrickOpts');
-    if (cowDiv) cowDiv.style.display = type === 'cowboy' ? '' : 'none';
-    if (barDiv) barDiv.style.display = type === 'barbed' ? '' : 'none';
-    if (briDiv) briDiv.style.display = type === 'brick'  ? '' : 'none';
+    const conDiv = document.getElementById('imConcreteOpts');   // ← ADD
+    if (cowDiv) cowDiv.style.display = type === 'cowboy'   ? '' : 'none';
+    if (barDiv) barDiv.style.display = type === 'barbed'   ? '' : 'none';
+    if (briDiv) briDiv.style.display = type === 'brick'    ? '' : 'none';
+    if (conDiv) conDiv.style.display = type === 'concrete' ? '' : 'none';  // ← ADD
 
     // Angle wrap + Add button: only for barbed wire
     const angWrap = document.getElementById('imAngleWrap');
@@ -829,7 +836,7 @@ function setIMFenceType(type) {
     if (angWrap) angWrap.style.display = type === 'barbed' ? '' : 'none';
     if (addBtn)  addBtn.style.display  = type === 'barbed' ? '' : 'none';
 
-    // For non-barbed: reset to default 10×10 square (4 sides, no angle input)
+    // For non-barbed: reset sides
     if (type !== 'barbed') {
         imSides = [];
         imOrigin = null;
@@ -874,8 +881,8 @@ function setIMFenceType(type) {
                 </div>
                 <div class="sfc-label">รั้วคาวบอย</div>
             </div>
-            <div class="sb-fence-card sfc-disabled" data-type="concrete">
-                <div class="sfc-icon" style="opacity:0.4;">
+            <div class="sb-fence-card" data-type="concrete">
+                <div class="sfc-icon">
                     <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
                         <rect x="4" y="6" width="6" height="36" rx="2" fill="#9ca3af"/>
                         <rect x="38" y="6" width="6" height="36" rx="2" fill="#9ca3af"/>
@@ -1012,6 +1019,36 @@ function setIMFenceType(type) {
     </div>
 
 <!-- BRICK opts -->
+<!-- CONCRETE opts -->
+<div id="imConcreteOpts" style="display:none;">
+    <div class="sb-section-label">ระยะห่างระหว่างแผ่น (เมตร)</div>
+    <select class="sb-number-input" id="imSpacingSelectConcrete"
+        style="width:100%;padding:6px 8px;font-size:12px;"
+        onchange="imSetSpacingConcrete(this.value)">
+        <option value="2.0">2.0 ม.</option>
+        <option value="2.5" selected>2.5 ม.</option>
+        <option value="3.0">3.0 ม.</option>
+        <option value="custom">กำหนดเอง…</option>
+    </select>
+    <input type="number" class="sb-number-input" id="imPostSpacingConcrete"
+        value="2.5" min="1" max="5" step="0.1"
+        style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+    <div class="sb-section-label" style="margin-top:10px;">จำนวนชั้นแผ่น</div>
+    <select class="sb-number-input" id="imConcreteLayerSelect"
+        style="width:100%;padding:6px 8px;font-size:12px;">
+        <option value="3">3 ชั้น</option>
+        <option value="4" selected>4 ชั้น</option>
+        <option value="5">5 ชั้น</option>
+        <option value="6">6 ชั้น</option>
+    </select>
+    <div style="margin-top:12px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="imConcreteDoubleCorner"
+                style="width:16px;height:16px;cursor:pointer;accent-color:#6b7280;">
+            <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
+        </label>
+    </div>
+</div>
 <div id="imBrickOpts" style="display:none;">
 
     <!-- Fence Height -->
@@ -1331,6 +1368,15 @@ function setIMFenceType(type) {
             if (input) { input.value = val; input.style.display = 'none'; }
         }
     };
+
+    window.imSetSpacingConcrete = function (val) {
+    const input = document.getElementById('imPostSpacingConcrete');
+    if (val === 'custom') {
+        if (input) { input.style.display = ''; input.focus(); }
+    } else {
+        if (input) { input.value = val; input.style.display = 'none'; }
+    }
+};
 
 window.imSetBrickHeight = function (val) {
     const input = document.getElementById('imBrickFenceHeight');

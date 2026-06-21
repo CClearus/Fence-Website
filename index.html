@@ -13,6 +13,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <!-- jsPDF for generating the PDF file -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- Thai font (Sarabun) registration for jsPDF — fixes garbled/gibberish Thai text in exported PDFs -->
+<script src="thai-font.js"></script>
 
 </head>
 
@@ -50,8 +52,8 @@
                         <div class="sfc-label">รั้วคาวบอย</div>
                     </div>
                     <!-- CONCRETE (disabled) -->
-                    <div class="sb-fence-card sfc-disabled" data-type="concrete">
-                        <div class="sfc-icon" style="opacity:0.4;">
+<div class="sb-fence-card" data-type="concrete" id="sbcard-concrete">
+    <div class="sfc-icon">
                             <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
                                 <rect x="4" y="6" width="6" height="36" rx="2" fill="#9ca3af" />
                                 <rect x="38" y="6" width="6" height="36" rx="2" fill="#9ca3af" />
@@ -487,14 +489,15 @@
 
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <script src="map.js"></script>
-    <script src="measure.js"></script>
+<script src="map.js"></script>
+<script src="measure.js"></script>
+<script src="concrete.js"></script>
 <script src="fence.js"></script>
 <script src="cowboy.js"></script>
 <script src="brickfence.js"></script>
 <script src="barb.js"></script>
 <script src="input_mode.js"></script>
-    <script src="plan_mode.js?v=222"></script> 
+<script src="plan_mode.js?v=222"></script>
 
     <!-- Hidden inputs -->
     <input type="hidden" id="resPrice">

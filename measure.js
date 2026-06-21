@@ -33,12 +33,13 @@ const colorPalette = [
 
 // Track fence type selection
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.fence-type-card').forEach(card => {
+    document.querySelectorAll('.sb-fence-card').forEach(card => {
         card.addEventListener('click', function() {
+            if (this.classList.contains('sfc-disabled')) return;
             selectedFenceType = this.getAttribute('data-type');
         });
     });
-    const activeCard = document.querySelector('.fence-type-card.active');
+    const activeCard = document.querySelector('.sb-fence-card.active');
     if (activeCard) selectedFenceType = activeCard.getAttribute('data-type');
 });
 
