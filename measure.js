@@ -12,6 +12,10 @@ let tempSegmentLabels = [];
 // Fence type tracking
 let selectedFenceType = null;
 function isCowboyFence() { return selectedFenceType === 'cowboy'; }
+// Fence types that must snap to 90° increments while drawing on the map
+function forces90deg() {
+    return selectedFenceType === 'cowboy' || selectedFenceType === 'brick' || selectedFenceType === 'concrete';
+}
 
 // Max 1 connection per dot (counts how many lines use this point as endpoint)
 function countDotConnections(point) {
@@ -1105,7 +1109,7 @@ map.on('click', function (e) {
 
             // Cowboy: snap connection to 90° relative to previous segment
             let connectPoint = dotPoint;
-if ((isCowboyFence() || selectedFenceType === 'brick') && currentLine.points.length >= 2) {
+if (forces90deg() && currentLine.points.length >= 2) {
                 const refPt  = currentLine.points[currentLine.points.length - 1];
                 const prevPt = currentLine.points[currentLine.points.length - 2];
                 const snapped = getSnapPoint(refPt, dotPoint, prevPt);
@@ -1123,7 +1127,7 @@ const isClosing = Math.abs(dotPoint[0]-ownFirst[0]) < 0.0001 && Math.abs(dotPoin
 if (isClosing && currentLine.points.length >= 3) {
     // Cowboy & brick: do NOT snap to the start point — it would break the forced 90° angle.
     // Instead, block the close-by-dot-click entirely; user finishes naturally via 90° snap.
-    if (isCowboyFence() || selectedFenceType === 'brick') return;
+    if (forces90deg()) return;
 
     currentLine.points.push(ownFirst);
     currentLine.closed = true;
@@ -1155,7 +1159,7 @@ if (isClosing && currentLine.points.length >= 3) {
 
             // Cowboy: force 90° from 2nd segment onward (relative to prev segment); Shift: always snap
 // AFTER:
-if (refPt && (shiftPressed || ((isCowboyFence() || selectedFenceType === 'brick') && currentLine.points.length >= 2))) {
+if (refPt && (shiftPressed || (forces90deg() && currentLine.points.length >= 2))) {
                 const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
                 clickPoint = getSnapPoint(refPt, clickPoint, prevPt);
             }
@@ -1203,7 +1207,7 @@ map.on('mousemove', function (e) {
             ? currentLine.points[currentLine.points.length - 1] : null;
 
         // Snap: cowboy forces 90° from 2nd segment (relative to prev segment), Shift always snaps
-if (referencePoint && (shiftPressed || ((isCowboyFence() || selectedFenceType === 'brick') && currentLine.points.length >= 2))) {
+if (referencePoint && (shiftPressed || (forces90deg() && currentLine.points.length >= 2))) {
             const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
             previewPoint = getSnapPoint(referencePoint, previewPoint, prevPt);
         }
