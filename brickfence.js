@@ -69,20 +69,10 @@ function calcBrick(brickLines) {
             const A_i = hav(p0, p1);
             grandTotal += A_i;
 
-            const fullCount = Math.floor(A_i / d + 1e-9);
-            const remainder = A_i - fullCount * d;
-            const gaps = [];
-            
-            if (remainder < d * 0.01) {
-                for (let i = 0; i < fullCount; i++) gaps.push(d);
-            } else if (fullCount + 1 <= 2) {
-                const evenGap = A_i / (fullCount + 1);
-                for (let i = 0; i < fullCount + 1; i++) gaps.push(evenGap);
-            } else {
-                for (let i = 0; i < fullCount - 1; i++) gaps.push(d);
-                const endSize = (d + remainder) / 2;
-                gaps.push(endSize); gaps.push(endSize);
-            }
+const r_i = Math.ceil(A_i / d);
+const dPrime = A_i / r_i;
+const gaps = [];
+for (let i = 0; i < r_i; i++) gaps.push(dPrime);
 
             totalBays += gaps.length;
             totalSpacingSum += A_i;
@@ -196,21 +186,10 @@ function drawPlanBrickLine(lineData, idx) {
         const A_i = hav(p0, p1);
         const segB = bearing(p0, p1);
 
-        const fullCount = Math.floor(A_i / d + 1e-9);
-        const remainder = A_i - fullCount * d;
-        const gaps = [];
-        
-        if (remainder < d * 0.01) {
-            for (let i = 0; i < fullCount; i++) gaps.push(d);
-        } else if (fullCount + 1 <= 2) {
-            const evenGap = A_i / (fullCount + 1);
-            for (let i = 0; i < fullCount + 1; i++) gaps.push(evenGap);
-        } else {
-            for (let i = 0; i < fullCount - 1; i++) gaps.push(d);
-            const endSize = (d + remainder) / 2;
-            gaps.push(endSize);
-            gaps.push(endSize);
-        }
+const r_i = Math.ceil(A_i / d);
+const dPrime = A_i / r_i;
+const gaps = [];
+for (let i = 0; i < r_i; i++) gaps.push(dPrime);
 
         const steps = Math.max(2, Math.ceil(A_i * 4));
         const wallPts = [];
@@ -225,8 +204,8 @@ function drawPlanBrickLine(lineData, idx) {
             const ptStart = interp(pts, distStart);
             const ptEnd = interp(pts, distEnd);
             
-            const isCorner = (si === 0 && bi === 0) || (si === numSegs - 1 && bi === gaps.length - 1);
-            drawPlanPost(ptStart, segB, isCorner, 0.15);
+const isStartOfLine = (si === 0 && bi === 0);
+            drawPlanPost(ptStart, segB, isStartOfLine, 0.15);
             pillarPositions.push({ dist: distStart, pt: ptStart });
 
             if (beamMode !== 'none') {
@@ -236,8 +215,8 @@ function drawPlanBrickLine(lineData, idx) {
         }
         
         const finalPt = interp(pts, cumulDist + A_i);
-        const isFinalCorner = (si === numSegs - 1);
-        drawPlanPost(finalPt, segB, isFinalCorner, 0.15);
+const isFinalCorner = (si === numSegs - 1); 
+drawPlanPost(finalPt, segB, isFinalCorner, 0.15);
         pillarPositions.push({ dist: cumulDist + A_i, pt: finalPt });
 
         for (let bi = 0; bi < pillarPositions.length - 1; bi++) {

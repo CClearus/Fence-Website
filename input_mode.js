@@ -22,9 +22,10 @@
     // ── Constants ──────────────────────────────────
     const CLOSE_THRESHOLD = 0.5; // metres — auto-close snap distance
 const ANGLE_RULES = {
-    cowboy: { step: 90,  label: '90°' },
-    barbed: { step: 1,   label: '1°'  },
-    brick:  { step: 90,  label: '90°' },
+    cowboy:   { step: 90,  label: '90°' },
+    barbed:   { step: 1,   label: '1°'  },
+    brick:    { step: 90,  label: '90°' },
+    concrete: { step: 90,  label: '90°' },
 };
     const DEFAULT_ANGLE_STEP = 1; // degrees (no restriction)
 
@@ -109,26 +110,39 @@ function buildPoints() {
         return (ANGLE_RULES[fenceType] || { step: DEFAULT_ANGLE_STEP }).step;
     }
 
-    // ============================================
-    // DRAW PREVIEW
-    // ============================================
-    function redrawPreview() {
+function redrawPreview() {
     ensureLayer();
     imLayerGroup.clearLayers();
+
+    // Always clean up existing ld on map first (polyline, markers, AND labels)
+    if (imLineIndex >= 0 && typeof allLines !== 'undefined') {
+        const ld = allLines[imLineIndex];
+        if (ld) {
+            ld.markers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+            ld.markers = [];
+            if (ld.polyline && map.hasLayer(ld.polyline)) map.removeLayer(ld.polyline);
+            ld.polyline = null;
+            // Clear labels via redrawLineLabels with empty points — it clears angleLabels/segmentLabels
+            const saved = ld.points;
+            ld.points = [];
+            if (typeof redrawLineLabels === 'function') redrawLineLabels(ld);
+            ld.points = saved;
+            if (ld.labelLayer) ld.labelLayer.clearLayers();
+            if (ld.segLabelLayer) ld.segLabelLayer.clearLayers();
+        }
+    }
+
     if (imSides.length === 0) return;
 
     const pts = buildPoints();
-    // Only close if shape is actually closed (last pt ≈ first pt)
     const drawPts = isClosedShape() ? [...pts, pts[0]] : [...pts];
 
     const colors = { cowboy: '#d97706', barbed: '#4b5563', brick: '#e8aa60', concrete: '#9ca3af' };
     const col = colors[imFenceType] || '#3b82f6';
 
-    // Build a fake lineData object exactly like measure.js uses, then call redrawLineLabels
     if (typeof redrawLineLabels === 'function' && typeof allLines !== 'undefined') {
-        // Re-use existing IM lineData slot if it exists, else create one
         let ld = (imLineIndex >= 0 && imLineIndex < allLines.length) ? allLines[imLineIndex] : null;
-    if (!ld) {
+        if (!ld) {
             ld = {
                 points: drawPts,
                 polyline: null,
@@ -149,20 +163,14 @@ function buildPoints() {
             ld.points = drawPts;
             ld.color = col;
             ld.fenceType = imFenceType;
-ld.fenceOptions = (typeof captureFenceOptions === 'function') ? captureFenceOptions(imFenceType) : {};
+            ld.fenceOptions = (typeof captureFenceOptions === 'function') ? captureFenceOptions(imFenceType) : {};
             ld.closed = false;
-            ld.markers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
-            ld.markers = [];
-            if (ld.polyline && map.hasLayer(ld.polyline)) map.removeLayer(ld.polyline);
-            if (ld.labelLayer) ld.labelLayer.clearLayers();
-            else { ld.labelLayer = L.layerGroup().addTo(map); }
-            if (ld.segLabelLayer) ld.segLabelLayer.clearLayers();
-            else { ld.segLabelLayer = L.layerGroup().addTo(map); }
+            if (!ld.labelLayer) ld.labelLayer = L.layerGroup().addTo(map);
+            if (!ld.segLabelLayer) ld.segLabelLayer = L.layerGroup().addTo(map);
         }
 
-ld.polyline = L.polyline(drawPts, { color: col, weight: 3, opacity: 0.8 }).addTo(map);
+        ld.polyline = L.polyline(drawPts, { color: col, weight: 3, opacity: 0.8 }).addTo(map);
 
-        // Add circle markers at each vertex (same style as measure.js addMarkerToLine)
         pts.forEach((p, i) => {
             const m = L.circleMarker(p, {
                 radius: 6,
@@ -175,11 +183,9 @@ ld.polyline = L.polyline(drawPts, { color: col, weight: 3, opacity: 0.8 }).addTo
             ld.markers.push(m);
         });
 
-        // Use measure.js label drawing — angle boxes + distance boxes identical to draw mode
         redrawLineLabels(ld);
     }
 
-    // Fit map to shape
     if (pts.length >= 2) {
         try { map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 18 }); } catch (_) {}
     }
@@ -259,7 +265,7 @@ function renderSideList() {
             btn.addEventListener('click', function () {
                 const idx = parseInt(this.getAttribute('data-idx'));
                 imSides.splice(idx, 1);
-                _recalcBearings();
+                if (typeof window._recalcBearings === 'function') window._recalcBearings();
                 renderSideList();
                 updateStatusBar();
                 redrawPreview();
@@ -316,11 +322,11 @@ imSides.forEach((s, i) => {
             `;
             list.appendChild(row);
         });
-        list.querySelectorAll('.im-del-btn').forEach(btn => {
+list.querySelectorAll('.im-del-btn').forEach(btn => {
             btn.addEventListener('click', function () {
                 const idx = parseInt(this.getAttribute('data-idx'));
                 imSides.splice(idx, 1);
-                _recalcBearings();
+                if (typeof window._recalcBearings === 'function') window._recalcBearings();
                 renderSideList();
                 updateStatusBar();
                 redrawPreview();
@@ -386,7 +392,7 @@ function openAngleDial(idx, anchorEl) {
 function isForbidden(deg) {
     if (prevBearing === null) return false;
     const d = ((deg % 360) + 360) % 360;
-if (imFenceType === 'cowboy' || imFenceType === 'brick') {
+if (imFenceType === 'cowboy' || imFenceType === 'brick' || imFenceType === 'concrete') {
         const reverse = (prevBearing + 180) % 360;
         return d === reverse;
     }
@@ -423,7 +429,7 @@ if (imFenceType === 'cowboy' || imFenceType === 'brick') {
         // Forbidden arc shading
         let forbiddenArc = '';
         if (prevBearing !== null) {
-if (imFenceType === 'cowboy') {
+if (imFenceType === 'cowboy' || imFenceType === 'concrete') {
     // Shade just the reverse bearing wedge (±45° since step=90)
     const reverse = (prevBearing + 180) % 360;
     const arcSpan = 45;
@@ -678,9 +684,10 @@ function updateFromXY(clientX, clientY) {
         // First side keeps its absolute bearing as-is (angle stored as absolute for side 0)
         for (let i = 1; i < imSides.length; i++) {
             abs = (abs + imSides[i].angle + 360) % 360;
-            imSides[i].bearingAbs = abs;
+ imSides[i].bearingAbs = abs;
         }
     }
+    window._recalcBearings = _recalcBearings;
 
     // ============================================
     // STATUS BAR
@@ -814,37 +821,72 @@ function _initDefaultSquare() {
     // ============================================
     // FENCE TYPE SYNC — mirror Page 1 selection
     // ============================================
+// Per-type saved state — persists sides & origin across fence type switches
+const _imSavedState = {
+    cowboy:   { sides: [], origin: null },
+    barbed:   { sides: [], origin: null },
+    brick:    { sides: [], origin: null },
+    concrete: { sides: [], origin: null },
+};
+
 function setIMFenceType(type) {
+    // 1. Save current type's state before switching
+    _imSavedState[imFenceType] = {
+        sides:  JSON.parse(JSON.stringify(imSides)),
+        origin: imOrigin ? [...imOrigin] : null,
+    };
+
+    // 2. Clear map preview for old type
+    ensureLayer();
+    imLayerGroup.clearLayers();
+    if (imLineIndex >= 0 && typeof allLines !== 'undefined') {
+        const ld = allLines[imLineIndex];
+        if (ld) {
+            ld.markers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+            if (ld.polyline && map.hasLayer(ld.polyline)) map.removeLayer(ld.polyline);
+            if (ld.labelLayer) ld.labelLayer.clearLayers();
+            if (ld.segLabelLayer) ld.segLabelLayer.clearLayers();
+            allLines.splice(imLineIndex, 1);
+        }
+        imLineIndex = -1;
+    }
+
+    // 3. Switch type
     imFenceType = type;
 
+    // 4. Restore saved state for new type
+    const saved = _imSavedState[type];
+    imSides  = saved ? JSON.parse(JSON.stringify(saved.sides)) : [];
+    imOrigin = (saved && saved.origin) ? [...saved.origin] : null;
+
+    // 5. Update fence card highlights
     document.querySelectorAll('#imFenceCards .sb-fence-card').forEach(c => {
         c.classList.toggle('active', c.getAttribute('data-type') === type);
     });
 
+    // 6. Show/hide fence-specific option panels
     const cowDiv = document.getElementById('imCowboyOpts');
     const barDiv = document.getElementById('imBarbedOpts');
     const briDiv = document.getElementById('imBrickOpts');
-    const conDiv = document.getElementById('imConcreteOpts');   // ← ADD
+    const conDiv = document.getElementById('imConcreteOpts');
     if (cowDiv) cowDiv.style.display = type === 'cowboy'   ? '' : 'none';
     if (barDiv) barDiv.style.display = type === 'barbed'   ? '' : 'none';
     if (briDiv) briDiv.style.display = type === 'brick'    ? '' : 'none';
-    if (conDiv) conDiv.style.display = type === 'concrete' ? '' : 'none';  // ← ADD
+    if (conDiv) conDiv.style.display = type === 'concrete' ? '' : 'none';
 
-    // Angle wrap + Add button: only for barbed wire
+    // 7. Angle wrap + Add button: only for barbed wire
     const angWrap = document.getElementById('imAngleWrap');
     const addBtn  = document.getElementById('imAddBtn');
     if (angWrap) angWrap.style.display = type === 'barbed' ? '' : 'none';
     if (addBtn)  addBtn.style.display  = type === 'barbed' ? '' : 'none';
 
-    // For non-barbed: reset sides
-    if (type !== 'barbed') {
-        imSides = [];
-        imOrigin = null;
-    }
-
+    // 8. Re-render UI and map with restored state
     renderSideList();
     updateStatusBar();
-    _pushToAllLines();
+    if (imSides.length >= 2) {
+        redrawPreview();
+        if (typeof runFenceCalc === 'function') runFenceCalc();
+    }
 }
 
     // ============================================

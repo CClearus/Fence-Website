@@ -101,14 +101,17 @@ function calcBarbed(barbedLines, m_barbed, n_barbed, nBraceSolo, nBraceDual, nBr
         });
 
         // Draw posts
-        let d = 0, postCount = 0;
-        while (d <= total + 1e-4) {
-            const pt = interp(linePoints, Math.min(d, total));
-            const b = bearingAt(linePoints, Math.min(d, total));
-            drawPost(pt, b, (d < 1e-3 || d >= total - 1e-3) ? 'endpoint' : 'normal');
-            d += m;
-            postCount++;
-        }
+// NEW
+const r_i = Math.ceil(total / m);
+const dPrime = total / r_i;
+let postCount = 0;
+for (let pi = 0; pi <= r_i; pi++) {
+    const dist = pi * dPrime;
+    const pt = interp(linePoints, Math.min(dist, total));
+    const b = bearingAt(linePoints, Math.min(dist, total));
+    drawPost(pt, b, (pi === 0 || pi === r_i) ? 'endpoint' : 'normal');
+    postCount++;
+}
 
         let extraPosts = 0, extraLength = 0;
         sharpCorners.forEach(({ idx, dist }) => {
@@ -284,16 +287,18 @@ function drawPlanBarbedLine(lineData, idx) {
     });
 
     // Draw posts
-    const postPositions = [];
-    let d = 0;
-    while (d <= total + 1e-4) {
-        const pt = interp(pts, Math.min(d, total));
-        const b = bearingAt(pts, Math.min(d, total));
-        const isEnd = d < 1e-3 || d >= total - 1e-3;
-drawPlanPost(pt, b, isEnd, 0.15, 'barbed');
-        postPositions.push({ dist: d, pt, b });
-        d += m;
-    }
+// NEW
+const postPositions = [];
+const r_i = Math.ceil(total / m);
+const dPrime = total / r_i;
+for (let pi = 0; pi <= r_i; pi++) {
+    const dist = pi * dPrime;
+    const pt = interp(pts, Math.min(dist, total));
+    const b = bearingAt(pts, Math.min(dist, total));
+    const isEnd = (pi === 0 || pi === r_i);
+    drawPlanPost(pt, b, isEnd, 0.15, 'barbed');
+    postPositions.push({ dist, pt, b });
+}
 
     sharpCorners.forEach(({ dist }) => {
         const extraDist = Math.max(0, dist - m);
