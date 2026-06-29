@@ -152,8 +152,21 @@ function drawConcreteFence(linePoints, m, n, splitAtStart, doubleCorner, lineCol
         const startIsDC = doubleCorner && isCornerPoint(p0) && blueArmFacesInto(p0, p1);
         const endIsDC   = doubleCorner && isCornerPoint(p1) && blueArmFacesInto(p1, p0);
 
-        const leftOff  = startIsDC ? DOUBLE_CORNER_OFFSET : 0;
-        const rightOff = endIsDC   ? DOUBLE_CORNER_OFFSET : 0;
+const n_post = 0.15;
+const leftOff = startIsDC
+    ? (() => {
+        const entry = cornerMap.get(ptKey(p0));
+        const [a1, a2] = entry ? getCornerArms(entry) : [0, 0];
+        return cornerOffsetX(n_post, cornerAngle(a1, a2));
+    })()
+    : 0;
+const rightOff = endIsDC
+    ? (() => {
+        const entry = cornerMap.get(ptKey(p1));
+        const [a1, a2] = entry ? getCornerArms(entry) : [0, 0];
+        return cornerOffsetX(n_post, cornerAngle(a1, a2));
+    })()
+    : 0;
         const panelSpace = A_i - leftOff - rightOff;
 
         if (panelSpace < 0.5) {
@@ -226,8 +239,8 @@ function calcConcrete(concreteLines, m_concrete, n, useDoubleCorner, layers) {
     let grandTotal = 0, grandPosts = 0, grandBeams = 0;
     const allWarnings = [];
 
-
-    if (concreteLines.length > 1) useDoubleCorner = true;
+    // REMOVED: if (concreteLines.length > 1) useDoubleCorner = true;
+    // Now respects the checkbox value passed in
 
     buildCornerMap(concreteLines.map(ld => ld.points));
 
@@ -239,7 +252,7 @@ function calcConcrete(concreteLines, m_concrete, n, useDoubleCorner, layers) {
         if (res.warnings) allWarnings.push(...res.warnings);
     });
 
-if (useDoubleCorner) {
+    if (useDoubleCorner) {
         for (const [k, entry] of cornerMap.entries()) {
             const result = drawConcreteDoubleCornerPost(entry.pt, n, true);
             grandPosts += result.count;
@@ -260,57 +273,55 @@ function drawConcreteDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     }
 
     const [armRed, armBlue] = getCornerArms(entry);
+    const theta = cornerAngle(armRed, armBlue);
+    const mode = getCornerMode(cornerPt, theta);
 
     const userScale = window._poleScale || 1.0;
-    // Use same SCALE as end/start posts so the icon is the same size
-    const SCALE = 5.4 * userScale;
-    const iconPx = 24  * userScale; // fixed 64px base, scaled by user pole scale
+    const iconPx = 24 * userScale;
 
-    // armRed/armBlue are outward bearings FROM the corner point toward the fence.
-    // The PNG channel (slot) is at the TOP of the image (pointing up = 0°).
-    // We want the channel to face TOWARD the fence arm (inward along the arm).
-    // armBearing points AWAY from corner along the arm, so channel should face
-    // the SAME direction as armBearing → rot = armBearing (no +180 flip).
+    if (mode === 'single') {
+        const bisect = (armRed + armBlue) / 2;
+        drawConcretePost(cornerPt, bisect, 'corner');
+        if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta);
+        return { count: 1 };
+    }
 
-    // RED → end.png at the corner point, channel faces armRed direction
+    // double mode — geometry-correct offset
+    const offset = cornerOffsetX(n > 0 ? n : 0.15, theta);
+
     const rotRed = ((armRed % 360) + 360) % 360;
     L.marker(cornerPt, {
         icon: L.divIcon({
             className: '',
             html: `<img src="end.png" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rotRed}deg);position:absolute;left:50%;top:50%;">`,
-            iconSize: [0, 0],
-            iconAnchor: [0, 0]
+            iconSize: [0, 0], iconAnchor: [0, 0]
         }),
         zIndexOffset: 99999
     }).addTo(fenceLayerGroup);
 
-    // BLUE → start.png offset along blue arm, channel faces armBlue direction
     const rotBlue = ((armBlue % 360) + 360) % 360;
-    const bluePt = offPt(cornerPt, armBlue, DOUBLE_CORNER_OFFSET);
+    const bluePt = offPt(cornerPt, armBlue, offset);
     L.marker(bluePt, {
         icon: L.divIcon({
             className: '',
             html: `<img src="start.png" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rotBlue}deg);position:absolute;left:50%;top:50%;">`,
-            iconSize: [0, 0],
-            iconAnchor: [0, 0]
+            iconSize: [0, 0], iconAnchor: [0, 0]
         }),
         zIndexOffset: 99999
     }).addTo(fenceLayerGroup);
 
     if (addHoverMarkers) {
+        _addCornerModeToggle(cornerPt, 'double', theta);
         const k = ptKey(cornerPt);
         L.marker(cornerPt, {
             icon: L.divIcon({
                 className: '',
                 html: `<div class="dc-swap-btn" data-k="${k}" title="Swap corner side">⇄</div>`,
-                iconSize: [24, 24],
-                iconAnchor: [12, 12]
+                iconSize: [24, 24], iconAnchor: [12, 12]
             }),
-            zIndexOffset: 3000,
-            interactive: true
+            zIndexOffset: 3000, interactive: true
         }).addTo(fenceLayerGroup);
     }
-
     return { count: 2 };
 }
 // ============================================
@@ -321,10 +332,8 @@ function drawPlanConcreteLine(lineData, idx) {
     const pts = lineData.points;
     if (!pts || pts.length < 2) return;
 
-    // ── fence line ──
     L.polyline(pts, { color: '#1a1a1a', weight: 3, opacity: 1 }).addTo(planLayerGroup);
 
-    // ── line label ──
     L.marker(pts[0], {
         icon: L.divIcon({
             className: '',
@@ -335,18 +344,22 @@ function drawPlanConcreteLine(lineData, idx) {
         zIndexOffset: 1600
     }).addTo(planLayerGroup);
 
-    // ── read spacing from concrete-specific fields (input-mode or draw-mode) ──
     const fenceOpts = lineData.fenceOptions || {};
     const m = fenceOpts.postSpacing
         || parseFloat(document.getElementById('imPostSpacingConcrete')?.value)
         || parseFloat(document.getElementById('imSpacingSelectConcrete')?.value)
         || 2.5;
 
+    // Read dual-pillar from concrete-specific checkbox (with cowboy fallback)
+    const dualPillarCheckbox = document.getElementById('concreteDoubleCornerPost')
+        || document.getElementById('doubleCornerPost');
+    const useDualPillar = fenceOpts.doubleCorner
+        ?? (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
+
     const n = 0.15;
     const userScale = window._poleScale || 1.0;
-    const iconPx = 32 * userScale;
+    const iconPx = Math.max(40, 32 * userScale); // bigger so side-by-side pair is visible
 
-    // helper: draw PNG icon into planLayerGroup
     function drawPlanConcreteIcon(pt, iconUrl, rot) {
         L.marker(pt, {
             icon: L.divIcon({
@@ -359,7 +372,24 @@ function drawPlanConcreteLine(lineData, idx) {
         }).addTo(planLayerGroup);
     }
 
-    // total number of segments to detect true start/end
+    // Draw a matched end+start pair side-by-side at a corner/endpoint.
+    // pt        = corner location
+    // inB       = bearing of the segment ARRIVING at pt (the "closing" side)
+    // outB      = bearing of the segment LEAVING pt (the "opening" side)
+    //             Pass inB === outB for a true line-end (only one arm).
+    function drawDualPair(pt, inB, outB) {
+        // end.png faces INTO the arriving segment (channel toward inB reversed)
+        const rotEnd   = ((inB + 180) % 360 + 360) % 360;
+        // start.png faces INTO the departing segment (channel toward outB)
+        const rotStart = ((outB % 360) + 360) % 360;
+        // Offset the two icons along the fence line so they sit beside each other
+        const gap = DOUBLE_CORNER_OFFSET > 0 ? DOUBLE_CORNER_OFFSET : 0.3;
+        const ptEnd   = offPt(pt, inB,  gap / 2); // slide back along arriving arm
+        const ptStart = offPt(pt, outB, gap / 2); // slide forward along departing arm
+        drawPlanConcreteIcon(ptEnd,   'end.png',   rotEnd);
+        drawPlanConcreteIcon(ptStart, 'start.png', rotStart);
+    }
+
     const numSegs = pts.length - 1;
     let dAcc = 0;
 
@@ -368,7 +398,6 @@ function drawPlanConcreteLine(lineData, idx) {
         const segLen = hav(p0, p1);
         const b = bearing(p0, p1);
 
-        // calculate intermediate post positions within this segment
         let poleDists = [0];
         if (segLen > 0.5) {
             const calc = calcConcretePanels(segLen, m);
@@ -380,54 +409,46 @@ function drawPlanConcreteLine(lineData, idx) {
             const pt = interp(pts, dAcc + dist);
             const isTrueStart  = (i === 0 && pIdx === 0);
             const isTrueEnd    = (i === numSegs - 1 && pIdx === poleDists.length - 1);
-            // Mid-line bend: last post of this segment that is NOT the very last segment.
-            // (The first post of the next segment, pIdx===0, is this same physical point —
-            // skip it there to avoid drawing the corner pair twice.)
             const isMidCorner  = (pIdx === poleDists.length - 1 && i < numSegs - 1);
-            const isCornerSkip = (pIdx === 0 && i > 0); // already handled as isMidCorner by previous segment
+            const isCornerSkip = (pIdx === 0 && i > 0);
 
-            if (isCornerSkip) {
-                // handled by previous segment's isMidCorner branch — do nothing here
-                return;
-            }
+            if (isCornerSkip) return;
 
             if (isTrueStart) {
-                // start.png — outward bearing points AWAY from fence, rotate +180 so channel faces IN
-                const outwardB = bearing(pts[1], pts[0]);
-                const rot = ((outwardB + 180) % 360 + 360) % 360;
-                drawPlanConcreteIcon(pt, 'start.png', rot);
+                if (useDualPillar) {
+                    // Line start: arriving from nowhere, departing along b
+                    // Show end.png (the "closed" cap) + start.png (open into fence)
+                    drawDualPair(pt, (b + 180) % 360, b);
+                } else {
+                    drawPlanPost(pt, b, true, n, 'concrete');
+                }
 
             } else if (isTrueEnd) {
-                // end.png — bearing(prev→last) points away, rotate +180 so channel faces IN
-                const rot = ((b + 180) % 360 + 360) % 360;
-                drawPlanConcreteIcon(pt, 'end.png', rot);
+                if (useDualPillar) {
+                    // Line end: arriving along b, no departure
+                    drawDualPair(pt, b, (b + 180) % 360);
+                } else {
+                    drawPlanPost(pt, b, true, n, 'concrete');
+                }
 
             } else if (isMidCorner) {
-                // Bend in the middle of the fence line — draw the SAME double end/start
-                // icon pair Map Mode draws at corners (drawConcreteDoubleCornerPost):
-                // RED end.png sits exactly at the corner point, channel facing back into
-                // this segment. BLUE start.png is offset along the next segment's bearing
-                // by DOUBLE_CORNER_OFFSET so the two icons don't render on top of each other.
-                const nextB = bearing(pts[i + 1], pts[i + 2]);
-                const rotEnd = ((b + 180) % 360 + 360) % 360;
-                drawPlanConcreteIcon(pt, 'end.png', rotEnd);
-
-                const rotStart = ((nextB % 360) + 360) % 360;
-                const bluePt = offPt(pt, nextB, DOUBLE_CORNER_OFFSET);
-                drawPlanConcreteIcon(bluePt, 'start.png', rotStart);
+                if (useDualPillar) {
+                    const nextB = bearing(pts[i + 1], pts[i + 2]);
+                    // Corner: arriving along b, departing along nextB
+                    drawDualPair(pt, b, nextB);
+                } else {
+                    drawPlanPost(pt, b, true, n, 'concrete');
+                }
 
             } else {
-                // intermediate post — plain white box, same as other fence types
                 drawPlanPost(pt, b, false, n, 'concrete');
             }
         });
 
-        // dimension lines between each pair of posts in this segment
         for (let j = 0; j < poleDists.length - 1; j++) {
             const sPt = interp(pts, dAcc + poleDists[j]);
             const ePt = interp(pts, dAcc + poleDists[j + 1]);
-            const spanLen = hav(sPt, ePt);
-            drawDimLine(sPt, ePt, 0.25, spanLen.toFixed(2) + 'm', '#000');
+            drawDimLine(sPt, ePt, 0.25, hav(sPt, ePt).toFixed(2) + 'm', '#000');
         }
         drawDimLine(p0, p1, 0.55, segLen.toFixed(2) + 'm', '#000');
         dAcc += segLen;

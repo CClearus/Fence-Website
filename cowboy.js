@@ -83,12 +83,23 @@ function drawCowboyFence(linePoints, m, n, splitAtStart, doubleCorner, lineColor
         if (si > 0 || closed) B_i++;
         if (si < numSegs-1 || closed) B_i++;
 
-        const startIsDC = doubleCorner && isCornerPoint(p0) && blueArmFacesInto(p0, p1);
-        const endIsDC = doubleCorner && isCornerPoint(p1) && blueArmFacesInto(p1, p0);
+function cornerShortenAmount(cornerPt, n) {
+    const entry = cornerMap.get(ptKey(cornerPt));
+    if (!entry) return 0;
+    const [a1, a2] = getCornerArms(entry);
+    const theta = cornerAngle(a1, a2);
+    const mode = getCornerMode(cornerPt, theta); // 'single' or 'double' — same source of truth as drawDoubleCornerPost
+    if (mode === 'single') return n / 2; // bisector post — panel only needs to clear half its width
+    return cornerOffsetX(n, theta);      // double post — full geometry-correct offset
+}
 
-        const leftOff = startIsDC ? DOUBLE_CORNER_OFFSET : 0;
-        const endsAtDC = doubleCorner && isCornerPoint(p1);
-        const rightOff = endIsDC ? DOUBLE_CORNER_OFFSET : endsAtDC ? 0 : 0;
+const startIsDC = doubleCorner && isCornerPoint(p0) && blueArmFacesInto(p0, p1);
+const endIsDC = doubleCorner && isCornerPoint(p1) && blueArmFacesInto(p1, p0);
+
+const n_post = 0.15; // post size in metres
+const leftOff = startIsDC ? cornerShortenAmount(p0, n_post) : 0;
+const endsAtDC = doubleCorner && isCornerPoint(p1);
+const rightOff = endIsDC ? cornerShortenAmount(p1, n_post) : 0;
         const panelSpace = A_i - leftOff - rightOff;
 
         if (panelSpace < 0.5) {
@@ -206,7 +217,7 @@ function drawPlanCowboyLine(lineData, idx) {
 
     L.marker(pts[0], {
         icon: L.divIcon({
-            className: '', 
+            className: '',
             html: `<div style="font-size:12px;font-weight:bold;color:#000;background:#ffffff;padding:4px 8px;border:2px solid #000;white-space:nowrap;border-radius:2px;box-shadow:2px 2px 0px rgba(0,0,0,0.1);">Line ${idx + 1}</div>`,
             iconSize: null,
             iconAnchor: [0, 0]
@@ -216,15 +227,39 @@ function drawPlanCowboyLine(lineData, idx) {
 
     const m = parseFloat(document.getElementById('postSpacing')?.value) || 2.5;
     const n = 0.15;
-    let dAcc = 0;
-    const standardLen = hav(pts[0], pts[1]);
 
-    for (let i = 0; i < pts.length - 1; i++) {
+    const dualPillarCheckbox = document.getElementById('doubleCornerPost')
+        || document.getElementById('imDoubleCornerPost');
+    const fenceOpts = lineData.fenceOptions || {};
+    const useDualPillar = fenceOpts.doubleCorner
+        ?? (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
+
+    const gap = (typeof DOUBLE_CORNER_OFFSET !== 'undefined' && DOUBLE_CORNER_OFFSET > 0)
+        ? DOUBLE_CORNER_OFFSET : 0.3;
+
+    // Draw a colored plan-mode post square (mirrors drawDoubleCornerPost's drawColorSquare)
+    function drawPlanColorPost(pt, b, color) {
+        const scale = window._poleScale || 1.0;
+        const halfSz = Math.max(n, 0.15) * scale * 5;
+        const corners = [
+            offPt(offPt(pt, b + 90, halfSz), b,       halfSz),
+            offPt(offPt(pt, b - 90, halfSz), b,       halfSz),
+            offPt(offPt(pt, b - 90, halfSz), b + 180, halfSz),
+            offPt(offPt(pt, b + 90, halfSz), b + 180, halfSz),
+        ];
+        L.polygon(corners, {
+            color: color, weight: 2,
+            fillColor: '#ffffff', fillOpacity: 1, opacity: 1
+        }).addTo(planLayerGroup);
+    }
+
+    let dAcc = 0;
+    const numSegs = pts.length - 1;
+
+    for (let i = 0; i < numSegs; i++) {
         const p0 = pts[i], p1 = pts[i + 1];
         const segLen = hav(p0, p1);
         const b = bearing(p0, p1);
-
-        const isDifferent = Math.abs(segLen - standardLen) > 0.05;
 
         let poleDists = [0];
         if (segLen > 0.5) {
@@ -235,15 +270,39 @@ function drawPlanCowboyLine(lineData, idx) {
 
         poleDists.forEach((dist, pIdx) => {
             const pt = interp(pts, dAcc + dist);
-            const isCorner = (i === 0 && pIdx === 0) || (i === pts.length - 2 && pIdx === poleDists.length - 1);
-            drawPlanPost(pt, b, isCorner, n);
+            const isTrueStart  = (i === 0 && pIdx === 0);
+            const isTrueEnd    = (i === numSegs - 1 && pIdx === poleDists.length - 1);
+            const isMidCorner  = (pIdx === poleDists.length - 1 && i < numSegs - 1);
+            const isCornerSkip = (pIdx === 0 && i > 0);
+
+            if (isCornerSkip) return;
+
+            if (useDualPillar && isTrueStart) {
+                // Start: RED at point (corner end), BLUE offset forward along fence
+                drawPlanColorPost(pt,                   b, '#dc2626');
+                drawPlanColorPost(offPt(pt, b, gap),    b, '#2563eb');
+
+            } else if (useDualPillar && isTrueEnd) {
+                // End: RED at point (corner end), BLUE offset back along fence
+                drawPlanColorPost(pt,                            b, '#dc2626');
+                drawPlanColorPost(offPt(pt, (b + 180) % 360, gap), b, '#2563eb');
+
+            } else if (useDualPillar && isMidCorner) {
+                const nextB = bearing(pts[i + 1], pts[i + 2]);
+                // Mid-corner: RED at corner point (arriving), BLUE offset forward along next segment
+                drawPlanColorPost(pt,                        b,     '#dc2626');
+                drawPlanColorPost(offPt(pt, nextB, gap),     nextB, '#2563eb');
+
+            } else {
+                const isCorner = isTrueStart || isTrueEnd || isMidCorner;
+                drawPlanPost(pt, b, isCorner, n, 'cowboy');
+            }
         });
 
         for (let j = 0; j < poleDists.length - 1; j++) {
             const sPt = interp(pts, dAcc + poleDists[j]);
             const ePt = interp(pts, dAcc + poleDists[j + 1]);
-            const spanLen = hav(sPt, ePt);
-            drawDimLine(sPt, ePt, 0.25, spanLen.toFixed(2) + 'm', '#000');
+            drawDimLine(sPt, ePt, 0.25, hav(sPt, ePt).toFixed(2) + 'm', '#000');
         }
         drawDimLine(p0, p1, 0.55, segLen.toFixed(2) + 'm', '#000');
         dAcc += segLen;

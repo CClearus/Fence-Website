@@ -94,38 +94,105 @@ function getCornerArms(entry) {
 }
 
 const DOUBLE_CORNER_HALF = 0.40;
-const DOUBLE_CORNER_OFFSET = DOUBLE_CORNER_HALF * 2;
+const DOUBLE_CORNER_OFFSET = DOUBLE_CORNER_HALF * 2; // legacy fallback only
+
+// Returns angle θ (degrees) at a corner between two arriving bearings
+function cornerAngle(armBearing1, armBearing2) {
+    let diff = Math.abs(armBearing1 - armBearing2) % 360;
+    if (diff > 180) diff = 360 - diff;
+    return diff; // interior angle in degrees
+}
+
+// Returns the exact double-corner offset x for post size n and corner angle θ (degrees)
+// x = n / (2·tan(θ/2)) + n/2
+function cornerOffsetX(n, thetaDeg) {
+    const half = (thetaDeg / 2) * Math.PI / 180;
+    if (Math.abs(Math.tan(half)) < 1e-6) return n; // fallback for 0° (straight)
+    return n / (2 * Math.tan(half)) + n / 2;
+}
+
+// Returns the corner mode for a given corner point.
+// Reads per-corner overrides from window._cornerModes map, falls back to global UI setting.
+// Returns 'single' or 'double'. If angle < 120° and mode would be 'single', falls back to 'double'.
+function getCornerMode(cornerPt, thetaDeg) {
+    const k = ptKey(cornerPt);
+    const perCorner = window._cornerModes && window._cornerModes.get(k);
+    if (perCorner) {
+        if (perCorner === 'single' && thetaDeg < 120) return 'double'; // enforce angle limit
+        return perCorner;
+    }
+    // Global default from UI (hidden input #globalCornerMode, value 'single'|'double', default 'double')
+    const globalEl = document.getElementById('globalCornerMode');
+    const globalMode = globalEl ? globalEl.value : 'double';
+    if (globalMode === 'single' && thetaDeg < 120) return 'double';
+    return globalMode;
+}
+
+// Initialize per-corner mode store
+if (!window._cornerModes) window._cornerModes = new Map();
 
 function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     const entry = cornerMap.get(ptKey(cornerPt));
     if (!entry) return { count: 0 };
     const arms = entry.arms.slice(0, 2);
-    if (arms.length < 2) { drawPost(cornerPt, arms[0].outward, 'corner'); return { count: 1 }; }
-
-    const [armRed, armBlue] = getCornerArms(entry);
-    const halfSz = DOUBLE_CORNER_HALF * (window._poleScale || 1.0);
-    
-    function drawColorSquare(latlng, b, color) {
-        const rect = [
-            offPt(offPt(latlng, b + 90, halfSz), b, halfSz),
-            offPt(offPt(latlng, b - 90, halfSz), b, halfSz),
-            offPt(offPt(latlng, b - 90, halfSz), b + 180, halfSz),
-            offPt(offPt(latlng, b + 90, halfSz), b + 180, halfSz),
-        ];
-        L.polygon(rect, { color, weight: 2, fillColor: 'white', fillOpacity: 1, opacity: 1 }).addTo(fenceLayerGroup);
+    if (arms.length < 2) {
+        drawPost(cornerPt, arms[0].outward, 'corner');
+        return { count: 1 };
     }
 
+    const [armRed, armBlue] = getCornerArms(entry);
+    const theta = cornerAngle(armRed, armBlue);
+    const mode = getCornerMode(cornerPt, theta);
+
+    if (mode === 'single') {
+        // Bisect the two arms → single post on angle bisector
+        const bisect = (armRed + armBlue) / 2;
+        drawPost(cornerPt, bisect, 'corner');
+        if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta);
+        return { count: 1 };
+    }
+
+    // mode === 'double' — use geometry-correct offset
+    const offset = cornerOffsetX(n, theta);
+
+    const k = ptKey(cornerPt);
+    function drawColorSquare(pt, b, color) { /* ... same as before ... */ }
+
     drawColorSquare(cornerPt, armRed, '#dc2626');
-    drawColorSquare(offPt(cornerPt, armBlue, DOUBLE_CORNER_OFFSET), armBlue, '#2563eb');
+    drawColorSquare(offPt(cornerPt, armBlue, offset), armBlue, '#2563eb');
 
     if (addHoverMarkers) {
-        const k = ptKey(cornerPt);
-        L.marker(cornerPt, { 
-            icon: L.divIcon({ className: '', html: `<div class="dc-swap-btn" data-k="${k}" title="Swap corner side">⇄</div>`, iconSize: [24, 24], iconAnchor: [12, 12] }), 
-            zIndexOffset: 3000, interactive: true 
+        _addCornerModeToggle(cornerPt, 'double', theta);
+        // existing ⇄ swap button
+        L.marker(cornerPt, {
+            icon: L.divIcon({
+                className: '',
+                html: `<div class="dc-swap-btn" data-k="${k}" title="Swap corner side">⇄</div>`,
+                iconSize: [24, 24], iconAnchor: [12, 12]
+            }),
+            zIndexOffset: 3000, interactive: true
         }).addTo(fenceLayerGroup);
     }
     return { count: 2 };
+}
+
+// Renders a small toggle button on the corner to switch single/double mode
+function _addCornerModeToggle(cornerPt, currentMode, thetaDeg) {
+    const k = ptKey(cornerPt);
+    const canSingle = thetaDeg >= 120;
+    const label = currentMode === 'double' ? '1️⃣' : '2️⃣';
+    const title = currentMode === 'double'
+        ? (canSingle ? 'Switch to single post' : `ต้องการมุม ≥ 120° (ปัจจุบัน ${thetaDeg.toFixed(0)}°)`)
+        : 'Switch to double post';
+    const btnHtml = `<div class="dc-mode-btn" data-k="${k}" data-theta="${thetaDeg.toFixed(1)}"
+        title="${title}" style="cursor:${canSingle||currentMode==='single'?'pointer':'not-allowed'};
+        opacity:${canSingle||currentMode==='single'?1:0.4};font-size:14px;background:#fff;
+        border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+        border:1.5px solid #6b7280;box-shadow:0 1px 3px rgba(0,0,0,0.2);">${label}</div>`;
+    L.marker(offPt(cornerPt, 0, 0.6), {
+        icon: L.divIcon({ className: '', html: btnHtml, iconSize: [22, 22], iconAnchor: [11, 11] }),
+        zIndexOffset: 3100, interactive: true
+    }).addTo(fenceLayerGroup);
 }
 
 function drawPost(latlng, b, type) {
@@ -191,27 +258,13 @@ function runFenceCalc() {
         return t !== 'brick' && t !== 'barbed' && t !== 'concrete';
     });
 
-    // Pre-scan: auto-enable double corner silently if any segment needs shortening
-    if (cowboyLines.length > 0) {
-        const spacingInputPre = document.getElementById('postSpacing') || document.getElementById('imPostSpacing');
-        const mPre = Math.min(3, Math.max(1, spacingInputPre ? parseFloat(spacingInputPre.value) || 2.5 : 2.5));
-        let anyNeeds = false;
-        outer: for (const ld of cowboyLines) {
-            for (let si = 0; si < ld.points.length - 1; si++) {
-                if (calcCowboyPanels(hav(ld.points[si], ld.points[si + 1]), mPre).needsDoubleCorner) {
-                    anyNeeds = true; break outer;
-                }
-            }
-        }
-        if (anyNeeds) {
-            const dcEl = document.getElementById('doubleCornerPost') || document.getElementById('imDoubleCornerPost');
-            if (dcEl && !dcEl.checked) dcEl.checked = true;
-        }
-    }
+    // Cowboy double-corner: read checkbox, NO auto-force
+    const cowboyDcEl = document.getElementById('doubleCornerPost') || document.getElementById('imDoubleCornerPost');
+    const cowboyDoubleCorner = cowboyDcEl ? cowboyDcEl.checked : false;
 
-    // Read doubleCorner AFTER potential auto-enable above
-    const doubleCornerInput = document.getElementById('doubleCornerPost') || document.getElementById('imDoubleCornerPost');
-    const doubleCorner = doubleCornerInput ? doubleCornerInput.checked : false;
+    // Concrete double-corner: read its own separate checkbox
+    const concreteDcEl = document.getElementById('concreteDoubleCornerPost') || document.getElementById('doubleCornerPost');
+    const concreteDoubleCorner = concreteDcEl ? concreteDcEl.checked : false;
 
     const allWarnings = [];
     if (fenceLayerGroup) fenceLayerGroup.clearLayers();
@@ -221,7 +274,7 @@ function runFenceCalc() {
     if (cowboyLines.length > 0) {
         const spacingInput = document.getElementById('postSpacing') || document.getElementById('imPostSpacing');
         const m_cowboy = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
-        const res = calcCowboy(cowboyLines, m_cowboy, 0, doubleCorner, layers);
+        const res = calcCowboy(cowboyLines, m_cowboy, 0, cowboyDoubleCorner, layers);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
         allWarnings.push(...res.warnings);
     }
@@ -229,7 +282,7 @@ function runFenceCalc() {
     if (concreteLines.length > 0) {
         const spacingInput = document.getElementById('postSpacing') || document.getElementById('imPostSpacing');
         const m_concrete = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
-        const res = calcConcrete(concreteLines, m_concrete, 0, doubleCorner, layers);
+        const res = calcConcrete(concreteLines, m_concrete, 0, concreteDoubleCorner, layers);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
         allWarnings.push(...res.warnings);
     }
@@ -354,6 +407,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const h = parseFloat((document.getElementById('brickFenceHeight') || document.getElementById('imBrickFenceHeight'))?.value) || 1.8;
     if (typeof syncBeamCheckboxesToHeight === 'function') syncBeamCheckboxesToHeight(h);
     if (typeof syncPillarSizeOptions === 'function') syncPillarSizeOptions(h);
+});
+
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.dc-mode-btn');
+    if (!btn) return;
+    const k = btn.dataset.k;
+    const theta = parseFloat(btn.dataset.theta);
+    if (!window._cornerModes) window._cornerModes = new Map();
+    const cur = window._cornerModes.get(k) || 'double';
+    const next = cur === 'double' ? 'single' : 'double';
+    if (next === 'single' && theta < 120) return; // angle too sharp
+    window._cornerModes.set(k, next);
+    if (typeof runFenceCalc === 'function') runFenceCalc();
 });
 
 document.getElementById('clearFenceBtn')?.addEventListener('click', function() {

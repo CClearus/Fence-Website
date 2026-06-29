@@ -33,6 +33,7 @@ const ANGLE_RULES = {
 // ── State ──────────────────────────────────────
     let imSides      = [];   // [{ length, angle, bearingAbs }]
     let imFenceType  = 'cowboy';
+    let imFreeAngle  = false; // true = cowboy angle dial unlocked from 90° steps
     let imLayerGroup = null; // L.layerGroup for preview lines
     let imActive     = false;
     let imOrigin     = null;
@@ -107,6 +108,7 @@ function buildPoints() {
     }
 
     function angleStepFor(fenceType) {
+        if (fenceType === 'cowboy' && imFreeAngle) return DEFAULT_ANGLE_STEP;
         return (ANGLE_RULES[fenceType] || { step: DEFAULT_ANGLE_STEP }).step;
     }
 
@@ -392,6 +394,9 @@ function openAngleDial(idx, anchorEl) {
 function isForbidden(deg) {
     if (prevBearing === null) return false;
     const d = ((deg % 360) + 360) % 360;
+if (imFenceType === 'cowboy' && imFreeAngle) {
+        return false; // unlocked — any angle allowed
+    }
 if (imFenceType === 'cowboy' || imFenceType === 'brick' || imFenceType === 'concrete') {
         const reverse = (prevBearing + 180) % 360;
         return d === reverse;
@@ -1022,13 +1027,32 @@ function setIMFenceType(type) {
         <input type="number" class="sb-number-input" id="imPostSpacing"
             value="2.5" min="1" max="3" step="0.1"
             style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
-        <div style="margin-top:12px;">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                <input type="checkbox" id="imDoubleCornerPost"
-                    style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;">
-                <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
-            </label>
-        </div>
+<div style="margin-top:12px;">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;">
+        <input type="checkbox" id="imFreeAngleToggle"
+            style="width:15px;height:15px;accent-color:#f59e0b;cursor:pointer;"
+            onchange="imOnFreeAngleToggle()">
+        <span style="font-size:12px;color:#374151;">ปลดล็อมุม</span>
+    </label>
+    <div class="sb-section-label">โหมดเสามุม</div>
+    <div id="imCornerModeWrap" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;flex-direction:column;gap:6px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="radio" name="imCornerMode" id="imCornerModeDouble" value="double" checked
+                style="width:15px;height:15px;accent-color:#f59e0b;cursor:pointer;"
+                onchange="imOnCornerModeChange()">
+            <span style="font-size:12px;color:#374151;">เสามุมคู่</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="radio" name="imCornerMode" id="imCornerModeSingle" value="single"
+                style="width:15px;height:15px;accent-color:#f59e0b;cursor:pointer;"
+                onchange="imOnCornerModeChange()">
+            <span style="font-size:12px;color:#374151;">แต่งร่องเสา </span>
+        </label>
+    </div>
+    <!-- Legacy hidden checkbox kept for fence.js compatibility -->
+    <input type="checkbox" id="imDoubleCornerPost" style="display:none;" checked>
+    <input type="hidden" id="globalCornerMode" value="double">
+</div>
     </div>
 
     <!-- BARBED opts -->
@@ -1083,13 +1107,24 @@ function setIMFenceType(type) {
         <option value="5">5 ชั้น</option>
         <option value="6">6 ชั้น</option>
     </select>
-    <div style="margin-top:12px;">
+<div style="margin-top:12px;">
+    <div class="sb-section-label">โหมดเสามุม</div>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="checkbox" id="imConcreteDoubleCorner"
-                style="width:16px;height:16px;cursor:pointer;accent-color:#6b7280;">
-            <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
+            <input type="radio" name="imConcreteCornerMode" id="imConcreteCornerModeDouble" value="double" checked
+                style="width:15px;height:15px;accent-color:#6b7280;cursor:pointer;"
+                onchange="imOnCornerModeChange()">
+            <span style="font-size:12px;color:#374151;">2️⃣ เสาคู่ที่มุม (แนะนำ)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="radio" name="imConcreteCornerMode" id="imConcreteCornerModeSingle" value="single"
+                style="width:15px;height:15px;accent-color:#6b7280;cursor:pointer;"
+                onchange="imOnCornerModeChange()">
+            <span style="font-size:12px;color:#374151;">1️⃣ เสาเดียวที่มุม (เฉพาะ θ ≥ 120°)</span>
         </label>
     </div>
+    <input type="checkbox" id="imConcreteDoubleCorner" style="display:none;" checked>
+</div>
 </div>
 <div id="imBrickOpts" style="display:none;">
 
@@ -1746,5 +1781,65 @@ window.imUpdateBrickDefaults = function () {
             }
         }, 100);
     }
+
+function imOnCornerModeChange() {
+    const r = document.querySelector('input[name="imCornerMode"]:checked');
+    const globalEl = document.getElementById('globalCornerMode');
+
+    if (r && r.value === 'single') {
+        // Check every existing corner's interior angle before allowing global single-post mode
+        const sharpCorner = imSides.some((s, i) => {
+            if (i === 0) return false; // first vertex isn't a corner between two sides
+            const prevB = imSides[i - 1].bearingAbs;
+            const curB = s.bearingAbs;
+            let diff = Math.abs(curB - prevB) % 360;
+            if (diff > 180) diff = 360 - diff;
+            const theta = 180 - diff; // interior angle at this corner
+            return theta < 120;
+        });
+
+        if (sharpCorner) {
+            // Block the switch — revert UI back to double and inform the user
+            const doubleRadio = document.getElementById('imCornerModeDouble');
+            if (doubleRadio) doubleRadio.checked = true;
+            if (globalEl) globalEl.value = 'double';
+            const statusEl = document.getElementById('imStatus');
+            if (statusEl) statusEl.textContent = '⚠️ ไม่สามารถใช้เสาเดียวที่มุมได้ เนื่องจากมีมุม < 120° อยู่ในรูปร่างนี้';
+            const legacyCb = document.getElementById('imDoubleCornerPost');
+            if (legacyCb) legacyCb.checked = true;
+            if (window._cornerModes) window._cornerModes.clear();
+            if (typeof runFenceCalc === 'function') runFenceCalc();
+            return;
+        }
+    }
+
+    // Sync the hidden globalCornerMode input that fence.js reads
+    if (r && globalEl) globalEl.value = r.value;
+    // Keep legacy checkbox in sync
+    const legacyCb = document.getElementById('imDoubleCornerPost');
+    if (legacyCb) legacyCb.checked = (r?.value !== 'single');
+    // Reset per-corner overrides since global mode changed
+    if (window._cornerModes) window._cornerModes.clear();
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+}
+
+    // ============================================
+    // FREE-ANGLE TOGGLE — checkbox above "โหมดเสามุม"
+    // Tick it to reveal the corner-mode radios AND
+    // unlock the cowboy angle dial from 90° steps.
+    // ============================================
+    function imOnFreeAngleToggle() {
+        const cb = document.getElementById('imFreeAngleToggle');
+        imFreeAngle = !!(cb && cb.checked);
+
+        const wrap = document.getElementById('imCornerModeWrap');
+        if (wrap) wrap.style.display = imFreeAngle ? 'flex' : 'none';
+
+        // Re-render so angle inputs/dial pick up the new step (1° vs 90°)
+        renderSideList();
+        redrawPreview();
+    }
+    window.imOnFreeAngleToggle = imOnFreeAngleToggle;
+
 
 })();
