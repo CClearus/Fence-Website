@@ -5,6 +5,106 @@
 // ── Globals ──────────────────────────────────
 let fenceLayerGroup = L.layerGroup().addTo(map);
 const PRICE_PER_M = 850;
+
+// ── Default prices per fence type (baht/meter, except brick which is baht/piece) ──
+const FENCE_PRICE_DEFAULTS = {
+    cowboy: 850,
+    barbed: 850,
+    concrete: 850
+};
+
+// ── Spacing lockout state ────────────────────────────────────────────────────
+// Tracks whether the user has clicked "ยืนยัน / ดำเนินการต่อ" to ignore the
+// tier-2 (m > 3) soft warning.  Reset to false whenever the spacing changes.
+window._spacingOverride = false;
+
+// ── Draw-tool lockout helpers ────────────────────────────────────────────────
+// Lock/unlock the measure button, eraser, clear-all, and map click.
+// Accepts a reason string for the data attribute so multiple callers can
+// co-exist without stepping on each other.
+window._spacingLocked = false;
+function _applyDrawLock(locked) {
+    window._spacingLocked = locked;
+    const ids = ['measureBtn', 'eraserBtn', 'clearAllBtn'];
+    ids.forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        if (locked) {
+            btn.disabled = true;
+            btn.style.opacity = '0.3';
+            btn.style.pointerEvents = 'none';
+        } else {
+            // Only re-enable if the tab-switch code hasn't locked them for its
+            // own reason (Tab 2 active).  Peek at the tab state.
+            const tab2Active = document.getElementById('sbPage2')?.style.display !== 'none';
+            if (!tab2Active) {
+                btn.disabled = false;
+                btn.style.opacity = '';
+                btn.style.pointerEvents = '';
+            }
+        }
+    });
+    // Also block map drawing by stopping active measure mode
+    if (locked && typeof measureActive !== 'undefined' && measureActive) {
+        const mBtn = document.getElementById('measureBtn');
+        if (mBtn) mBtn.click(); // toggle off
+    }
+}
+
+// Returns the checkbox that actually reflects the user's current choice:
+// Page 2's (imId) when Input Mode is active, Page 1's (pageId) otherwise.
+// Falls back to whichever one exists if the tab state can't be read.
+function _activeCornerCheckbox(pageId, imId) {
+    const page2El = document.getElementById('sbPage2');
+    const page2Active = page2El ? page2El.style.display !== 'none' : false;
+    const primaryId = page2Active ? imId : pageId;
+    const fallbackId = page2Active ? pageId : imId;
+    return document.getElementById(primaryId) || document.getElementById(fallbackId);
+}
+
+// ── Post-spacing validation (3 tiers from design spec) ──────────────────────
+// Returns objects: { type: 'hard'|'soft'|'ok', message: string }
+// Tier 1 (hard): m < 1  — red, locks system
+// Tier 2 (soft): m > 3  — yellow, locks until user clicks "ดำเนินการต่อ"
+// Tier 3 (hard): panelSpace < 0.5 — produced per-segment in draw functions
+function validatePostSpacing(m) {
+    if (isNaN(m) || m < 1) {
+        return { type: 'hard', message: 'ระยะห่างระหว่างเสาต้องมีมาตรฐานอย่างน้อย <b>1 เมตร</b> — กรุณากรอกใหม่' };
+    }
+    if (m > 3 && !window._spacingOverride) {
+        return { type: 'soft', message: 'ระยะห่าง <b>' + m.toFixed(2) + ' ม.</b> อาจทำให้รั้วไม่แข็งแรง — ต้องการดำเนินการต่อหรือไม่?' };
+    }
+    return { type: 'ok', message: '' };
+}
+window.validatePostSpacing = validatePostSpacing;
+
+// Resets a fence type's price input(s) back to their default value.
+// Called by the small "↺" reset button next to each price field.
+window.resetFencePrice = function (type) {
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    };
+
+    if (type === 'cowboy') {
+        setVal('cowboyPricePerM', FENCE_PRICE_DEFAULTS.cowboy);
+        setVal('imCowboyPricePerM', FENCE_PRICE_DEFAULTS.cowboy);
+    } else if (type === 'barbed') {
+        setVal('barbedPricePerM', FENCE_PRICE_DEFAULTS.barbed);
+        setVal('imBarbedPricePerM', FENCE_PRICE_DEFAULTS.barbed);
+    } else if (type === 'concrete') {
+        setVal('concretePricePerM', FENCE_PRICE_DEFAULTS.concrete);
+        setVal('imConcretePricePerM', FENCE_PRICE_DEFAULTS.concrete);
+    } else if (type === 'brick') {
+        // Brick's default depends on which brick type is selected, so
+        // re-sync from the brick catalogue rather than a flat constant.
+        if (typeof updateBrickDefaults === 'function') updateBrickDefaults();
+        if (typeof imUpdateBrickDefaults === 'function') imUpdateBrickDefaults();
+    }
+
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
 let cornerMap = new Map();
 const swappedCorners = new Map();
 
@@ -105,10 +205,34 @@ function cornerAngle(armBearing1, armBearing2) {
 
 // Returns the exact double-corner offset x for post size n and corner angle θ (degrees)
 // x = n / (2·tan(θ/2)) + n/2
+// Shared "how much bigger than a normal pillar" size for dual-corner posts.
+// Used both when drawing the post AND when computing its clearance/offset,
+// so the two never drift out of sync.
+const DUAL_POST_SIZE_MULTIPLIER = 1.8;
+
+// Purely visual — how big the red/blue dual-corner posts are actually DRAWN.
+// Kept separate from DUAL_POST_SIZE_MULTIPLIER (which drives the clearance
+// offset / panel-shortening math) so bumping the on-screen size doesn't also
+// push the posts further apart. Normal in-line posts use baseScale 5.4 and
+// corner-type posts use baseScale 1.6 (see drawPost), so 5.4/1.6 makes a
+// dual-corner post render the same on-screen size as a normal white pillar.
+const DUAL_POST_VISUAL_MULTIPLIER = 5.4 / 1.6;
+
 function cornerOffsetX(n, thetaDeg) {
     const half = (thetaDeg / 2) * Math.PI / 180;
     if (Math.abs(Math.tan(half)) < 1e-6) return n; // fallback for 0° (straight)
     return n / (2 * Math.tan(half)) + n / 2;
+}
+
+// Single source of truth for how far the "blue" dual-corner post sits from
+// the corner point. Both the post drawing (drawDoubleCornerPost) and the
+// fence-line/panel shortening (cornerShortenAmount in cowboy.js) MUST use
+// this exact same value, or the panel will stop short at the wrong spot
+// relative to where the post is actually drawn.
+function getDualCornerOffset(n, thetaDeg) {
+    const userScale = window._poleScale || 1.0;
+    const minVisualClearance = 0.35 * DUAL_POST_SIZE_MULTIPLIER * userScale; // scaled to match the pillar size
+    return Math.max(cornerOffsetX(n, thetaDeg), minVisualClearance);
 }
 
 // Returns the corner mode for a given corner point.
@@ -152,17 +276,19 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
         return { count: 1 };
     }
 
-    // mode === 'double' — use geometry-correct offset
-    const offset = cornerOffsetX(n, theta);
+    // mode === 'double' — use the same offset the panel-shortening code uses,
+    // so the drawn post and the shortened fence line always agree.
+    const offset = getDualCornerOffset(n, theta);
 
     const k = ptKey(cornerPt);
-    function drawColorSquare(pt, b, color) { /* ... same as before ... */ }
 
-    drawColorSquare(cornerPt, armRed, '#dc2626');
-    drawColorSquare(offPt(cornerPt, armBlue, offset), armBlue, '#2563eb');
+    // Same pillar look as every other post (drawPost), just bigger —
+    // white fill with a red or blue outline to tell them apart.
+    drawPost(cornerPt, armRed, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+    drawPost(offPt(cornerPt, armBlue, offset), armBlue, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
 
     if (addHoverMarkers) {
-        _addCornerModeToggle(cornerPt, 'double', theta);
+        _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue);
         // existing ⇄ swap button
         L.marker(cornerPt, {
             icon: L.divIcon({
@@ -176,8 +302,10 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     return { count: 2 };
 }
 
-// Renders a small toggle button on the corner to switch single/double mode
-function _addCornerModeToggle(cornerPt, currentMode, thetaDeg) {
+// Renders a small toggle button on the corner to switch single/double mode.
+// Placed on the OUTWARD bisector (opposite side from the two posts) so it
+// doesn't sit on top of the red/blue pillars.
+function _addCornerModeToggle(cornerPt, currentMode, thetaDeg, armRed, armBlue) {
     const k = ptKey(cornerPt);
     const canSingle = thetaDeg >= 120;
     const label = currentMode === 'double' ? '1️⃣' : '2️⃣';
@@ -189,16 +317,21 @@ function _addCornerModeToggle(cornerPt, currentMode, thetaDeg) {
         opacity:${canSingle||currentMode==='single'?1:0.4};font-size:14px;background:#fff;
         border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
         border:1.5px solid #6b7280;box-shadow:0 1px 3px rgba(0,0,0,0.2);">${label}</div>`;
-    L.marker(offPt(cornerPt, 0, 0.6), {
+    // Place it opposite the bisector of the two arms so it clears both posts
+    const outwardBisector = (typeof armRed === 'number' && typeof armBlue === 'number')
+        ? ((armRed + armBlue) / 2) + 180
+        : 0;
+    L.marker(offPt(cornerPt, outwardBisector, 0.6), {
         icon: L.divIcon({ className: '', html: btnHtml, iconSize: [22, 22], iconAnchor: [11, 11] }),
         zIndexOffset: 3100, interactive: true
     }).addTo(fenceLayerGroup);
 }
 
-function drawPost(latlng, b, type) {
+function drawPost(latlng, b, type, borderColorOverride, fillColorOverride, sizeMultiplier) {
     const postW = 0.15, postL = 0.15;
     const userScale = window._poleScale || 1.0;
-    const SCALE = (type === 'endpoint' || type === 'corner' ? 1.6 : 5.4) * userScale;
+    const baseScale = (type === 'endpoint' || type === 'corner' ? 1.6 : 5.4) * userScale;
+    const SCALE = baseScale * (sizeMultiplier || 1);
     const halfW = (postW * SCALE) / 2, halfL = (postL * SCALE) / 2;
 
     const isCorner = type === 'endpoint' || type === 'corner';
@@ -210,9 +343,9 @@ function drawPost(latlng, b, type) {
     ];
 
     L.polygon(rect, {
-        color: isCorner ? '#ffffff' : '#1f2937',
+        color: borderColorOverride || (isCorner ? '#ffffff' : '#1f2937'),
         weight: isCorner ? 2 : 1.5,
-        fillColor: isCorner ? '#dc2626' : '#ffffff',
+        fillColor: fillColorOverride || (isCorner ? '#dc2626' : '#ffffff'),
         fillOpacity: 1, opacity: 1
     }).addTo(fenceLayerGroup);
 }
@@ -246,6 +379,9 @@ function runFenceCalc() {
     const layersInput = document.getElementById('beamSelect');
     const layers = layersInput ? parseInt(layersInput.value) || 2 : 2;
 
+    const concreteLayersInput = document.getElementById('concreteLayerSelect') || document.getElementById('imConcreteLayerSelect');
+    const concreteLayers = concreteLayersInput ? parseInt(concreteLayersInput.value) || 2 : layers;
+
     const activeCard = document.querySelector('.sb-fence-card.active');
     const activeFenceType = activeCard ? activeCard.getAttribute('data-type') : 'cowboy';
 
@@ -258,33 +394,63 @@ function runFenceCalc() {
         return t !== 'brick' && t !== 'barbed' && t !== 'concrete';
     });
 
-    // Cowboy double-corner: read checkbox, NO auto-force
-    const cowboyDcEl = document.getElementById('doubleCornerPost') || document.getElementById('imDoubleCornerPost');
+    // Cowboy/concrete double-corner: read the checkbox belonging to whichever
+    // tab is actually active. Previously this used `document.getElementById(a) ||
+    // document.getElementById(b)` — since Page 1's checkboxes (doubleCornerPost,
+    // concreteDoubleCornerPost) always exist in the DOM (just hidden, not
+    // removed, when Page 2/Input Mode is shown), that `||` fallback to the
+    // "im..." id never fired, so Input Mode's corner-mode radios had zero
+    // effect on the actual calculation.
+    const cowboyDcEl = _activeCornerCheckbox('doubleCornerPost', 'imDoubleCornerPost');
     const cowboyDoubleCorner = cowboyDcEl ? cowboyDcEl.checked : false;
 
     // Concrete double-corner: read its own separate checkbox
-    const concreteDcEl = document.getElementById('concreteDoubleCornerPost') || document.getElementById('doubleCornerPost');
+    const concreteDcEl = _activeCornerCheckbox('concreteDoubleCornerPost', 'imConcreteDoubleCorner');
     const concreteDoubleCorner = concreteDcEl ? concreteDcEl.checked : false;
 
+    // ── Spacing validation — collect typed results ───────────────────────────
+    // spacingValidations: [{ type:'hard'|'soft'|'ok', message }]
+    const spacingValidations = [];
+
+    // Helper: read raw spacing value for a fence type
+    function rawSpacing(id1, id2) {
+        const el = document.getElementById(id1) || document.getElementById(id2);
+        return el ? parseFloat(el.value) : NaN;
+    }
+
     const allWarnings = [];
+    // Tier-3 warnings (panelSpace < 0.5) come from draw functions — collected below
+    const segmentWarnings = []; // hard-lock tier-3
+
     if (fenceLayerGroup) fenceLayerGroup.clearLayers();
-    let grandTotal = 0, grandPosts = 0, grandBeams = 0;
+    let grandTotal = 0, grandPosts = 0, grandBeams = 0, grandPrice = 0;
     let hasBrick = false;
 
     if (cowboyLines.length > 0) {
-        const spacingInput = document.getElementById('postSpacing') || document.getElementById('imPostSpacing');
-        const m_cowboy = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
-        const res = calcCowboy(cowboyLines, m_cowboy, 0, cowboyDoubleCorner, layers);
+        const m_raw = rawSpacing('postSpacing', 'imPostSpacing');
+        const vResult = validatePostSpacing(isNaN(m_raw) ? 0 : m_raw);
+        if (vResult.type !== 'ok') spacingValidations.push(vResult);
+        const m_cowboy = Math.min(3, Math.max(1, isNaN(m_raw) ? 2.5 : m_raw));
+        const res = calcCowboy(cowboyLines, m_cowboy, 0.15, cowboyDoubleCorner, layers);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
-        allWarnings.push(...res.warnings);
+        const priceEl = document.getElementById('cowboyPricePerM') || document.getElementById('imCowboyPricePerM');
+        const cowboyPrice = parseFloat(priceEl?.value) || FENCE_PRICE_DEFAULTS.cowboy;
+        grandPrice += res.grandTotal * cowboyPrice;
+        // Separate tier-3 (segment too short) from other warnings
+        res.warnings.forEach(w => segmentWarnings.push(w));
     }
 
     if (concreteLines.length > 0) {
-        const spacingInput = document.getElementById('postSpacing') || document.getElementById('imPostSpacing');
-        const m_concrete = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
-        const res = calcConcrete(concreteLines, m_concrete, 0, concreteDoubleCorner, layers);
+        const m_raw = rawSpacing('postSpacingConcrete', 'imPostSpacingConcrete');
+        const vResult = validatePostSpacing(isNaN(m_raw) ? 0 : m_raw);
+        if (vResult.type !== 'ok') spacingValidations.push(vResult);
+        const m_concrete = Math.min(3, Math.max(1, isNaN(m_raw) ? 2.5 : m_raw));
+        const res = calcConcrete(concreteLines, m_concrete, 0.15, concreteDoubleCorner, concreteLayers);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
-        allWarnings.push(...res.warnings);
+        const priceEl = document.getElementById('concretePricePerM') || document.getElementById('imConcretePricePerM');
+        const concretePrice = parseFloat(priceEl?.value) || FENCE_PRICE_DEFAULTS.concrete;
+        grandPrice += res.grandTotal * concretePrice;
+        res.warnings.forEach(w => segmentWarnings.push(w));
     }
 
     if (brickLines.length > 0) {
@@ -295,15 +461,32 @@ function runFenceCalc() {
     }
 
     if (barbedLines.length > 0) {
-        const spacingInput = document.getElementById('postSpacingBarbed') || document.getElementById('imPostSpacingBarbed');
-        const m_barbed = Math.min(3, Math.max(1, spacingInput ? parseFloat(spacingInput.value) || 2.5 : 2.5));
+        const m_raw = rawSpacing('postSpacingBarbed', 'imPostSpacingBarbed');
+        const vResult = validatePostSpacing(isNaN(m_raw) ? 0 : m_raw);
+        if (vResult.type !== 'ok') spacingValidations.push(vResult);
+        const m_barbed = Math.min(3, Math.max(1, isNaN(m_raw) ? 2.5 : m_raw));
         const nBraceSolo  = (document.getElementById('nBraceSolo')  || document.getElementById('imNBraceSolo'))?.checked  ?? false;
         const nBraceDual  = (document.getElementById('nBraceDual')  || document.getElementById('imNBraceDual'))?.checked  ?? false;
         const nBraceAngle = (document.getElementById('nBraceAngle') || document.getElementById('imNBraceAngle'))?.checked ?? false;
         const res = calcBarbed(barbedLines, m_barbed, 0, nBraceSolo, nBraceDual, nBraceAngle);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
-        allWarnings.push(...res.warnings);
+        const priceEl = document.getElementById('barbedPricePerM') || document.getElementById('imBarbedPricePerM');
+        const barbedPrice = parseFloat(priceEl?.value) || FENCE_PRICE_DEFAULTS.barbed;
+        grandPrice += res.grandTotal * barbedPrice;
+        res.warnings.forEach(w => segmentWarnings.push(w));
     }
+
+    // ── Determine overall lock state ─────────────────────────────────────────
+    // Hard lock: any tier-1 (m<1) or tier-3 (panelSpace<0.5) violation
+    // Soft lock: any tier-2 (m>3) without override, no hard violations
+    const hasHard = spacingValidations.some(v => v.type === 'hard') || segmentWarnings.length > 0;
+    const hasSoft = !hasHard && spacingValidations.some(v => v.type === 'soft');
+    const shouldLock = hasHard || hasSoft;
+    _applyDrawLock(shouldLock);
+
+    // Build final warnings list for display
+    spacingValidations.forEach(v => allWarnings.push({ type: v.type, message: v.message }));
+    segmentWarnings.forEach(w => allWarnings.push({ type: 'hard', message: w }));
 
     function writeResults(ids) {
         const totalInput = document.getElementById(ids.total);
@@ -330,20 +513,28 @@ function runFenceCalc() {
 
         const priceInput = document.getElementById(ids.price);
         if (priceInput) {
+            let totalPrice = grandPrice;
             if (hasBrick && window._brickCalcResult) {
                 const br = window._brickCalcResult;
                 const brickPrice = parseFloat((document.getElementById('brickPricePerPiece') || document.getElementById('imBrickPrice'))?.value) || 1.05;
                 const brickCount = Math.ceil(br.brickCount * 1.05);
-                priceInput.value = (brickCount * brickPrice).toLocaleString('th-TH', { maximumFractionDigits: 0 });
-            } else {
-                priceInput.value = (grandTotal * 850).toLocaleString('th-TH', { maximumFractionDigits: 0 });
+                totalPrice += brickCount * brickPrice;
             }
+            priceInput.value = totalPrice.toLocaleString('th-TH', { maximumFractionDigits: 0 });
         }
 
         const warnEl = document.getElementById(ids.warnings);
         if (warnEl) {
             if (allWarnings.length > 0) {
-                warnEl.innerHTML = allWarnings.map(w => `<div class="fw-item">${w}</div>`).join('');
+                warnEl.innerHTML = allWarnings.map(w => {
+                    const isHard = w.type === 'hard';
+                    const isSoft = w.type === 'soft';
+                    const cls = isHard ? 'fw-item fw-hard' : isSoft ? 'fw-item fw-soft' : 'fw-item';
+                    const btn = isSoft
+                        ? `<button class="fw-override-btn" onclick="window._spacingOverride=true;if(typeof runFenceCalc==='function')runFenceCalc();">ดำเนินการต่อ →</button>`
+                        : '';
+                    return `<div class="${cls}">⚠️ ${w.message}${btn}</div>`;
+                }).join('');
                 warnEl.style.display = 'block';
             } else {
                 warnEl.style.display = 'none';
@@ -463,13 +654,17 @@ function captureFenceOptions(fenceType) {
         };
     }
     if (fenceType === 'concrete') {
-        const spacingSel    = document.getElementById('imSpacingSelectConcrete') || document.getElementById('spacingSelectConcrete');
-        const spacingCustom = document.getElementById('imPostSpacingConcrete')   || document.getElementById('postSpacingConcrete');
+        const spacingSel    = document.getElementById('spacingSelectConcrete') || document.getElementById('imSpacingSelectConcrete');
+        const spacingCustom = document.getElementById('postSpacingConcrete')   || document.getElementById('imPostSpacingConcrete');
         const spacing = (spacingSel?.value === 'custom')
             ? parseFloat(spacingCustom?.value) || 2.5
             : parseFloat(spacingSel?.value)    || 2.5;
-        const layers      = parseInt(document.getElementById('imConcreteLayerSelect')?.value  || document.getElementById('concreteLayerSelect')?.value)  || 4;
-        const doubleCorner = (document.getElementById('imConcreteDoubleCorner') || document.getElementById('concreteDoubleCorner'))?.checked || false;
+        const layers      = parseInt(document.getElementById('concreteLayerSelect')?.value  || document.getElementById('imConcreteLayerSelect')?.value)  || 2;
+        // Fixed id typo: the actual Input Mode element is "imConcreteDoubleCorner"
+        // (no "Post" suffix) — the old lookup for "imConcreteDoubleCornerPost"
+        // never matched anything, and even then was shadowed by the always-
+        // present Page 1 checkbox. Use the tab-aware helper instead.
+        const doubleCorner = _activeCornerCheckbox('concreteDoubleCornerPost', 'imConcreteDoubleCorner')?.checked || false;
         return { postSpacing: spacing, layers, doubleCorner };
     }   
 
@@ -482,7 +677,7 @@ function captureFenceOptions(fenceType) {
         };
     }
     // cowboy (default)
-    const dcEl = document.getElementById('doubleCornerPost') || document.getElementById('imDoubleCornerPost');
+    const dcEl = _activeCornerCheckbox('doubleCornerPost', 'imDoubleCornerPost');
     return {
         spacing: val('postSpacing', 'imPostSpacing'),
         doubleCorner: dcEl ? dcEl.checked : false,

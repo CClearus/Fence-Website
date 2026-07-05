@@ -36,7 +36,7 @@ function calcBrick(brickLines) {
         return parseFloat(el ? el.value : fallback) || parseFloat(fallback);
     };
 
-    const d = readVal('postSpacingBrick', 'imPostSpacingBrick', '2.5');
+const d = readVal('imPostSpacingBrick', 'postSpacingBrick', '2.5');
     const h = readVal('brickFenceHeight', 'imBrickFenceHeight', '1.8');
     const brickPrice = readVal('brickPricePerPiece', 'imBrickPrice', '1.05');
     const ppm2 = readVal('brickPpm2', 'imBrickPpm2', '135');
@@ -152,7 +152,7 @@ function drawPlanBrickLine(lineData, idx) {
     const pts = lineData.points;
     if (!pts || pts.length < 2) return;
     
-    const d = parseFloat((document.getElementById('postSpacingBrick') || document.getElementById('imPostSpacingBrick'))?.value) || 2.5;
+const d = Math.min(5, Math.max(0.5, parseFloat((document.getElementById('imPostSpacingBrick') || document.getElementById('postSpacingBrick'))?.value) || 2.5));
     const h = parseFloat((document.getElementById('brickFenceHeight') || document.getElementById('imBrickFenceHeight'))?.value) || 1.8;
     const beamSel = document.getElementById('imBrickBeamMode');
     const beamOverride = beamSel ? beamSel.value : 'auto';
@@ -219,7 +219,8 @@ const isFinalCorner = (si === numSegs - 1);
 drawPlanPost(finalPt, segB, isFinalCorner, 0.15);
         pillarPositions.push({ dist: cumulDist + A_i, pt: finalPt });
 
-        for (let bi = 0; bi < pillarPositions.length - 1; bi++) {
+for (let bi = 0; bi < pillarPositions.length - 1; bi++) {
+            if (bi > 0) continue;
             const pStart = pillarPositions[bi].pt;
             const pEnd = pillarPositions[bi + 1].pt;
             const bayLen = hav(pStart, pEnd);
@@ -227,7 +228,7 @@ drawPlanPost(finalPt, segB, isFinalCorner, 0.15);
             drawDimLine(pStart, pEnd, offset, bayLen.toFixed(2) + 'm', '#92400e');
         }
 
-        drawDimLine(p0, p1, 0.8, A_i.toFixed(2) + 'm', '#92400e');
+drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 1.4), A_i.toFixed(2) + 'm', '#92400e');
         cumulDist += A_i;
     }
 }

@@ -59,21 +59,26 @@ function drawCowboyFence(linePoints, m, n, splitAtStart, doubleCorner, lineColor
     let grandTotal = 0, totalPosts = 0, totalBeams = 0;
     const warnings = [];
     let cumulDist = 0;
+    // Per-segment geometry, exactly as computed for the map — Plan Mode reads
+    // this instead of recalculating panels/ticks itself, so it can never
+    // drift from what the map actually draws (dual-corner shortening
+    // included).
+    const segGeom = [];
 
-    function blueArmFacesInto(cornerPt, towardPt) {
-        const entry = cornerMap.get(ptKey(cornerPt));
-        if (!entry || entry.arms.length < 2) return false;
-        const k = ptKey(cornerPt);
-        const arms = entry.arms.slice(0, 2);
-        const isSwapped = swappedCorners.get(k) || false;
-        const blueArm = isSwapped ? arms[0] : arms[1];
-        const segDir = bearing(cornerPt, towardPt);
-        const a = ((blueArm.outward % 360) + 360) % 360;
-        const b2 = ((segDir % 360) + 360) % 360;
-        let diff = Math.abs(a - b2);
-        if (diff > 180) diff = 360 - diff;
-        return diff < 90;
-    }
+   function blueArmFacesInto(cornerPt, towardPt) {
+    const entry = cornerMap.get(ptKey(cornerPt));
+    if (!entry || entry.arms.length < 2) return false;
+    const k = ptKey(cornerPt);
+    const arms = entry.arms.slice(0, 2);
+    const isSwapped = swappedCorners.get(k) || false;
+    const blueArm = isSwapped ? arms[0] : arms[1];
+    const segDir = bearing(cornerPt, towardPt);
+    const a = ((blueArm.outward % 360) + 360) % 360;
+    const b2 = ((segDir % 360) + 360) % 360;
+    let diff = Math.abs(a - b2);
+    if (diff > 180) diff = 360 - diff;
+    return diff < 1; // must match blue arm's own bearing, not just be within 90°
+}
 
     for (let si = 0; si < numSegs; si++) {
         const p0 = linePoints[si], p1 = linePoints[si+1];
@@ -90,7 +95,7 @@ function cornerShortenAmount(cornerPt, n) {
     const theta = cornerAngle(a1, a2);
     const mode = getCornerMode(cornerPt, theta); // 'single' or 'double' — same source of truth as drawDoubleCornerPost
     if (mode === 'single') return n / 2; // bisector post — panel only needs to clear half its width
-    return cornerOffsetX(n, theta);      // double post — full geometry-correct offset
+    return getDualCornerOffset(n, theta); // double post — must match drawDoubleCornerPost's post placement exactly
 }
 
 const startIsDC = doubleCorner && isCornerPoint(p0) && blueArmFacesInto(p0, p1);
@@ -102,8 +107,9 @@ const endsAtDC = doubleCorner && isCornerPoint(p1);
 const rightOff = endIsDC ? cornerShortenAmount(p1, n_post) : 0;
         const panelSpace = A_i - leftOff - rightOff;
 
-        if (panelSpace < 0.5) {
-            warnings.push(`ด้านยาว ${A_i.toFixed(2)}m สั้นเกินไป`);
+if (panelSpace < 0.5) {
+    warnings.push(`⚠️ ด้านที่ ${si + 1}: A<sub>${si+1}</sub> − B<sub>${si+1}</sub>·n = <b>${panelSpace.toFixed(2)} ม.</b> — ระยะรั้วต้องไม่ต่ำกว่า 0.5 เมตร`);
+            segGeom.push({ A_i, leftOff, rightOff, boundsRel: [0, A_i], standardCount: 0, splitCount: 0, tooShort: true });
             cumulDist += A_i;
             const pts = [interp(linePoints, cumulDist - A_i), interp(linePoints, cumulDist)];
             L.polyline(pts, { color: '#f87171', weight: 4, opacity: 0.7, dashArray: '6,4' }).addTo(fenceLayerGroup);
@@ -127,6 +133,13 @@ const rightOff = endIsDC ? cornerShortenAmount(p1, n_post) : 0;
         for (let i = 0; i < allBounds.length - 1; i++) {
             splitPanelFlags.push(i >= calc.standardCount);
         }
+
+        segGeom.push({
+            A_i, leftOff, rightOff,
+            boundsRel: allBounds.map(d => d - segStart),
+            standardCount: calc.standardCount,
+            splitCount: calc.splitCount
+        });
 
         if (leftOff > 1e-4) {
             const pts = [];
@@ -179,7 +192,7 @@ const rightOff = endIsDC ? cornerShortenAmount(p1, n_post) : 0;
         }
     }
 
-    return { grandTotal, totalPosts, totalBeams, warnings };
+    return { grandTotal, totalPosts, totalBeams, warnings, segGeom };
 }
 
 function calcCowboy(cowboyLines, m_cowboy, n, useDoubleCorner, layers) {
@@ -194,6 +207,8 @@ function calcCowboy(cowboyLines, m_cowboy, n, useDoubleCorner, layers) {
         grandPosts += res.totalPosts;
         grandBeams += res.totalBeams * layers;
         if (res.warnings) allWarnings.push(...res.warnings);
+        // Plan Mode reuses this verbatim — no separate recalculation there.
+        ld._cowboyPlanGeom = res.segGeom;
     });
 
     if (useDoubleCorner) {
@@ -228,30 +243,11 @@ function drawPlanCowboyLine(lineData, idx) {
     const m = parseFloat(document.getElementById('postSpacing')?.value) || 2.5;
     const n = 0.15;
 
-    const dualPillarCheckbox = document.getElementById('doubleCornerPost')
-        || document.getElementById('imDoubleCornerPost');
-    const fenceOpts = lineData.fenceOptions || {};
-    const useDualPillar = fenceOpts.doubleCorner
-        ?? (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
-
-    const gap = (typeof DOUBLE_CORNER_OFFSET !== 'undefined' && DOUBLE_CORNER_OFFSET > 0)
-        ? DOUBLE_CORNER_OFFSET : 0.3;
-
-    // Draw a colored plan-mode post square (mirrors drawDoubleCornerPost's drawColorSquare)
-    function drawPlanColorPost(pt, b, color) {
-        const scale = window._poleScale || 1.0;
-        const halfSz = Math.max(n, 0.15) * scale * 5;
-        const corners = [
-            offPt(offPt(pt, b + 90, halfSz), b,       halfSz),
-            offPt(offPt(pt, b - 90, halfSz), b,       halfSz),
-            offPt(offPt(pt, b - 90, halfSz), b + 180, halfSz),
-            offPt(offPt(pt, b + 90, halfSz), b + 180, halfSz),
-        ];
-        L.polygon(corners, {
-            color: color, weight: 2,
-            fillColor: '#ffffff', fillOpacity: 1, opacity: 1
-        }).addTo(planLayerGroup);
-    }
+    // Reuse the exact geometry the map-mode calculation already produced
+    // (see calcCowboy/drawCowboyFence in this file) — same panel boundaries,
+    // same dual-corner shortening — rather than recalculating it here from
+    // scratch. Falls back to a local calc only if that hasn't run yet.
+    const geom = lineData._cowboyPlanGeom;
 
     let dAcc = 0;
     const numSegs = pts.length - 1;
@@ -261,12 +257,21 @@ function drawPlanCowboyLine(lineData, idx) {
         const segLen = hav(p0, p1);
         const b = bearing(p0, p1);
 
-        let poleDists = [0];
-        if (segLen > 0.5) {
-            const calc = calcCowboyPanels(segLen, m);
-            calc.ticks.forEach(t => poleDists.push(t.pos));
+        const g = geom && geom[i];
+        let poleDists, stdCount;
+        if (g) {
+            poleDists = g.boundsRel.slice();
+            stdCount = g.standardCount;
+        } else {
+            poleDists = [0];
+            let calc = null;
+            if (segLen > 0.5) {
+                calc = calcCowboyPanels(segLen, m);
+                calc.ticks.forEach(t => poleDists.push(t.pos));
+            }
+            poleDists.push(segLen);
+            stdCount = calc ? calc.standardCount : 1;
         }
-        poleDists.push(segLen);
 
         poleDists.forEach((dist, pIdx) => {
             const pt = interp(pts, dAcc + dist);
@@ -277,34 +282,105 @@ function drawPlanCowboyLine(lineData, idx) {
 
             if (isCornerSkip) return;
 
-            if (useDualPillar && isTrueStart) {
-                // Start: RED at point (corner end), BLUE offset forward along fence
-                drawPlanColorPost(pt,                   b, '#dc2626');
-                drawPlanColorPost(offPt(pt, b, gap),    b, '#2563eb');
+            const isEndOfLine = isTrueStart || isTrueEnd || isMidCorner;
 
-            } else if (useDualPillar && isTrueEnd) {
-                // End: RED at point (corner end), BLUE offset back along fence
-                drawPlanColorPost(pt,                            b, '#dc2626');
-                drawPlanColorPost(offPt(pt, (b + 180) % 360, gap), b, '#2563eb');
+            // Any registered corner (an interior bend, or a point shared with
+            // another line) is drawn exactly once by drawPlanCowboyCorners()
+            // after all lines are drawn — using the same arm bearings, swap
+            // state, and single/double mode as the map view. This is what
+            // stops two lines sharing a corner from each drawing their own
+            // rotated square on top of one another, and means plan mode has
+            // no separate "side" of its own — it just mirrors the map.
+            //
+            // Test against the TRUE corner coordinate (this segment's own
+            // endpoint, p0/p1) rather than `pt`: when a dual-corner offset
+            // shortens the boundary inward, `pt` no longer sits exactly on
+            // the corner, so checking `pt` itself would miss it.
+            const cornerPt = (pIdx === 0) ? p0 : p1;
+            if (isEndOfLine && typeof isCornerPoint === 'function' && isCornerPoint(cornerPt)) return;
 
-            } else if (useDualPillar && isMidCorner) {
-                const nextB = bearing(pts[i + 1], pts[i + 2]);
-                // Mid-corner: RED at corner point (arriving), BLUE offset forward along next segment
-                drawPlanColorPost(pt,                        b,     '#dc2626');
-                drawPlanColorPost(offPt(pt, nextB, gap),     nextB, '#2563eb');
-
-            } else {
-                const isCorner = isTrueStart || isTrueEnd || isMidCorner;
-                drawPlanPost(pt, b, isCorner, n, 'cowboy');
-            }
+            drawPlanPost(pt, b, isEndOfLine, n, 'cowboy');
         });
 
+        // Standard-length panels repeat the same spacing, so only the first
+        // one per side gets a dimension label — no need to re-label every
+        // identical gap. Special panels (split panels near a corner) each
+        // get their own label since their length genuinely differs.
         for (let j = 0; j < poleDists.length - 1; j++) {
+            const isStandardPanel = j < stdCount;
+            if (isStandardPanel && j > 0) continue;
             const sPt = interp(pts, dAcc + poleDists[j]);
             const ePt = interp(pts, dAcc + poleDists[j + 1]);
             drawDimLine(sPt, ePt, 0.25, hav(sPt, ePt).toFixed(2) + 'm', '#000');
         }
-        drawDimLine(p0, p1, 0.55, segLen.toFixed(2) + 'm', '#000');
+        drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
         dAcc += segLen;
+    }
+}
+
+// Draws a colored plan-mode post square (mirrors the map view's dual-corner
+// pillar). Standalone/top-level so the unified corner pass below can use it.
+function drawPlanColorPost(pt, b, color, n) {
+    const scale = window._poleScale || 1.0;
+    // Match the NORMAL post size factor (3), not the oversized corner-post
+    // factor (5) — the two color posts sit close together at a corner, so
+    // drawing them corner-sized made them overlap each other and the nearby
+    // dimension line/label. Same footprint as a normal post, just outlined
+    // in red/blue instead of white fill's usual dark border.
+    const visualN = Math.max(n, 0.15) * scale * 3;
+    const halfSz = visualN / 2;
+    const corners = [
+        offPt(offPt(pt, b + 90, halfSz), b,       halfSz),
+        offPt(offPt(pt, b - 90, halfSz), b,       halfSz),
+        offPt(offPt(pt, b - 90, halfSz), b + 180, halfSz),
+        offPt(offPt(pt, b + 90, halfSz), b + 180, halfSz),
+    ];
+    L.polygon(corners, {
+        color: color, weight: 2,
+        fillColor: '#ffffff', fillOpacity: 1, opacity: 1
+    }).addTo(planLayerGroup);
+}
+
+// ============================================
+// COWBOY FENCE — Plan Mode: unified corner-post pass
+// ============================================
+// Draws every corner exactly once, reusing the SAME arm bearings, swap
+// state (swappedCorners), and single/double mode (getCornerMode) as the
+// map view. Plan mode has no swap button of its own — it always mirrors
+// whichever side/orientation is currently set on the map (e.g. if the
+// blue post sits on the vertical arm on the map, it sits on the vertical
+// arm here too).
+//
+// Caller MUST have already called buildCornerMap(...) with the current
+// set of visible cowboy lines, so cornerMap reflects exactly what's drawn.
+function drawPlanCowboyCorners() {
+    if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
+
+    const dualPillarCheckbox = document.getElementById('doubleCornerPost')
+        || document.getElementById('imDoubleCornerPost');
+    const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
+    const n = 0.15;
+
+    for (const [, entry] of cornerMap.entries()) {
+        const arms = entry.arms.slice(0, 2);
+
+        if (arms.length < 2 || !useDualPillar) {
+            const b = arms.length >= 2 ? (arms[0].outward + arms[1].outward) / 2 : arms[0].outward;
+            drawPlanPost(entry.pt, b, true, n, 'cowboy');
+            continue;
+        }
+
+        const [armRed, armBlue] = getCornerArms(entry);
+        const theta = cornerAngle(armRed, armBlue);
+        const mode = getCornerMode(entry.pt, theta);
+
+        if (mode === 'single') {
+            const bisect = (armRed + armBlue) / 2;
+            drawPlanPost(entry.pt, bisect, true, n, 'cowboy');
+        } else {
+            const offset = getDualCornerOffset(n, theta);
+            drawPlanColorPost(entry.pt, armRed, '#dc2626', n);
+            drawPlanColorPost(offPt(entry.pt, armBlue, offset), armBlue, '#2563eb', n);
+        }
     }
 }

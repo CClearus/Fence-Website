@@ -850,32 +850,83 @@ function formatDistance(meters) {
 function metersToInches(meters) {
     return meters * 39.3701;
 }
-
 // Calculate point for 90-degree snap.
-function getSnapPoint(startPoint, currentPoint, prevPoint) {
+// Cowboy/brick/concrete require perpendicular (or straight-through) segments.
+// We work in a local frame relative to the incoming segment:
+//   0°  = straight ahead
+//  +90° = turn right
+//  -90° = turn left
+// The cursor's angle in that frame is LOCKED to a narrow window around
+// whichever of those three directions it's closest to — e.g. a right turn
+// can only ever land between 87° and 93°. Outside that window the angle is
+// clamped to the window's edge (never left free); inside the window it
+// snaps exactly onto the target angle (0°/90°/-90°).
+
+const ANGLE_SNAP_TOLERANCE_DEG = 3;
+
+function getClampedPreviewPoint(startPoint, currentPoint, prevPoint) {
     if (prevPoint) {
-        // Three allowed directions from the last segment (prevPoint → startPoint):
-        //   0°: straight ahead (same direction as incoming)
-        //  +90°: turn right (perpendicular)
-        //  -90°: turn left (perpendicular)
-        const dx = startPoint[1] - prevPoint[1]; // lng component of incoming segment
-        const dy = startPoint[0] - prevPoint[0]; // lat component of incoming segment
+        const dx = startPoint[1] - prevPoint[1];
+        const dy = startPoint[0] - prevPoint[0];
         const len = Math.sqrt(dx * dx + dy * dy);
 
         if (len > 1e-10) {
-            // Unit vectors for the 3 candidate directions
-            const ux = dx / len, uy = dy / len;         // straight
-            const px = -uy,      py =  ux;               // left perp
-            const qx =  uy,      qy = -ux;               // right perp
+            const ux = dx / len, uy = dy / len;   // straight
+            const qx = uy,       qy = -ux;         // right perp
 
             const relLat = currentPoint[0] - startPoint[0];
             const relLng = currentPoint[1] - startPoint[1];
+            const relLen = Math.sqrt(relLat * relLat + relLng * relLng);
+            if (relLen < 1e-10) return [...currentPoint];
 
-            // Project cursor onto each direction and find the best snap point
+            const fComp = relLng * ux + relLat * uy;
+            const rComp = relLng * qx + relLat * qy;
+            const theta = Math.atan2(rComp, fComp) * 180 / Math.PI; // 0=straight, +90=right, -90=left
+
+            const candidates = [0, 90, -90];
+            let bestCandidate = 0, bestDelta = Infinity;
+            candidates.forEach(c => {
+                let delta = theta - c;
+                while (delta > 180) delta -= 360;
+                while (delta <= -180) delta += 360;
+                if (Math.abs(delta) < Math.abs(bestDelta)) { bestDelta = delta; bestCandidate = c; }
+            });
+
+            // Clamp to the window's edge — angle can drift within
+            // ±3° of the right angle, but never past it.
+            const clampedDelta = Math.max(-ANGLE_SNAP_TOLERANCE_DEG, Math.min(ANGLE_SNAP_TOLERANCE_DEG, bestDelta));
+            const thetaFinal = bestCandidate + clampedDelta;
+
+            const rad = thetaFinal * Math.PI / 180;
+            const outLng = relLen * (Math.cos(rad) * ux + Math.sin(rad) * qx);
+            const outLat = relLen * (Math.cos(rad) * uy + Math.sin(rad) * qy);
+            return [startPoint[0] + outLat, startPoint[1] + outLng];
+        }
+    }
+    return getSnapPoint(startPoint, currentPoint, prevPoint);
+}
+
+function getSnapPoint(startPoint, currentPoint, prevPoint) {
+    if (prevPoint) {
+        const dx = startPoint[1] - prevPoint[1];
+        const dy = startPoint[0] - prevPoint[0];
+        const len = Math.sqrt(dx * dx + dy * dy);
+
+        if (len > 1e-10) {
+            const ux = dx / len, uy = dy / len;
+            const px = -uy,      py =  ux;
+            const qx =  uy,      qy = -ux;
+
+            const relLat = currentPoint[0] - startPoint[0];
+            const relLng = currentPoint[1] - startPoint[1];
+            if (Math.sqrt(relLat * relLat + relLng * relLng) < 1e-10) {
+                return [...currentPoint];
+            }
+
             const candidates = [
-                { vLat: uy, vLng: ux },   // straight
-                { vLat: py, vLng: px },   // left perp
-                { vLat: qy, vLng: qx },   // right perp
+                { vLat: uy, vLng: ux },
+                { vLat: py, vLng: px },
+                { vLat: qy, vLng: qx },
             ].map(({ vLat, vLng }) => {
                 const t = relLat * vLat + relLng * vLng;
                 const snapLat = startPoint[0] + t * vLat;
@@ -890,16 +941,12 @@ function getSnapPoint(startPoint, currentPoint, prevPoint) {
         }
     }
 
-    // Global horizontal/vertical snap (Shift key, or only 1 point placed)
     const lat1 = startPoint[0], lng1 = startPoint[1];
     const lat2 = currentPoint[0], lng2 = currentPoint[1];
     const deltaLat = Math.abs(lat2 - lat1);
     const deltaLng = Math.abs(lng2 - lng1);
-    if (deltaLat > deltaLng) {
-        return [lat2, lng1]; // vertical
-    } else {
-        return [lat1, lng2]; // horizontal
-    }
+    if (deltaLat > deltaLng) return [lat2, lng1];
+    return [lat1, lng2];
 }
 
 function updateLineInfoBox() {
@@ -1208,9 +1255,9 @@ map.on('mousemove', function (e) {
 
         // Snap: cowboy forces 90° from 2nd segment (relative to prev segment), Shift always snaps
 if (referencePoint && (shiftPressed || (forces90deg() && currentLine.points.length >= 2))) {
-            const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
-            previewPoint = getSnapPoint(referencePoint, previewPoint, prevPt);
-        }
+    const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
+    previewPoint = getClampedPreviewPoint(referencePoint, previewPoint, prevPt); // was getSnapPoint
+}
 
         const previewPoints = [...currentLine.points, previewPoint];
 

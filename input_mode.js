@@ -98,6 +98,43 @@ function buildPoints() {
     }
 
     // ============================================
+    // REAL-TIME LOCK ENFORCEMENT
+    // window._spacingLocked is set by fence.js's _applyDrawLock() whenever
+    // there's a tier-1 (m<1) or tier-3 (panelSpace<0.5) hard violation.
+    // Previously that flag only disabled Page-1 draw tools — it never
+    // stopped Input Mode from adding more sides, so a warning could appear
+    // and the user could just keep adding/drawing past it. These two
+    // helpers close that gap.
+    // ============================================
+    function _imAddBlocked() {
+        if (window._spacingLocked) {
+            const statusEl = document.getElementById('imStatus');
+            if (statusEl) {
+                statusEl.textContent = '⛔ กรุณาแก้ไขค่าที่ไม่ถูกต้องให้เรียบร้อยก่อน จึงจะเพิ่มด้านใหม่หรือวาดต่อได้';
+                statusEl.className = 'im-status im-status-error';
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // Keep the "+ เพิ่มด้าน" / "+ เพิ่มด้าน (barbed)" buttons in sync with the
+    // current lock state. Called after every recalculation since these
+    // buttons get torn down and rebuilt by renderSideList() on every edit.
+    function _syncAddButtonLockState() {
+        const locked = !!window._spacingLocked;
+        ['imAddSegBtn', 'imAddBtn'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.disabled = locked;
+            el.style.opacity = locked ? '0.4' : '';
+            el.style.pointerEvents = locked ? 'none' : '';
+            el.style.cursor = locked ? 'not-allowed' : '';
+        });
+    }
+    window._syncAddButtonLockState = _syncAddButtonLockState;
+
+    // ============================================
     // ANGLE SNAPPING
     // ============================================
     function snapAngle(deg, fenceType) {
@@ -251,8 +288,10 @@ function renderSideList() {
             border:1.5px dashed #d1d5db;border-radius:7px;background:#f9fafb;color:#6b7280;cursor:pointer;">
             + เพิ่มด้าน</button>`;
         list.appendChild(addRow);
+        if (typeof _syncAddButtonLockState === 'function') _syncAddButtonLockState();
 
         list.querySelector('#imAddSegBtn').addEventListener('click', function () {
+            if (_imAddBlocked()) return;
             const last = imSides[imSides.length - 1];
             const prevB = last ? last.bearingAbs : 270;
             imSides.push({ length: 10, angle: 90, bearingAbs: (prevB + 90) % 360 });
@@ -654,6 +693,11 @@ function updateFromXY(clientX, clientY) {
             if (hint) hint.classList.add('visible');
             return;
         }
+        // Only block if this would EXTEND the shape with a new side while
+        // locked — editing the angle of an existing (already-invalid) side
+        // must stay allowed, since that's often how the user fixes it.
+        const isNewSide = idx >= imSides.length;
+        if (isNewSide && _imAddBlocked()) return;
         while (imSides.length <= idx)
             imSides.push({ length: 10, angle: 90, bearingAbs: imSides.length * 90 });
         imSides[idx].bearingAbs = snapped;
@@ -708,6 +752,8 @@ function updateStatusBar() {
     // ADD SIDE
     // ============================================
 function addSide() {
+    if (_imAddBlocked()) return;
+
     const defaultLen = 10;
 
     // Freeze origin on first add
@@ -730,9 +776,17 @@ function addSide() {
 // Push current shape into allLines and run fence calc (live, every change)
 // Push current shape into allLines — delegates all drawing to redrawPreview()
 function _pushToAllLines() {
-    if (imSides.length < 2) return;
+    // Was `< 2` — that skipped runFenceCalc() entirely while only one side
+    // existed, so the tier-3 (Ai - Bi·n < 0.5 m) hard-lock check never ran
+    // on a lone first side (e.g. typing 0.25 m didn't get blocked).
+    // A single side already yields a valid 2-point line, so validate it too.
+    if (imSides.length < 1) return;
     redrawPreview();
     if (typeof runFenceCalc === 'function') runFenceCalc();
+    // runFenceCalc() (fence.js) just updated window._spacingLocked based on
+    // the values as they stand right now — immediately reflect that on the
+    // add-side buttons so a locked state actually blocks further additions.
+    _syncAddButtonLockState();
 }
 
 
@@ -1024,9 +1078,11 @@ function setIMFenceType(type) {
             <option value="2.5" selected>2.5 ม.</option>
             <option value="custom">กำหนดเอง…</option>
         </select>
-        <input type="number" class="sb-number-input" id="imPostSpacing"
-            value="2.5" min="1" max="3" step="0.1"
-            style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+<input type="number" class="sb-number-input" id="imPostSpacing"
+    value="2.5" min="1" max="3" step="0.1"
+    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
+    oninput="if(typeof showSpacingHint==='function') showSpacingHint('imPostSpacingHint', parseFloat(this.value))">
+<div id="imPostSpacingHint" class="spacing-hint" style="display:none;"></div>
 <div style="margin-top:12px;">
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;">
         <input type="checkbox" id="imFreeAngleToggle"
@@ -1035,7 +1091,7 @@ function setIMFenceType(type) {
         <span style="font-size:12px;color:#374151;">ปลดล็อมุม</span>
     </label>
     <div class="sb-section-label">โหมดเสามุม</div>
-    <div id="imCornerModeWrap" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;flex-direction:column;gap:6px;">
+    <div id="imCornerModeWrap" style="display:flex;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;flex-direction:column;gap:6px;">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
             <input type="radio" name="imCornerMode" id="imCornerModeDouble" value="double" checked
                 style="width:15px;height:15px;accent-color:#f59e0b;cursor:pointer;"
@@ -1053,6 +1109,14 @@ function setIMFenceType(type) {
     <input type="checkbox" id="imDoubleCornerPost" style="display:none;" checked>
     <input type="hidden" id="globalCornerMode" value="double">
 </div>
+
+        <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <input type="number" class="sb-number-input-sm" id="imCowboyPricePerM" value="850"
+                min="0" step="10" style="flex:1;" placeholder="บาท/เมตร">
+            <button type="button" class="price-reset-btn" onclick="resetFencePrice('cowboy')"
+                title="รีเซ็ตราคาเริ่มต้น">↺</button>
+        </div>
     </div>
 
     <!-- BARBED opts -->
@@ -1066,9 +1130,11 @@ function setIMFenceType(type) {
             <option value="3.0">3.0 ม.</option>
             <option value="custom">กำหนดเอง…</option>
         </select>
-        <input type="number" class="sb-number-input" id="imPostSpacingBarbed"
-            value="2.5" min="1" max="3" step="0.1"
-            style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+<input type="number" class="sb-number-input" id="imPostSpacingBarbed"
+    value="2.5" min="1" max="3" step="0.1"
+    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
+    oninput="if(typeof showSpacingHint==='function') showSpacingHint('imPostSpacingBarbedHint', parseFloat(this.value))">
+<div id="imPostSpacingBarbedHint" class="spacing-hint" style="display:none;"></div>
         <div class="sb-section-label" style="margin-top:10px;">ตัวเลือก N-Brace</div>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;">
             <input type="checkbox" id="imNBraceSolo" style="width:16px;height:16px;accent-color:#dc2626;">
@@ -1082,6 +1148,14 @@ function setIMFenceType(type) {
             <input type="checkbox" id="imNBraceAngle" style="width:16px;height:16px;accent-color:#7c3aed;">
             <span style="font-size:12px;color:#374151;">N-Brace มุม (เสาคู่ที่มุม)</span>
         </label>
+
+        <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <input type="number" class="sb-number-input-sm" id="imBarbedPricePerM" value="850"
+                min="0" step="10" style="flex:1;" placeholder="บาท/เมตร">
+            <button type="button" class="price-reset-btn" onclick="resetFencePrice('barbed')"
+                title="รีเซ็ตราคาเริ่มต้น">↺</button>
+        </div>
     </div>
 
 <!-- BRICK opts -->
@@ -1096,9 +1170,11 @@ function setIMFenceType(type) {
         <option value="3.0">3.0 ม.</option>
         <option value="custom">กำหนดเอง…</option>
     </select>
-    <input type="number" class="sb-number-input" id="imPostSpacingConcrete"
-        value="2.5" min="1" max="5" step="0.1"
-        style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+<input type="number" class="sb-number-input" id="imPostSpacingConcrete"
+    value="2.5" min="1" max="5" step="0.1"
+    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
+    oninput="if(typeof showSpacingHint==='function') showSpacingHint('imPostSpacingConcreteHint', parseFloat(this.value))">
+<div id="imPostSpacingConcreteHint" class="spacing-hint" style="display:none;"></div>
     <div class="sb-section-label" style="margin-top:10px;">จำนวนชั้นแผ่น</div>
     <select class="sb-number-input" id="imConcreteLayerSelect"
         style="width:100%;padding:6px 8px;font-size:12px;">
@@ -1125,6 +1201,14 @@ function setIMFenceType(type) {
     </div>
     <input type="checkbox" id="imConcreteDoubleCorner" style="display:none;" checked>
 </div>
+
+    <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
+    <div style="display:flex;align-items:center;gap:6px;">
+        <input type="number" class="sb-number-input-sm" id="imConcretePricePerM" value="850"
+            min="0" step="10" style="flex:1;" placeholder="บาท/เมตร">
+        <button type="button" class="price-reset-btn" onclick="resetFencePrice('concrete')"
+            title="รีเซ็ตราคาเริ่มต้น">↺</button>
+    </div>
 </div>
 <div id="imBrickOpts" style="display:none;">
 
@@ -1154,9 +1238,11 @@ function setIMFenceType(type) {
         <option value="3.0">3.0 ม.</option>
         <option value="custom">กำหนดเอง…</option>
     </select>
-    <input type="number" class="sb-number-input" id="imPostSpacingBrick"
-        value="2.5" min="1" max="5" step="0.1"
-        style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+<input type="number" class="sb-number-input" id="imPostSpacingBrick"
+    value="2.5" min="1" max="5" step="0.1"
+    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
+    oninput="if(typeof showSpacingHint==='function') showSpacingHint('imPostSpacingBrickHint', parseFloat(this.value))">
+<div id="imPostSpacingBrickHint" class="spacing-hint" style="display:none;"></div>
 
     <!-- Pillar Size -->
     <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา</div>
@@ -1207,6 +1293,8 @@ function setIMFenceType(type) {
         <span style="font-size:11px;color:#6b7280;white-space:nowrap;">ก้อน/ม²</span>
         <input type="number" class="sb-number-input-sm" id="imBrickPpm2"
             value="135" min="1" step="0.1" style="flex:1;">
+        <button type="button" class="price-reset-btn" onclick="resetFencePrice('brick')"
+            title="รีเซ็ตราคาเริ่มต้นตามชนิดอิฐ">↺</button>
     </div>
 
     <!-- คานทับหลัง (N) — checkbox style matching draw mode -->
@@ -1272,6 +1360,65 @@ function setIMFenceType(type) {
 </div><!-- /.im-root -->
 
 <style>
+/* ── Spacing inline hints (shared with draw mode) ──────────────────────── */
+.spacing-hint {
+    font-size: 11px;
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin-top: 4px;
+    font-weight: 600;
+    line-height: 1.4;
+    display: none;
+}
+.spacing-hint-error {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+}
+.spacing-hint-warn {
+    background: #fef9c3;
+    color: #92400e;
+    border: 1px solid #fde047;
+}
+.fw-hard {
+    background: #fee2e2;
+    color: #991b1b;
+    border-left: 3px solid #dc2626;
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.fw-soft {
+    background: #fef9c3;
+    color: #78350f;
+    border-left: 3px solid #f59e0b;
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.fw-override-btn {
+    margin-left: auto;
+    background: #f59e0b;
+    color: #1f2937;
+    border: none;
+    border-radius: 5px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.fw-override-btn:hover { background: #d97706; }
+
 /* ── Input Mode Styles ───────────────────────────── */
 .im-root { padding: 0 2px 24px; }
 
@@ -1419,41 +1566,40 @@ function setIMFenceType(type) {
     // ============================================
     // SPACING PILL HELPERS (called from inline onclick)
     // ============================================
-    window.imSetSpacing = function (val) {
-        const input = document.getElementById('imPostSpacing');
-        if (val === 'custom') {
-            if (input) { input.style.display = ''; input.focus(); }
+    // ── Input-mode spacing select helpers ──────────────────────────────────
+    // Mirrors _applySpacingSelect from index.html but scoped to IM element IDs.
+    function _imApplySpacingSelect(selectVal, inputId, hintId, defaultVal) {
+        const input = document.getElementById(inputId);
+        const hint  = document.getElementById(hintId);
+        if (!input) return;
+        if (selectVal === 'custom') {
+            input.style.display = '';
+            input.focus();
+            if (typeof showSpacingHint === 'function') showSpacingHint(hintId, parseFloat(input.value));
         } else {
-            if (input) { input.value = val; input.style.display = 'none'; }
+            input.value = parseFloat(selectVal) || defaultVal;
+            input.style.display = 'none';
+            if (hint) { hint.style.display = 'none'; hint.className = 'spacing-hint'; }
+            window._spacingOverride = false;
+            if (typeof runFenceCalc === 'function') runFenceCalc();
         }
+    }
+
+    window.imSetSpacing = function (val) {
+        _imApplySpacingSelect(val, 'imPostSpacing', 'imPostSpacingHint', 2.5);
     };
 
     window.imSetSpacingBarbed = function (val) {
-        const input = document.getElementById('imPostSpacingBarbed');
-        if (val === 'custom') {
-            if (input) { input.style.display = ''; input.focus(); }
-        } else {
-            if (input) { input.value = val; input.style.display = 'none'; }
-        }
+        _imApplySpacingSelect(val, 'imPostSpacingBarbed', 'imPostSpacingBarbedHint', 2.5);
     };
 
     window.imSetSpacingBrick = function (val) {
-        const input = document.getElementById('imPostSpacingBrick');
-        if (val === 'custom') {
-            if (input) { input.style.display = ''; input.focus(); }
-        } else {
-            if (input) { input.value = val; input.style.display = 'none'; }
-        }
+        _imApplySpacingSelect(val, 'imPostSpacingBrick', 'imPostSpacingBrickHint', 2.5);
     };
 
     window.imSetSpacingConcrete = function (val) {
-    const input = document.getElementById('imPostSpacingConcrete');
-    if (val === 'custom') {
-        if (input) { input.style.display = ''; input.focus(); }
-    } else {
-        if (input) { input.value = val; input.style.display = 'none'; }
-    }
-};
+        _imApplySpacingSelect(val, 'imPostSpacingConcrete', 'imPostSpacingConcreteHint', 2.5);
+    };
 
 window.imSetBrickHeight = function (val) {
     const input = document.getElementById('imBrickFenceHeight');
@@ -1783,8 +1929,15 @@ window.imUpdateBrickDefaults = function () {
     }
 
 function imOnCornerModeChange() {
-    const r = document.querySelector('input[name="imCornerMode"]:checked');
+    // Handles BOTH radio groups: cowboy's "imCornerMode" and concrete's
+    // "imConcreteCornerMode". Previously this only ever queried
+    // "imCornerMode", so clicking the concrete radios did nothing at all.
+    const isConcrete = (imFenceType === 'concrete');
+    const groupName = isConcrete ? 'imConcreteCornerMode' : 'imCornerMode';
+    const r = document.querySelector('input[name="' + groupName + '"]:checked');
     const globalEl = document.getElementById('globalCornerMode');
+    const doubleRadioId = isConcrete ? 'imConcreteCornerModeDouble' : 'imCornerModeDouble';
+    const legacyCbId = isConcrete ? 'imConcreteDoubleCorner' : 'imDoubleCornerPost';
 
     if (r && r.value === 'single') {
         // Check every existing corner's interior angle before allowing global single-post mode
@@ -1800,12 +1953,12 @@ function imOnCornerModeChange() {
 
         if (sharpCorner) {
             // Block the switch — revert UI back to double and inform the user
-            const doubleRadio = document.getElementById('imCornerModeDouble');
+            const doubleRadio = document.getElementById(doubleRadioId);
             if (doubleRadio) doubleRadio.checked = true;
             if (globalEl) globalEl.value = 'double';
             const statusEl = document.getElementById('imStatus');
             if (statusEl) statusEl.textContent = '⚠️ ไม่สามารถใช้เสาเดียวที่มุมได้ เนื่องจากมีมุม < 120° อยู่ในรูปร่างนี้';
-            const legacyCb = document.getElementById('imDoubleCornerPost');
+            const legacyCb = document.getElementById(legacyCbId);
             if (legacyCb) legacyCb.checked = true;
             if (window._cornerModes) window._cornerModes.clear();
             if (typeof runFenceCalc === 'function') runFenceCalc();
@@ -1815,8 +1968,9 @@ function imOnCornerModeChange() {
 
     // Sync the hidden globalCornerMode input that fence.js reads
     if (r && globalEl) globalEl.value = r.value;
-    // Keep legacy checkbox in sync
-    const legacyCb = document.getElementById('imDoubleCornerPost');
+    // Keep legacy checkbox in sync (imDoubleCornerPost for cowboy,
+    // imConcreteDoubleCorner for concrete)
+    const legacyCb = document.getElementById(legacyCbId);
     if (legacyCb) legacyCb.checked = (r?.value !== 'single');
     // Reset per-corner overrides since global mode changed
     if (window._cornerModes) window._cornerModes.clear();
@@ -1832,8 +1986,9 @@ function imOnCornerModeChange() {
         const cb = document.getElementById('imFreeAngleToggle');
         imFreeAngle = !!(cb && cb.checked);
 
-        const wrap = document.getElementById('imCornerModeWrap');
-        if (wrap) wrap.style.display = imFreeAngle ? 'flex' : 'none';
+        // NOTE: corner-mode (เสามุมคู่/เดี่ยว) visibility is independent of
+        // free-angle unlock — it must stay visible at all times, not just
+        // after unlocking the angle dial. See imCornerModeWrap default style.
 
         // Re-render so angle inputs/dial pick up the new step (1° vs 90°)
         renderSideList();

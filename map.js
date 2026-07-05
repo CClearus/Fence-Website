@@ -1,5 +1,47 @@
 // Initialize the map
-const map = L.map('map', { zoomControl: false }).setView([13.7563, 100.5018], 13);
+// Initialize the map without a hardcoded starting view
+const map = L.map('map', { zoomControl: false });
+
+// Fallback location if everything else fails
+const DEFAULT_LOCATION = { lat: 13.7563, lng: 100.5018, zoom: 13 };
+
+// Try precise browser geolocation first (this triggers the native
+// "Allow location access?" prompt on mobile and desktop browsers)
+function setInitialUserLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                map.setView([position.coords.latitude, position.coords.longitude], 13);
+            },
+            () => {
+                // Denied, blocked, or timed out — fall back to IP-based location
+                setLocationFromIP();
+            },
+            { timeout: 8000 }
+        );
+    } else {
+        setLocationFromIP();
+    }
+}
+
+// Fallback: approximate location from the visitor's IP address
+async function setLocationFromIP() {
+    try {
+        const response = await fetch('https://ipapi.co/json/');
+        const data = await response.json();
+        if (data.latitude && data.longitude) {
+            map.setView([data.latitude, data.longitude], 13);
+        } else {
+            map.setView([DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng], DEFAULT_LOCATION.zoom);
+        }
+    } catch (error) {
+        console.error('IP location lookup failed:', error);
+        map.setView([DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng], DEFAULT_LOCATION.zoom);
+    }
+}
+
+// Kick off location detection as soon as the map is created
+setInitialUserLocation();
 
 // Define different map layers
 // NEW - use CartoDB as fallback (no referer restriction)

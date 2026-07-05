@@ -320,10 +320,12 @@ const pt = interp(pts, extraDist);
     }).addTo(planLayerGroup);
 
     // Span dimension lines
-    for (let i = 0; i < postPositions.length - 1; i++) {
+for (let i = 0; i < postPositions.length - 1; i++) {
         const p0 = postPositions[i].pt;
         const p1 = postPositions[i + 1].pt;
         const spanLen = hav(p0, p1);
+        const isStandardSpan = Math.abs(spanLen - dPrime) < 0.01;
+        if (isStandardSpan && i > 0) continue;
         const offset = 0.3 + (i % 2) * 0.15;
         drawDimLine(p0, p1, offset, spanLen.toFixed(2) + 'm', '#374151');
     }

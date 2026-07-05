@@ -71,6 +71,313 @@ function applyLockedRatio(ratio) {
     updatePlanScale();
 }
 
+
+function geoBrickBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
+    const midLat = (bayStartPt[0] + bayEndPt[0]) / 2;
+    const midLng = (bayStartPt[1] + bayEndPt[1]) / 2;
+    const mid = [midLat, midLng];
+    const perpB = segBearing + 90;
+    const tickHalf = 0.28;
+
+    const drawTick = (pt, hex, dashed) => {
+        const t1 = _geoOffset(pt, perpB, tickHalf);
+        const t2 = _geoOffset(pt, perpB + 180, tickHalf);
+        geoPolyline([t1, t2], hex, 0.35, dashed ? [0.6, 0.5] : []);
+        geoCircle(pt, 0.12, hex, hex, 0.2);
+    };
+
+    if (mode === 'top') {
+        drawTick(mid, '#ea580c', false);
+    } else if (mode === 'center') {
+        drawTick(mid, '#d97706', true);
+    } else if (mode === 'center+top') {
+        const offset = 0.28;
+        drawTick(_geoOffset(mid, segBearing, offset), '#d97706', true);
+        drawTick(_geoOffset(mid, segBearing + 180, offset), '#ea580c', false);
+    }
+}
+
+// New helper: mirrors cowboy.js's drawPlanCowboyCorners exactly — same
+// arm bearings, swap state, and single/double mode as the live map — so
+// dual red/blue corner posts (or a single bisector post) that exist in
+// Plan Mode actually show up in the PDF too, instead of being silently
+// skipped.
+function geoDrawCowboyCorners() {
+    if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
+    const dualPillarCheckbox = document.getElementById('doubleCornerPost')
+        || document.getElementById('imDoubleCornerPost');
+    const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
+    const n = 0.15;
+    const scale = window._poleScale || 1.0;
+    const vis = Math.max(n, 0.15) * scale * 3;
+    const halfSz = vis / 2;
+
+    for (const [, entry] of cornerMap.entries()) {
+        const arms = entry.arms.slice(0, 2);
+
+        if (arms.length < 2 || !useDualPillar) {
+            const b = arms.length >= 2 ? (arms[0].outward + arms[1].outward) / 2 : arms[0].outward;
+            drawVPost(entry.pt, b, true, n);
+            continue;
+        }
+
+        const [armRed, armBlue] = getCornerArms(entry);
+        const theta = cornerAngle(armRed, armBlue);
+        const mode = getCornerMode(entry.pt, theta);
+
+        if (mode === 'single') {
+            const bisect = (armRed + armBlue) / 2;
+            drawVPost(entry.pt, bisect, true, n);
+        } else {
+            // Same clearance offset the live map's post placement uses —
+            // must match exactly or the drawn post and the (already-
+            // shortened) panel line would visually disagree.
+            const offset = getDualCornerOffset(n, theta);
+            geoRect(entry.pt, armRed, halfSz, halfSz, '#ffffff', '#dc2626');
+            geoRect(_geoOffset(entry.pt, armBlue, offset), armBlue, halfSz, halfSz, '#ffffff', '#2563eb');
+        }
+    }
+}
+
+// Cowboy corners are drawn once, after all cowboy lines are processed —
+// scope the shared cornerMap to cowboy-type lines only, exactly like
+// calcCowboy() does for the live map.
+const cowboyLinesForPdf = allLines.filter(ld => (ld.fenceType || 'cowboy') === 'cowboy');
+buildCornerMap(cowboyLinesForPdf.map(ld => ld.points));
+
+allLines.forEach((ld, idx) => {
+    const pts = ld.points;
+    if (!pts || pts.length < 2) return;
+    const fenceType = ld.fenceType || 'cowboy';
+    const opts = ld.fenceOptions || {}; // per-line captured settings — same source of truth the map uses
+    const total = _geoTotalLen(pts);
+
+    if (fenceType === 'cowboy') {
+        geoPolyline(pts, '#1a1a1a', 0.6, []);
+        const spacing = parseFloat(opts.spacing) || parseFloat(document.getElementById('postSpacing')?.value) || 2.5;
+
+        // Reuse the exact geometry the map already computed (corner
+        // shortening + split panels near dual posts included) instead of
+        // recalculating from scratch — this is what was causing panel
+        // counts/spacings to disagree with the real drawing.
+        const geom = ld._cowboyPlanGeom;
+        let dAcc = 0;
+        const numSegs = pts.length - 1;
+
+        for (let i = 0; i < numSegs; i++) {
+            const p0 = pts[i], p1 = pts[i + 1];
+            const segLen = _geoHav(p0, p1);
+            const b = _geoBearing(p0, p1);
+
+            const g = geom && geom[i];
+            let poleDists, stdCount;
+            if (g) {
+                poleDists = g.boundsRel.slice();
+                stdCount = g.standardCount;
+            } else {
+                poleDists = [0];
+                let calc = null;
+                if (segLen > 0.5) {
+                    calc = calcCowboyPanels(segLen, spacing);
+                    calc.ticks.forEach(t => poleDists.push(t.pos));
+                }
+                poleDists.push(segLen);
+                stdCount = calc ? calc.standardCount : 1;
+            }
+
+            poleDists.forEach((dist, pIdx) => {
+                const pt = _geoInterp(pts, dAcc + dist);
+                const isTrueStart = (i === 0 && pIdx === 0);
+                const isTrueEnd   = (i === numSegs - 1 && pIdx === poleDists.length - 1);
+                const isMidCorner = (pIdx === poleDists.length - 1 && i < numSegs - 1);
+                const isCornerSkip = (pIdx === 0 && i > 0);
+                if (isCornerSkip) return;
+
+                const isEndOfLine = isTrueStart || isTrueEnd || isMidCorner;
+                const cornerPt = (pIdx === 0) ? p0 : p1;
+                // Every corner point (shared or a plain line end) is drawn
+                // exactly once by geoDrawCowboyCorners() below — matches
+                // drawPlanCowboyLine's own skip logic, so two lines sharing
+                // a corner don't each draw their own overlapping post.
+                if (isEndOfLine && isCornerPoint(cornerPt)) return;
+
+                drawVPost(pt, b, isEndOfLine, 0.15);
+            });
+
+            for (let j = 0; j < poleDists.length - 1; j++) {
+                const isStandardPanel = j < stdCount;
+                if (isStandardPanel && j > 0) continue;
+                const sPt = _geoInterp(pts, dAcc + poleDists[j]);
+                const ePt = _geoInterp(pts, dAcc + poleDists[j + 1]);
+                geoDimLine(sPt, ePt, 0.25, _geoHav(sPt, ePt).toFixed(2) + 'm', '#000000');
+            }
+            geoDimLine(p0, p1, 0.55, segLen.toFixed(2) + 'm', '#000000');
+            dAcc += segLen;
+        }
+
+    } else if (fenceType === 'concrete') {
+        geoPolyline(pts, '#1a1a1a', 0.6, []);
+        const spacing = opts.postSpacing
+            || parseFloat(document.getElementById('postSpacingConcrete')?.value)
+            || parseFloat(document.getElementById('spacingSelectConcrete')?.value)
+            || 2.5;
+        const useDualPillar = opts.doubleCorner
+            ?? (document.getElementById('concreteDoubleCornerPost')?.checked || false);
+
+        const numSegs = pts.length - 1;
+        let dAcc = 0;
+
+        for (let i = 0; i < numSegs; i++) {
+            const p0 = pts[i], p1 = pts[i + 1];
+            const segLen = _geoHav(p0, p1);
+            const b = _geoBearing(p0, p1);
+
+            let poleDists = [0], stdCount = 1;
+            if (segLen > 0.5) {
+                const calc = calcConcretePanels(segLen, spacing); // was a naive while-loop before — wrong panel count/split logic
+                calc.ticks.forEach(t => poleDists.push(t.pos));
+                stdCount = calc.standardCount;
+            }
+            poleDists.push(segLen);
+
+            poleDists.forEach((dist, pIdx) => {
+                const pt = _geoInterp(pts, dAcc + dist);
+                const isTrueStart = (i === 0 && pIdx === 0);
+                const isTrueEnd   = (i === numSegs - 1 && pIdx === poleDists.length - 1);
+                const isMidCorner = (pIdx === poleDists.length - 1 && i < numSegs - 1);
+                const isCornerSkip = (pIdx === 0 && i > 0);
+                if (isCornerSkip) return;
+                const isEndOfLine = isTrueStart || isTrueEnd || isMidCorner;
+
+                if (isEndOfLine && useDualPillar) {
+                    // Vector approximation of the map's red "end" / blue "start"
+                    // icon pair (jsPDF can't easily embed the PNG icons here) —
+                    // still visually distinguishes a dual-post corner from a
+                    // normal single post, which the old PDF never did at all.
+                    const inB  = isTrueStart ? (b + 180) % 360 : b;
+                    const outB = isTrueEnd   ? (b + 180) % 360
+                                 : isMidCorner ? _geoBearing(pts[i + 1], pts[i + 2])
+                                 : b;
+                    const scale = window._poleScale || 1.0;
+                    const vis = Math.max(0.15, 0.15) * scale * 3;
+                    const gap = 0.3;
+                    geoRect(_geoOffset(pt, inB, gap / 2),  inB,  vis / 2, vis / 2, '#ffffff', '#dc2626');
+                    geoRect(_geoOffset(pt, outB, gap / 2), outB, vis / 2, vis / 2, '#ffffff', '#2563eb');
+                } else {
+                    drawVPost(pt, b, isEndOfLine, 0.15);
+                }
+            });
+
+            for (let j = 0; j < poleDists.length - 1; j++) {
+                const isStandardPanel = j < stdCount;
+                if (isStandardPanel && j > 0) continue;
+                const sPt = _geoInterp(pts, dAcc + poleDists[j]);
+                const ePt = _geoInterp(pts, dAcc + poleDists[j + 1]);
+                geoDimLine(sPt, ePt, 0.25, _geoHav(sPt, ePt).toFixed(2) + 'm', '#000000');
+            }
+            geoDimLine(p0, p1, 0.55, segLen.toFixed(2) + 'm', '#000000');
+            dAcc += segLen;
+        }
+
+    } else if (fenceType === 'barbed') {
+        const spacing = parseFloat(opts.spacing) || parseFloat(document.getElementById('postSpacingBarbed')?.value) || 2.5;
+        const offsets = [-0.25, 0, 0.25];
+        offsets.forEach((off, si) => {
+            geoPolyline(pts, '#4b5563', si === 1 ? 0.5 : 0.2, si === 1 ? [] : [1.2, 0.8]);
+        });
+        let d2 = 0;
+        while (d2 <= total + 1e-4) {
+            const pt = _geoInterp(pts, Math.min(d2, total));
+            const b  = _geoBearingAt(pts, Math.min(d2, total));
+            const isEnd = d2 < 1e-3 || d2 >= total - 1e-3;
+            drawVPost(pt, b, isEnd, 0.15);
+            d2 += spacing;
+        }
+        for (let i = 0; i < pts.length - 1; i++) {
+            const segLen = _geoHav(pts[i], pts[i + 1]);
+            geoDimLine(pts[i], pts[i + 1], 0.5, segLen.toFixed(2) + 'm', '#374151');
+        }
+
+    } else if (fenceType === 'brick') {
+        // Real spacing rule: even division of each segment, not
+        // "spacing, then a leftover remainder" — this alone was producing
+        // a different pillar count than what's actually on the map.
+        const d = Math.min(5, Math.max(0.5, parseFloat(opts.spacing)
+            || parseFloat(document.getElementById('postSpacingBrick')?.value)
+            || parseFloat(document.getElementById('imPostSpacingBrick')?.value)
+            || 2.5));
+        const h = parseFloat(opts.height)
+            || parseFloat(document.getElementById('brickFenceHeight')?.value)
+            || parseFloat(document.getElementById('imBrickFenceHeight')?.value)
+            || 1.8;
+
+        let beamMode = opts.beamMode;
+        if (!beamMode || beamMode === '0') {
+            if (!opts.beamMode) {
+                if (h <= 1.2) beamMode = 'none';
+                else if (h < 1.8) beamMode = 'top';
+                else if (h < 2.2) beamMode = 'center';
+                else beamMode = 'center+top';
+            } else {
+                beamMode = 'none';
+            }
+        }
+
+        geoPolyline(pts, '#92400e', 0.9, []);
+
+        let cumulDist = 0;
+        const numSegs = pts.length - 1;
+        for (let si = 0; si < numSegs; si++) {
+            const p0 = pts[si], p1 = pts[si + 1];
+            const A_i = _geoHav(p0, p1);
+            const segB = _geoBearing(p0, p1);
+
+            const r_i = Math.ceil(A_i / d);
+            const dPrime = A_i / r_i;
+
+            let cursor = cumulDist;
+            for (let bi = 0; bi < r_i; bi++) {
+                const ptStart = _geoInterp(pts, cursor);
+                const isStartOfLine = (si === 0 && bi === 0);
+                drawVPost(ptStart, segB, isStartOfLine, 0.15);
+
+                if (beamMode !== 'none') {
+                    const ptEnd = _geoInterp(pts, cursor + dPrime);
+                    geoBrickBeamSymbol(ptStart, ptEnd, segB, beamMode);
+                }
+                cursor += dPrime;
+            }
+            geoDimLine(p0, p1, 0.55, A_i.toFixed(2) + 'm', '#92400e');
+            cumulDist += A_i;
+        }
+        const lastPt = pts[pts.length - 1];
+        const lastB  = _geoBearing(pts[pts.length - 2], lastPt);
+        drawVPost(lastPt, lastB, true, 0.15);
+    }
+
+    const [lx, ly] = project(pts[0]);
+    const colours = { cowboy:'#000000', concrete:'#000000', barbed:'#374151', brick:'#92400e' };
+    const bgColours = { cowboy:'#ffffff', concrete:'#ffffff', barbed:'#f9fafb', brick:'#fff7ed' };
+    const typeNames = { cowboy:'คาวบอย', concrete:'คอนกรีต', barbed:'ลวดหนาม', brick:'อิฐ' };
+    const label = `Line ${idx+1} (${typeNames[fenceType]||fenceType})  L=${total.toFixed(1)}m`;
+    pdf.setFontSize(5.5);
+    pdf.setFont('Sarabun', 'bold');
+    const [cr,cg,cb2] = hexRgb(colours[fenceType]||'#000000');
+    pdf.setTextColor(cr,cg,cb2);
+    const lw2 = pdf.getTextWidth(label);
+    const [br2,bg2,bb2] = hexRgb(bgColours[fenceType]||'#ffffff');
+    pdf.setFillColor(br2,bg2,bb2);
+    pdf.setDrawColor(cr,cg,cb2);
+    pdf.setLineWidth(0.2);
+    pdf.setLineDashPattern([],0);
+    pdf.rect(lx+0.5, ly-4, lw2+2, 4.5, 'FD');
+    pdf.text(label, lx+1.5, ly-0.5);
+});
+
+// Draw all cowboy dual/single corner posts once, after every line is done —
+// same reasoning as drawPlanCowboyCorners on the live map.
+geoDrawCowboyCorners();
+
 async function downloadPlanPDF() {
     const btn = document.getElementById('btnDownloadPDF');
     if (!btn) return;
@@ -273,7 +580,7 @@ async function downloadPlanPDF() {
 
         function drawVPost(pt, bearingDeg, isCorner, sizeM) {
             const sc = window._poleScale || 1.0;
-            const vis = Math.max(sizeM, 0.15) * sc * (isCorner ? 5 : 3);
+            const vis = Math.max(sizeM, 0.15) * sc * 3;
             const hSz = vis / 2;
             geoRect(pt, bearingDeg, hSz, hSz, isCorner ? '#dc2626' : '#ffffff', '#1a1a1a');
         }
@@ -568,6 +875,10 @@ function togglePlanMode() {
     if (planModeActive) {
         if (searchBar) searchBar.style.display = 'none';
         if (imRoot) imRoot.style.display = 'none';
+        const tabBar = document.querySelector('.sb-tab-bar');
+        if (tabBar) tabBar.style.display = 'none';
+        const sbPage1 = document.getElementById('sbPage1');
+        if (sbPage1) sbPage1.style.display = 'none';
 
         map._savedClickListeners = map._events && map._events.click ? [...map._events.click] : [];
         map.off('click');
@@ -621,6 +932,8 @@ function togglePlanMode() {
     } else {
         if (searchBar) searchBar.style.display = '';
         if (imRoot) imRoot.style.display = '';
+        const tabBar = document.querySelector('.sb-tab-bar');
+        if (tabBar) tabBar.style.display = '';
 
         if (map._savedClickListeners && map._savedClickListeners.length > 0) {
             map._savedClickListeners.forEach(h => map.on('click', h.fn, h.ctx));
@@ -689,12 +1002,107 @@ function renderPlanView() {
         listEl.appendChild(item);
     });
 
+    // Run the real map-mode calculation FIRST so every cowboy line's
+    // _cowboyPlanGeom (segment boundaries, dual-corner offsets, standard vs
+    // split panel counts) is fresh before we draw a single plan post or
+    // dimension line. Plan mode never recomputes this math itself — it only
+    // re-skins the same numbers the map used.
+    //
+    // This must run BEFORE the visible-only buildCornerMap call below:
+    // runFenceCalc() -> calcCowboy() rebuilds cornerMap from ALL cowboy
+    // lines internally, which would otherwise clobber the visible-only
+    // corner map that the actual plan drawing depends on.
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+    if (typeof fenceLayerGroup !== 'undefined') fenceLayerGroup.clearLayers();
+
+    // Cowboy corners must be resolved using the SAME shared corner data as
+    // the map view (arm bearings, swap state, single/double mode) — never
+    // per line — otherwise two lines sharing a corner each draw their own
+    // rotated square on top of the other. Build that shared corner map from
+    // only the currently-visible cowboy lines before anything is drawn.
+const visibleCowboyLines = allLines.filter((ld, idx) => {
+    const cb = document.getElementById(`plan_cb_${idx}`);
+    return cb && cb.checked && (ld.fenceType || 'cowboy') === 'cowboy';
+});
+if (typeof buildCornerMap === 'function') {
+    buildCornerMap(visibleCowboyLines.map(ld => ld.points));
+}
+
 allLines.forEach((ld, idx) => {
-        const cb = document.getElementById(`plan_cb_${idx}`);
-        if (cb && cb.checked) drawPlanLine(ld, idx);
-    });
+    const cb = document.getElementById(`plan_cb_${idx}`);
+    if (cb && cb.checked) drawPlanLine(ld, idx);
+});
+
+// Cowboy corners: single shared pass, same corner data the map used.
+if (typeof drawPlanCowboyCorners === 'function') drawPlanCowboyCorners();
+
+// Concrete corners: same idea — rebuild cornerMap scoped to only the
+// visible concrete lines (buildCornerMap is destructive/global, so this
+// must happen in its own scoped call, after the cowboy pass above has
+// already used and finished with the shared cornerMap), then draw each
+// dual red/blue corner pillar exactly once.
+const visibleConcreteLines = allLines.filter((ld, idx) => {
+    const cb = document.getElementById(`plan_cb_${idx}`);
+    return cb && cb.checked && (ld.fenceType || 'cowboy') === 'concrete';
+});
+if (typeof buildCornerMap === 'function') {
+    buildCornerMap(visibleConcreteLines.map(ld => ld.points));
+}
+if (typeof drawPlanConcreteCorners === 'function') drawPlanConcreteCorners();
 
     _drawPlanLegend();
+    renderPlanSummaryTable();
+}
+
+// ============================================
+// PLAN VIEW — MATERIALS & PRICE SUMMARY TABLE
+// (per instruction note #3: the plan must show a table with the
+// quantity of materials used — beams, posts, etc. — and the total
+// price, calculated across everything.)
+// ============================================
+function renderPlanSummaryTable() {
+    const box = document.getElementById('planSummaryBox');
+    if (!box) return;
+
+    // renderPlanView() already ran runFenceCalc() before drawing the plan
+    // lines (so their geometry would be fresh), which also refreshed
+    // resTotal/resPosts/resBeams/resPriceDisplay — just read them here.
+    // (runFenceCalc draws into fenceLayerGroup as a side effect; renderPlanView
+    // already clears that layer so it doesn't reappear on top of the plan.)
+
+    const total = document.getElementById('resTotal')?.value || '—';
+    const posts = document.getElementById('resPosts')?.value || '—';
+    const beamsInput = document.getElementById('resBeams');
+    const beamsLabel = beamsInput?.closest('.sbr-row-item')?.querySelector('.sbr-label')?.textContent
+        || 'จำนวนคานที่ต้องใช้';
+    const beamsUnit = beamsInput?.closest('.sbr-row-item')?.querySelector('.sbr-unit')?.textContent
+        || 'อัน';
+    const beams = beamsInput?.value || '—';
+    const price = document.getElementById('resPriceDisplay')?.value || '—';
+
+    box.innerHTML = `
+        <div style="font-family:'Courier New',monospace;font-size:11px;font-weight:bold;color:#1a1a1a;letter-spacing:0.05em;border-bottom:1.5px solid #1a1a1a;padding-bottom:5px;margin-bottom:6px;">
+            สรุปวัสดุ &amp; ราคา (รวมทั้งหมด)
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-family:'Courier New',monospace;font-size:11px;color:#1a1a1a;">
+            <tr>
+                <td style="padding:4px;border-bottom:1px solid #e5e7eb;">ความยาวรั้วรวม</td>
+                <td style="padding:4px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;white-space:nowrap;">${total} ม.</td>
+            </tr>
+            <tr>
+                <td style="padding:4px;border-bottom:1px solid #e5e7eb;">จำนวนเสา</td>
+                <td style="padding:4px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;white-space:nowrap;">${posts} ต้น</td>
+            </tr>
+            <tr>
+                <td style="padding:4px;border-bottom:1px solid #e5e7eb;">${beamsLabel}</td>
+                <td style="padding:4px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;white-space:nowrap;">${beams} ${beamsUnit}</td>
+            </tr>
+            <tr>
+                <td style="padding:6px 4px 2px;font-weight:bold;">ราคารวมทั้งหมด</td>
+                <td style="padding:6px 4px 2px;text-align:right;font-weight:bold;color:#dc2626;white-space:nowrap;">${price} บาท</td>
+            </tr>
+        </table>
+    `;
 }
 
 // ============================================
@@ -723,7 +1131,7 @@ function drawPlanLine(lineData, idx) {
 function drawPlanPost(pt, b, isCorner, n, fenceType) {
     const scale = window._poleScale || 1.0;
     const isBarbedEndpoint = (fenceType === 'barbed') && isCorner;
-    const visualN = Math.max(n, 0.15) * scale * (isCorner && !isBarbedEndpoint ? 5 : 3);
+    const visualN = Math.max(n, 0.15) * scale * 3;
     const halfSz = visualN / 2;
     const color = (isCorner && !isBarbedEndpoint) ? '#dc2626' : '#ffffff';
     const corners = [
@@ -1017,4 +1425,20 @@ function _drawPlanLegend() {
         }
         scaleBar.appendChild(box);
     }
+}
+
+function outwardOffset(pts, p0, p1, mag) {
+    let cLat = 0, cLon = 0;
+    pts.forEach(p => { cLat += p[0]; cLon += p[1]; });
+    cLat /= pts.length; cLon /= pts.length;
+
+    const mLat = (p0[0] + p1[0]) / 2, mLon = (p0[1] + p1[1]) / 2;
+    const b = bearing(p0, p1);
+    const vLat = mLat - cLat, vLon = mLon - cLon;
+
+    // drawDimLine's default direction is b+90 — check if that direction
+    // points away from the centroid (outward) or toward it (inward).
+    const rad = (b + 90) * Math.PI / 180;
+    const dot = Math.cos(rad) * vLat + Math.sin(rad) * vLon;
+    return dot >= 0 ? mag : -mag;
 }

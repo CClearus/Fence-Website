@@ -2,22 +2,27 @@
 // CONCRETE FENCE — Calculation and Drawing
 // ============================================
 
-function drawConcretePost(latlng, b, type) {
+function drawConcretePost(latlng, b, type, borderColorOverride, fillColorOverride, sizeMultiplier) {
     const userScale = window._poleScale || 1.0;
 
     const isEndCap = (type === 'start' || type === 'end');
     const isCorner = (type === 'corner' || type === 'endpoint');
-    const SCALE = (isCorner ? 1.6 : 5.4) * userScale;
+    const baseScale = (isCorner ? 1.6 : 5.4) * userScale;
+    const SCALE = baseScale * (sizeMultiplier || 1);
 
     const halfAlong  = (0.15 * SCALE) / 2;
     const halfAcross = (0.15 * SCALE) / 2;
-    const outColor   = '#1f2937';
 
 if (isEndCap) {
     const iconPx = 32 * SCALE / 5.4;
     const iconUrl = (type === 'start') ? 'start.png' : 'end.png';
-    // PNG channel is at top (0°). We need channel to face INTO the fence,
-    // so rotate by bearing + 180 to flip it inward.
+    // start.png/end.png's channel is at top (0°) in the source art. The
+    // caller passes `b` as the OUTWARD-facing bearing along that post's own
+    // arm (for 'start': the direction back away from the fence, before we
+    // flip it here; for 'end': the direction the fence arrives FROM). Adding
+    // 180° flips the channel to face INTO the fence, so a 'start' cap
+    // rotates to align with the departing line, and an 'end' cap rotates to
+    // close up against the line arriving into it.
     const rot = ((b + 180) % 360 + 360) % 360;
 
     const capMarker = L.marker(latlng, {
@@ -32,15 +37,18 @@ if (isEndCap) {
     capMarker.setZIndexOffset(99999);
     capMarker.bringToFront?.();
 } else {
-        // plain box for normal/split posts
-        const fillColor = '#ffffff';
+        // Plain box post — same look as cowboy's drawPost: white in-line
+        // posts, red corner/endpoint posts (unless overridden, e.g. for the
+        // red/blue dual-corner pair).
+        const borderColor = borderColorOverride || (isCorner ? '#ffffff' : '#1f2937');
+        const fillColor = fillColorOverride || (isCorner ? '#dc2626' : '#ffffff');
         const webRect = [
             offPt(offPt(latlng, b,       halfAlong), b + 90,  halfAcross),
             offPt(offPt(latlng, b,       halfAlong), b - 90,  halfAcross),
             offPt(offPt(latlng, b + 180, halfAlong), b - 90,  halfAcross),
             offPt(offPt(latlng, b + 180, halfAlong), b + 90,  halfAcross),
         ];
-        L.polygon(webRect, { color: outColor, weight: 1.5, fillColor, fillOpacity: 1, opacity: 1 }).addTo(fenceLayerGroup);
+        L.polygon(webRect, { color: borderColor, weight: isCorner ? 2 : 1.5, fillColor, fillOpacity: 1, opacity: 1 }).addTo(fenceLayerGroup);
     }
 }
 
@@ -152,25 +160,29 @@ function drawConcreteFence(linePoints, m, n, splitAtStart, doubleCorner, lineCol
         const startIsDC = doubleCorner && isCornerPoint(p0) && blueArmFacesInto(p0, p1);
         const endIsDC   = doubleCorner && isCornerPoint(p1) && blueArmFacesInto(p1, p0);
 
-const n_post = 0.15;
-const leftOff = startIsDC
-    ? (() => {
-        const entry = cornerMap.get(ptKey(p0));
-        const [a1, a2] = entry ? getCornerArms(entry) : [0, 0];
-        return cornerOffsetX(n_post, cornerAngle(a1, a2));
-    })()
-    : 0;
-const rightOff = endIsDC
-    ? (() => {
-        const entry = cornerMap.get(ptKey(p1));
-        const [a1, a2] = entry ? getCornerArms(entry) : [0, 0];
-        return cornerOffsetX(n_post, cornerAngle(a1, a2));
-    })()
-    : 0;
+        // Mirrors cowboy's cornerShortenAmount: respects whichever mode
+        // (single bisector post vs double red/blue pair) this specific
+        // corner is currently in, and uses the same clearance-floor offset
+        // (getDualCornerOffset) that drawConcreteDoubleCornerPost draws
+        // its posts at — so the panel never stops short of, or overlaps,
+        // where the post actually is.
+        function cornerShortenAmount(cornerPt, n) {
+            const entry = cornerMap.get(ptKey(cornerPt));
+            if (!entry) return 0;
+            const [a1, a2] = getCornerArms(entry);
+            const theta = cornerAngle(a1, a2);
+            const mode = getCornerMode(cornerPt, theta);
+            if (mode === 'single') return n / 2;
+            return getDualCornerOffset(n, theta);
+        }
+
+        const n_post = 0.15;
+        const leftOff = startIsDC ? cornerShortenAmount(p0, n_post) : 0;
+        const rightOff = endIsDC ? cornerShortenAmount(p1, n_post) : 0;
         const panelSpace = A_i - leftOff - rightOff;
 
-        if (panelSpace < 0.5) {
-            warnings.push(`ด้านยาว ${A_i.toFixed(2)}m สั้นเกินไป`);
+if (panelSpace < 0.5) {
+    warnings.push(`⚠️ ด้านที่ ${si + 1}: A<sub>${si+1}</sub> − B<sub>${si+1}</sub>·n = <b>${panelSpace.toFixed(2)} ม.</b> — ระยะรั้วต้องไม่ต่ำกว่า 0.5 เมตร`);
             cumulDist += A_i;
             const pts = [interp(linePoints, cumulDist - A_i), interp(linePoints, cumulDist)];
             L.polyline(pts, { color: '#f87171', weight: 4, opacity: 0.7, dashArray: '6,4' }).addTo(fenceLayerGroup);
@@ -210,12 +222,18 @@ const rightOff = endIsDC
         // Draw start post of this segment
         if (!(doubleCorner && isCornerPoint(linePoints[si]))) {
             const startPt = interp(linePoints, cumulDist);
-            postIndex++;
-            const startType = (si === 0) ? 'start' : (postIndex % 2 === 0 ? 'normal' : 'split');
-            const startBearing = (si === 0)
-    ? bearing(linePoints[1], linePoints[0])   // outward: away from fence
-    : bearingAt(linePoints, cumulDist + 0.01);
-drawConcretePost(startPt, startBearing, startType);
+            const isTrueLineStart = (si === 0 && !closed);
+            const startBearing = isTrueLineStart
+                ? bearing(linePoints[1], linePoints[0])   // outward: away from fence
+                : bearingAt(linePoints, cumulDist + 0.01);
+            if (isTrueLineStart) {
+                drawConcretePost(startPt, startBearing, 'start');
+            } else {
+                // Mid-line bend (or closed-loop wrap point) — a distinct
+                // corner post, same as cowboy's solo-mode corner square,
+                // not just another alternating in-line panel post.
+                drawConcretePost(startPt, startBearing, 'corner');
+            }
         }
 
         totalPosts += calc.ticks.length + 1;
@@ -276,9 +294,6 @@ function drawConcreteDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     const theta = cornerAngle(armRed, armBlue);
     const mode = getCornerMode(cornerPt, theta);
 
-    const userScale = window._poleScale || 1.0;
-    const iconPx = 24 * userScale;
-
     if (mode === 'single') {
         const bisect = (armRed + armBlue) / 2;
         drawConcretePost(cornerPt, bisect, 'corner');
@@ -286,9 +301,19 @@ function drawConcreteDoubleCornerPost(cornerPt, n, addHoverMarkers) {
         return { count: 1 };
     }
 
-    // double mode — geometry-correct offset
-    const offset = cornerOffsetX(n > 0 ? n : 0.15, theta);
+    // double mode — same clearance-floor offset as cowboy's dual corner
+    // (getDualCornerOffset, not the raw un-clamped cornerOffsetX), so the
+    // two brackets sit cleanly apart instead of overlapping.
+    const offset = getDualCornerOffset(n > 0 ? n : 0.15, theta);
+    const userScale = window._poleScale || 1.0;
+    const iconPx = 32 * userScale; // matches a normal post's visual size
 
+    // armRed/armBlue are each arm's OUTWARD bearing (away from the corner,
+    // into that segment) — end.png's channel needs to face back along the
+    // arm it closes against, so no extra +180 flip is needed here (unlike
+    // drawConcretePost's isEndCap branch, which flips a true line-end's
+    // arriving bearing). start.png similarly just follows armBlue directly,
+    // since armBlue already points the way that segment departs.
     const rotRed = ((armRed % 360) + 360) % 360;
     L.marker(cornerPt, {
         icon: L.divIcon({
@@ -311,7 +336,7 @@ function drawConcreteDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     }).addTo(fenceLayerGroup);
 
     if (addHoverMarkers) {
-        _addCornerModeToggle(cornerPt, 'double', theta);
+        _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue);
         const k = ptKey(cornerPt);
         L.marker(cornerPt, {
             icon: L.divIcon({
@@ -346,11 +371,12 @@ function drawPlanConcreteLine(lineData, idx) {
 
     const fenceOpts = lineData.fenceOptions || {};
     const m = fenceOpts.postSpacing
+        || parseFloat(document.getElementById('postSpacingConcrete')?.value)
         || parseFloat(document.getElementById('imPostSpacingConcrete')?.value)
+        || parseFloat(document.getElementById('spacingSelectConcrete')?.value)
         || parseFloat(document.getElementById('imSpacingSelectConcrete')?.value)
         || 2.5;
 
-    // Read dual-pillar from concrete-specific checkbox (with cowboy fallback)
     const dualPillarCheckbox = document.getElementById('concreteDoubleCornerPost')
         || document.getElementById('doubleCornerPost');
     const useDualPillar = fenceOpts.doubleCorner
@@ -358,7 +384,7 @@ function drawPlanConcreteLine(lineData, idx) {
 
     const n = 0.15;
     const userScale = window._poleScale || 1.0;
-    const iconPx = Math.max(40, 32 * userScale); // bigger so side-by-side pair is visible
+    const iconPx = Math.max(40, 32 * userScale);
 
     function drawPlanConcreteIcon(pt, iconUrl, rot) {
         L.marker(pt, {
@@ -372,23 +398,48 @@ function drawPlanConcreteLine(lineData, idx) {
         }).addTo(planLayerGroup);
     }
 
-    // Draw a matched end+start pair side-by-side at a corner/endpoint.
-    // pt        = corner location
-    // inB       = bearing of the segment ARRIVING at pt (the "closing" side)
-    // outB      = bearing of the segment LEAVING pt (the "opening" side)
-    //             Pass inB === outB for a true line-end (only one arm).
     function drawDualPair(pt, inB, outB) {
-        // end.png faces INTO the arriving segment (channel toward inB reversed)
         const rotEnd   = ((inB + 180) % 360 + 360) % 360;
-        // start.png faces INTO the departing segment (channel toward outB)
         const rotStart = ((outB % 360) + 360) % 360;
-        // Offset the two icons along the fence line so they sit beside each other
         const gap = DOUBLE_CORNER_OFFSET > 0 ? DOUBLE_CORNER_OFFSET : 0.3;
-        const ptEnd   = offPt(pt, inB,  gap / 2); // slide back along arriving arm
-        const ptStart = offPt(pt, outB, gap / 2); // slide forward along departing arm
+        const ptEnd   = offPt(pt, inB,  gap / 2);
+        const ptStart = offPt(pt, outB, gap / 2);
         drawPlanConcreteIcon(ptEnd,   'end.png',   rotEnd);
         drawPlanConcreteIcon(ptStart, 'start.png', rotStart);
     }
+
+    // --- FIX: mirror drawConcreteFence's corner clearance -----------------
+    // The real map never splits the FULL segment length into panels — it
+    // first pulls back `leftOff`/`rightOff` at any dual-corner post, then
+    // divides only the remaining `panelSpace`. Plan Mode was feeding the
+    // raw segment length straight into calcConcretePanels, so its leftover
+    // "split" panel near a corner was the wrong size and its dimension
+    // label ended up sitting on top of the corner post / total-length label.
+    function blueArmFacesInto(cornerPt, towardPt) {
+        const entry = cornerMap.get(ptKey(cornerPt));
+        if (!entry || entry.arms.length < 2) return false;
+        const k = ptKey(cornerPt);
+        const arms = entry.arms.slice(0, 2);
+        const isSwapped = swappedCorners.get(k) || false;
+        const blueArm = isSwapped ? arms[0] : arms[1];
+        const segDir = bearing(cornerPt, towardPt);
+        const a = ((blueArm.outward % 360) + 360) % 360;
+        const b2 = ((segDir % 360) + 360) % 360;
+        let diff = Math.abs(a - b2);
+        if (diff > 180) diff = 360 - diff;
+        return diff < 90;
+    }
+
+    function cornerShortenAmount(cornerPt) {
+        const entry = cornerMap.get(ptKey(cornerPt));
+        if (!entry) return 0;
+        const [a1, a2] = getCornerArms(entry);
+        const theta = cornerAngle(a1, a2);
+        const mode = getCornerMode(cornerPt, theta);
+        if (mode === 'single') return n / 2;
+        return getDualCornerOffset(n, theta);
+    }
+    // ------------------------------------------------------------------------
 
     const numSegs = pts.length - 1;
     let dAcc = 0;
@@ -398,59 +449,111 @@ function drawPlanConcreteLine(lineData, idx) {
         const segLen = hav(p0, p1);
         const b = bearing(p0, p1);
 
-        let poleDists = [0];
-        if (segLen > 0.5) {
-            const calc = calcConcretePanels(segLen, m);
-            calc.ticks.forEach(t => poleDists.push(t.pos));
+        const startIsDC = useDualPillar && isCornerPoint(p0) && blueArmFacesInto(p0, p1);
+        const endIsDC   = useDualPillar && isCornerPoint(p1) && blueArmFacesInto(p1, p0);
+        const leftOff  = startIsDC ? cornerShortenAmount(p0) : 0;
+        const rightOff = endIsDC   ? cornerShortenAmount(p1) : 0;
+        const panelSpace = Math.max(0, segLen - leftOff - rightOff);
+
+        // tickDists = panel/slab boundaries, bounded by the shortened span
+        let tickDists = [leftOff];
+        let stdCount = 1;
+        if (panelSpace > 0.5) {
+            const calc = calcConcretePanels(panelSpace, m);
+            calc.ticks.forEach(t => tickDists.push(leftOff + t.pos));
+            stdCount = calc.standardCount;
         }
-        poleDists.push(segLen);
+        tickDists.push(segLen - rightOff);
 
-        poleDists.forEach((dist, pIdx) => {
-            const pt = interp(pts, dAcc + dist);
-            const isTrueStart  = (i === 0 && pIdx === 0);
-            const isTrueEnd    = (i === numSegs - 1 && pIdx === poleDists.length - 1);
-            const isMidCorner  = (pIdx === poleDists.length - 1 && i < numSegs - 1);
-            const isCornerSkip = (pIdx === 0 && i > 0);
+        // postDists = actual post render points — corners/ends still sit at
+        // the TRUE endpoint; drawDualPair applies its own visual offset,
+        // same as the live map does.
+        const postDists = [0, ...tickDists.slice(1, -1), segLen];
 
-            if (isCornerSkip) return;
+postDists.forEach((dist, pIdx) => {
+    const pt = interp(pts, dAcc + dist);
+    const isTrueStart  = (i === 0 && pIdx === 0);
+    const isTrueEnd    = (i === numSegs - 1 && pIdx === postDists.length - 1);
+    const isMidCorner  = (pIdx === postDists.length - 1 && i < numSegs - 1);
+    const isCornerSkip = (pIdx === 0 && i > 0);
 
-            if (isTrueStart) {
-                if (useDualPillar) {
-                    // Line start: arriving from nowhere, departing along b
-                    // Show end.png (the "closed" cap) + start.png (open into fence)
-                    drawDualPair(pt, (b + 180) % 360, b);
-                } else {
-                    drawPlanPost(pt, b, true, n, 'concrete');
-                }
+    if (isCornerSkip) return;
 
-            } else if (isTrueEnd) {
-                if (useDualPillar) {
-                    // Line end: arriving along b, no departure
-                    drawDualPair(pt, b, (b + 180) % 360);
-                } else {
-                    drawPlanPost(pt, b, true, n, 'concrete');
-                }
+    // Only a point actually SHARED with another line (2+ arms in cornerMap)
+    // is the double red/blue pillar pair, drawn once by
+    // drawPlanConcreteCorners(). A true, unshared start/end always gets its
+    // own single start.png/end.png cap, same as the live map's isEndCap
+    // branch in drawConcretePost — dual-pillar mode doesn't change that.
+    const sharedCorner = useDualPillar && isCornerPoint(pt);
 
-            } else if (isMidCorner) {
-                if (useDualPillar) {
-                    const nextB = bearing(pts[i + 1], pts[i + 2]);
-                    // Corner: arriving along b, departing along nextB
-                    drawDualPair(pt, b, nextB);
-                } else {
-                    drawPlanPost(pt, b, true, n, 'concrete');
-                }
+    if (isTrueStart) {
+        if (sharedCorner) return; // handled by drawPlanConcreteCorners
+        drawPlanConcreteIcon(pt, 'start.png', ((b % 360) + 360) % 360);
+    } else if (isTrueEnd) {
+        if (sharedCorner) return;
+        drawPlanConcreteIcon(pt, 'end.png', (((b + 180) % 360) + 360) % 360);
+    } else if (isMidCorner) {
+        if (sharedCorner) return; // dual-pillar pair drawn once, elsewhere
+        drawPlanPost(pt, b, true, n, 'concrete'); // single-mode corner square
+    } else {
+        drawPlanPost(pt, b, false, n, 'concrete');
+    }
+});
 
-            } else {
-                drawPlanPost(pt, b, false, n, 'concrete');
-            }
-        });
-
-        for (let j = 0; j < poleDists.length - 1; j++) {
-            const sPt = interp(pts, dAcc + poleDists[j]);
-            const ePt = interp(pts, dAcc + poleDists[j + 1]);
+        for (let j = 0; j < tickDists.length - 1; j++) {
+            const isStandardPanel = j < stdCount;
+            if (isStandardPanel && j > 0) continue;
+            const sPt = interp(pts, dAcc + tickDists[j]);
+            const ePt = interp(pts, dAcc + tickDists[j + 1]);
             drawDimLine(sPt, ePt, 0.25, hav(sPt, ePt).toFixed(2) + 'm', '#000');
         }
-        drawDimLine(p0, p1, 0.55, segLen.toFixed(2) + 'm', '#000');
+        drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
         dAcc += segLen;
+    }
+}
+
+function drawPlanConcreteCorners() {
+    if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
+
+    const dualPillarCheckbox = document.getElementById('concreteDoubleCornerPost')
+        || document.getElementById('doubleCornerPost');
+    const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
+    if (!useDualPillar) return; // single-post corners are drawn inline by drawPlanConcreteLine
+
+    const n = 0.15;
+    const userScale = window._poleScale || 1.0;
+    const iconPx = Math.max(40, 32 * userScale);
+
+    for (const [, entry] of cornerMap.entries()) {
+        const arms = entry.arms.slice(0, 2);
+        if (arms.length < 2) continue; // true line-end, handled inline
+
+        const [armRed, armBlue] = getCornerArms(entry);
+        const theta = cornerAngle(armRed, armBlue);
+        const mode = getCornerMode(entry.pt, theta);
+        if (mode === 'single') continue; // handled inline as a normal single post
+
+        const offset = getDualCornerOffset(n, theta);
+
+        const rotRed = ((armRed % 360) + 360) % 360;
+        L.marker(entry.pt, {
+            icon: L.divIcon({
+                className: '',
+                html: `<img src="end.png" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rotRed}deg);position:absolute;left:50%;top:50%;">`,
+                iconSize: [0, 0], iconAnchor: [0, 0]
+            }),
+            zIndexOffset: 99999
+        }).addTo(planLayerGroup);
+
+        const rotBlue = ((armBlue % 360) + 360) % 360;
+        const bluePt = offPt(entry.pt, armBlue, offset);
+        L.marker(bluePt, {
+            icon: L.divIcon({
+                className: '',
+                html: `<img src="start.png" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rotBlue}deg);position:absolute;left:50%;top:50%;">`,
+                iconSize: [0, 0], iconAnchor: [0, 0]
+            }),
+            zIndexOffset: 99999
+        }).addTo(planLayerGroup);
     }
 }

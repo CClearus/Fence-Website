@@ -135,8 +135,10 @@
                     <option value="2.5" selected>2.5 ม.</option>
                     <option value="custom">กำหนดเอง…</option>
                 </select>
-                <input type="number" class="sb-number-input" id="postSpacing" value="2.5" min="1" max="3" step="0.1"
-                    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+<input type="number" class="sb-number-input" id="postSpacing" value="2.5" min="1" max="3" step="0.1"
+    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
+    oninput="showSpacingHint('postSpacingHint', parseFloat(this.value))">
+<div id="postSpacingHint" class="spacing-hint" style="display:none;"></div>
 
                 <div style="margin-top:12px;">
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -144,6 +146,71 @@
                             style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;">
                         <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
                     </label>
+                </div>
+
+                <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <input type="number" class="sb-number-input-sm" id="cowboyPricePerM" value="850"
+                        min="0" step="10" style="flex:1;" placeholder="บาท/เมตร">
+                    <button type="button" class="price-reset-btn" onclick="resetFencePrice('cowboy')"
+                        title="รีเซ็ตราคาเริ่มต้น">↺</button>
+                </div>
+            </div>
+
+            <!-- ── CONCRETE OPTIONS (same layout as cowboy, spacing limited to 2/3/custom) ── -->
+            <div id="p1ConcreteOpts" style="display:none;">
+                <div class="sb-section-label">เลือกเสา - คาน</div>
+                <div class="sb-select-wrap" style="position:relative;">
+                    <select class="sb-select" id="concreteLayerSelect">
+                        <option value="2">2 ชั้น</option>
+                        <option value="3">3 ชั้น</option>
+                        <option value="4">4 ชั้น</option>
+                    </select>
+                    <div class="sb-select-icon">▼</div>
+                </div>
+                <!-- Beam spec display — updates based on selection -->
+                <div class="sb-beam-spec" id="concreteBeamSpec">
+                    <div class="sbbs-row" id="concbs2">
+                        <span class="sbbs-floor">2 ชั้น</span>
+                        <span class="sbbs-dim">0.15 × 0.15 × 1.50 ม.</span>
+                    </div>
+                    <div class="sbbs-row" id="concbs3" style="display:none;">
+                        <span class="sbbs-floor">3 ชั้น</span>
+                        <span class="sbbs-dim">0.15 × 0.15 × 2.00 ม.</span>
+                    </div>
+                    <div class="sbbs-row" id="concbs4" style="display:none;">
+                        <span class="sbbs-floor">4 ชั้น</span>
+                        <span class="sbbs-dim">0.15 × 0.15 × 2.50 ม.</span>
+                    </div>
+                </div>
+
+                <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
+                <select class="sb-number-input" id="spacingSelectConcrete"
+                    style="width:100%;padding:6px 8px;font-size:12px;"
+                    onchange="setSpacingConcrete(this.value)">
+                    <option value="2.0" selected>2.0 ม.</option>
+                    <option value="3.0">3.0 ม.</option>
+                    <option value="custom">กำหนดเอง…</option>
+                </select>
+<input type="number" class="sb-number-input" id="postSpacingConcrete" value="2.0" min="1" max="3" step="0.1"
+    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
+    oninput="showSpacingHint('postSpacingConcreteHint', parseFloat(this.value))">
+<div id="postSpacingConcreteHint" class="spacing-hint" style="display:none;"></div>
+
+                <div style="margin-top:12px;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="concreteDoubleCornerPost"
+                            style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;">
+                        <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
+                    </label>
+                </div>
+
+                <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <input type="number" class="sb-number-input-sm" id="concretePricePerM" value="850"
+                        min="0" step="10" style="flex:1;" placeholder="บาท/เมตร">
+                    <button type="button" class="price-reset-btn" onclick="resetFencePrice('concrete')"
+                        title="รีเซ็ตราคาเริ่มต้น">↺</button>
                 </div>
             </div>
 
@@ -159,8 +226,10 @@
                     <option value="3.0">3.0 ม.</option>
                     <option value="custom">กำหนดเอง…</option>
                 </select>
-                <input type="number" class="sb-number-input" id="postSpacingBarbed" value="2.5" min="1" max="3"
-                    step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+<input type="number" class="sb-number-input" id="postSpacingBarbed" value="2.5" min="1" max="3"
+    step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
+    oninput="showSpacingHint('postSpacingBarbedHint', parseFloat(this.value))">
+<div id="postSpacingBarbedHint" class="spacing-hint" style="display:none;"></div>
 
                 <div class="sb-section-label" style="margin-top:10px;">ตัวเลือก N-Brace</div>
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;">
@@ -175,6 +244,14 @@
                     <input type="checkbox" id="nBraceAngle" style="width:16px;height:16px;accent-color:#7c3aed;">
                     <span style="font-size:12px;color:#374151;">N-Brace มุม (เสาคู่ที่มุม)</span>
                 </label>
+
+                <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <input type="number" class="sb-number-input-sm" id="barbedPricePerM" value="850"
+                        min="0" step="10" style="flex:1;" placeholder="บาท/เมตร">
+                    <button type="button" class="price-reset-btn" onclick="resetFencePrice('barbed')"
+                        title="รีเซ็ตราคาเริ่มต้น">↺</button>
+                </div>
             </div>
 
             <!-- ── BRICK OPTIONS ── -->
@@ -205,8 +282,10 @@
                     <option value="3.0">3.0 ม.</option>
                     <option value="custom">กำหนดเอง…</option>
                 </select>
-                <input type="number" class="sb-number-input" id="postSpacingBrick" value="2.5" min="1" max="5"
-                    step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)">
+<input type="number" class="sb-number-input" id="postSpacingBrick" value="2.5" min="1" max="5"
+    step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
+    oninput="showSpacingHint('postSpacingBrickHint', parseFloat(this.value))">
+<div id="postSpacingBrickHint" class="spacing-hint" style="display:none;"></div>
 
 
                 <!-- Pillar Size -->
@@ -259,6 +338,8 @@
                     <span style="font-size:11px;color:#6b7280;white-space:nowrap;">ก้อน/ม²</span>
                     <input type="number" class="sb-number-input-sm" id="brickPpm2" value="135"
                         min="1" step="0.1" style="flex:1;" placeholder="ก้อน/ม²">
+                    <button type="button" class="price-reset-btn" onclick="resetFencePrice('brick')"
+                        title="รีเซ็ตราคาเริ่มต้นตามชนิดอิฐ">↺</button>
                 </div>
 
 <div class="sb-section-label" style="margin-top:10px;">คานทับหลัง (n)</div>
@@ -348,6 +429,10 @@
             <div style="font-family:'Courier New',monospace;font-size:14px;font-weight:bold;color:#1f2937;border-bottom:2px solid #1f2937;padding-bottom:8px;margin-bottom:14px;">PLAN VIEW</div>
             <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">รายการเส้น</div>
             <div id="planLineList" style="max-height:260px;overflow-y:auto;"></div>
+
+            <!-- Materials & price summary table (per note #3: must show quantities used + total price) -->
+            <div id="planSummaryBox" style="margin-top:14px;"></div>
+
             <button onclick="togglePlanMode()" style="margin-top:16px;width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">✕ ออกจากโหมดแผน</button>
             <button id="btnDownloadPDF" style="width:100%; margin-top:10px; padding:10px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; font-size:14px;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -539,11 +624,54 @@ function switchSbTab(n) {
     }
 }
 
-        // ── Spacing pills ──
-        function setSpacing(val) {
-            const input = document.getElementById('postSpacing');
-            if (val === 'custom') { input.style.display = ''; input.focus(); }
-            else { input.value = val; input.style.display = 'none'; }
+        // ── Spacing select → show/hide custom input ───────────────────────────
+        // Each setSpacing* function reveals the number input when "custom" is
+        // chosen and hides it (restoring the preset value) otherwise.
+        // The hint div is always cleared when switching back to a preset value.
+        function _applySpacingSelect(selectVal, inputId, hintId, defaultVal) {
+            const input = document.getElementById(inputId);
+            const hint  = document.getElementById(hintId);
+            if (!input) return;
+            if (selectVal === 'custom') {
+                input.style.display = '';
+                input.focus();
+                // Show hint for current value immediately if already invalid
+                showSpacingHint(hintId, parseFloat(input.value));
+            } else {
+                input.value = parseFloat(selectVal) || defaultVal;
+                input.style.display = 'none';
+                if (hint) { hint.style.display = 'none'; hint.className = 'spacing-hint'; }
+                // Reset override whenever user picks a preset
+                if (typeof window !== 'undefined') window._spacingOverride = false;
+                if (typeof runFenceCalc === 'function') runFenceCalc();
+            }
+        }
+
+        function setSpacing(val)         { _applySpacingSelect(val, 'postSpacing',         'postSpacingHint',         2.5); }
+        function setSpacingConcrete(val) { _applySpacingSelect(val, 'postSpacingConcrete', 'postSpacingConcreteHint', 2.0); }
+
+        // ── Spacing inline hint (3 tiers) ─────────────────────────────────────
+        // Called via oninput on the custom number inputs.
+        // Renders an inline hint and resets the soft-warning override so the
+        // lockout re-engages whenever the user edits the value again.
+        function showSpacingHint(hintId, m) {
+            const el = document.getElementById(hintId);
+            if (!el) return;
+            // Any change by the user voids the previous "ignore" click
+            window._spacingOverride = false;
+            if (isNaN(m) || m < 1) {
+                el.innerHTML = '⚠️ ระยะห่างต้องมีมาตรฐานอย่างน้อย <b>1 เมตร</b> — กรุณากรอกใหม่';
+                el.className = 'spacing-hint spacing-hint-error';
+                el.style.display = '';
+            } else if (m > 3) {
+                el.innerHTML = '⚠️ ระยะห่าง <b>' + m.toFixed(2) + ' ม.</b> อาจทำให้รั้วไม่แข็งแรง';
+                el.className = 'spacing-hint spacing-hint-warn';
+                el.style.display = '';
+            } else {
+                el.style.display = 'none';
+                el.className = 'spacing-hint';
+            }
+            if (typeof runFenceCalc === 'function') runFenceCalc();
         }
 
         // Keep postSizeLength in sync with postSizeWidth (square post)
@@ -554,6 +682,13 @@ function switchSbTab(n) {
             ['sbbs2', 'sbbs3', 'sbbs4'].forEach(id => document.getElementById(id).style.display = 'none');
             var el = document.getElementById('sbbs' + this.value);
             if (el) el.style.display = '';
+        });
+
+        document.getElementById('concreteLayerSelect')?.addEventListener('change', function () {
+            ['concbs2', 'concbs3', 'concbs4'].forEach(id => document.getElementById(id).style.display = 'none');
+            var el = document.getElementById('concbs' + this.value);
+            if (el) el.style.display = '';
+            if (typeof runFenceCalc === 'function') runFenceCalc();
         });
 
         // ── Sidebar fence card selection ──
@@ -594,10 +729,12 @@ function switchSbTab(n) {
             const cowboyDiv = document.getElementById('p1CowboyOpts');
             const brickDiv = document.getElementById('p1BrickOpts');
             const barbedDiv = document.getElementById('p1BarbedOpts');
+            const concreteDiv = document.getElementById('p1ConcreteOpts');
 
             if (cowboyDiv) cowboyDiv.style.display = 'none';
             if (brickDiv) brickDiv.style.display = 'none';
             if (barbedDiv) barbedDiv.style.display = 'none';
+            if (concreteDiv) concreteDiv.style.display = 'none';
 
             // Show the selected one
             if (type === 'cowboy' && cowboyDiv) {
@@ -606,6 +743,8 @@ function switchSbTab(n) {
                 brickDiv.style.display = 'block';
             } else if (type === 'barbed' && barbedDiv) {
                 barbedDiv.style.display = 'block';
+            } else if (type === 'concrete' && concreteDiv) {
+                concreteDiv.style.display = 'block';
             }
         }
 
@@ -694,22 +833,8 @@ function setAppMode(mode) {
             allLines.forEach(ld => { if (ld.polyline && !map.hasLayer(ld.polyline)) ld.polyline.addTo(map); });
         }
 
-        function setSpacingBarbed(val) {
-            const input = document.getElementById('postSpacingBarbed');
-            if (val === 'custom') { input.style.display = ''; input.focus(); }
-            else { input.value = val; input.style.display = 'none'; }
-        }
-
-        function setSpacingBrick(val) {
-            const customInput = document.getElementById('postSpacingBrick');
-            if (val === 'custom') {
-                customInput.style.display = '';
-                customInput.focus();
-            } else {
-                customInput.value = val;
-                customInput.style.display = 'none';
-            }
-        }
+        function setSpacingBarbed(val) { _applySpacingSelect(val, 'postSpacingBarbed', 'postSpacingBarbedHint', 2.5); }
+        function setSpacingBrick(val)  { _applySpacingSelect(val, 'postSpacingBrick',  'postSpacingBrickHint',  2.5); }
 
 function setBrickHeight(val) {
     const customInput = document.getElementById('brickFenceHeight');
@@ -754,6 +879,88 @@ function setBrickHeight(val) {
         });
     </script>
     <style>
+        /* ── Spacing inline hints ──────────────────────────────────────────── */
+        .spacing-hint {
+            font-size: 11px;
+            border-radius: 6px;
+            padding: 6px 8px;
+            margin-top: 4px;
+            font-weight: 600;
+            line-height: 1.4;
+            display: none;
+        }
+        .spacing-hint-error {
+            background: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fca5a5;
+        }
+        .spacing-hint-warn {
+            background: #fef9c3;
+            color: #92400e;
+            border: 1px solid #fde047;
+        }
+
+        /* ── Warning box items ─────────────────────────────────────────────── */
+        .fw-hard {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 3px solid #dc2626;
+            padding: 6px 10px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .fw-soft {
+            background: #fef9c3;
+            color: #78350f;
+            border-left: 3px solid #f59e0b;
+            padding: 6px 10px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .fw-override-btn {
+            margin-left: auto;
+            background: #f59e0b;
+            color: #1f2937;
+            border: none;
+            border-radius: 5px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .fw-override-btn:hover { background: #d97706; }
+
+        /* Small "reset to default price" button used next to price inputs */
+        .price-reset-btn {
+            flex: 0 0 auto;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            line-height: 1;
+            background: #f3f4f6;
+            color: #dc2626;
+            border: 1.5px solid #fca5a5;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .price-reset-btn:hover {
+            background: #fee2e2;
+        }
+
         /* PDF Download Button Styling */
 #btnDownloadPDF {
     width: 100%;
