@@ -1,7 +1,7 @@
 // ============================================
 // CONCRETE FENCE — Calculation and Drawing
 // ============================================
-
+const PLAN_CONCRETE_ICON_BASE_PX = 20;
 function drawConcretePost(latlng, b, type, borderColorOverride, fillColorOverride, sizeMultiplier) {
     const userScale = window._poleScale || 1.0;
 
@@ -14,7 +14,7 @@ function drawConcretePost(latlng, b, type, borderColorOverride, fillColorOverrid
     const halfAcross = (0.15 * SCALE) / 2;
 
 if (isEndCap) {
-    const iconPx = 32 * SCALE / 5.4;
+    const iconPx = PLAN_CONCRETE_ICON_BASE_PX * userScale
     const iconUrl = (type === 'start') ? 'start.png' : 'end.png';
     // start.png/end.png's channel is at top (0°) in the source art. The
     // caller passes `b` as the OUTWARD-facing bearing along that post's own
@@ -305,8 +305,8 @@ function drawConcreteDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     // (getDualCornerOffset, not the raw un-clamped cornerOffsetX), so the
     // two brackets sit cleanly apart instead of overlapping.
     const offset = getDualCornerOffset(n > 0 ? n : 0.15, theta);
-    const userScale = window._poleScale || 1.0;
-    const iconPx = 32 * userScale; // matches a normal post's visual size
+const userScale = window._poleScale || 1.0;
+const iconPx = PLAN_CONCRETE_ICON_BASE_PX * userScale;
 
     // armRed/armBlue are each arm's OUTWARD bearing (away from the corner,
     // into that segment) — end.png's channel needs to face back along the
@@ -382,19 +382,20 @@ function drawPlanConcreteLine(lineData, idx) {
     const useDualPillar = fenceOpts.doubleCorner
         ?? (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
 
-    const n = 0.15;
-    const userScale = window._poleScale || 1.0;
-    const iconPx = Math.max(40, 32 * userScale);
+const n = 0.15;
+const userScale = window._poleScale || 1.0;
+const iconPx = PLAN_CONCRETE_ICON_BASE_PX * userScale; // Scales with white pillar boxes
 
     function drawPlanConcreteIcon(pt, iconUrl, rot) {
         L.marker(pt, {
             icon: L.divIcon({
-                className: '',
-                html: `<img src="${iconUrl}" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rot}deg);position:absolute;left:50%;top:50%;">`,
-                iconSize: [0, 0],
-                iconAnchor: [0, 0]
+                 className: 'plan-concrete-icon',  // Add unique class
+                html: `<img src="${iconUrl}" style="width:${iconPx}px !important;height:${iconPx}px !important;min-width:${iconPx}px;min-height:${iconPx}px;max-width:none !important;max-height:none !important;transform:translate(-50%,-50%) rotate(${rot}deg);position:absolute;left:50%;top:50%;">`,
+        iconSize: [iconPx, iconPx],  // Change from [0,0] to actual size
+        iconAnchor: [iconPx/2, iconPx/2]
             }),
-            zIndexOffset: 99999
+            zIndexOffset: 99999,
+            autoPan: false  // Prevent any auto-adjustments
         }).addTo(planLayerGroup);
     }
 
@@ -492,10 +493,16 @@ postDists.forEach((dist, pIdx) => {
     } else if (isTrueEnd) {
         if (sharedCorner) return;
         drawPlanConcreteIcon(pt, 'end.png', (((b + 180) % 360) + 360) % 360);
-    } else if (isMidCorner) {
-        if (sharedCorner) return; // dual-pillar pair drawn once, elsewhere
-        drawPlanPost(pt, b, true, n, 'concrete'); // single-mode corner square
+} else if (isMidCorner) {
+    if (sharedCorner) return; // dual-pillar pair drawn once, elsewhere
+    if (useDualPillar) {
+        // Dual pillar mode on: use the red/blue pair, not the plain red box
+        const outB = (i + 2 < pts.length) ? bearing(p1, pts[i + 2]) : b;
+        drawDualPair(pt, b, outB);
     } else {
+        drawPlanPost(pt, b, true, n, 'concrete'); // single-mode corner square
+    }
+} else {
         drawPlanPost(pt, b, false, n, 'concrete');
     }
 });
@@ -520,9 +527,9 @@ function drawPlanConcreteCorners() {
     const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
     if (!useDualPillar) return; // single-post corners are drawn inline by drawPlanConcreteLine
 
-    const n = 0.15;
-    const userScale = window._poleScale || 1.0;
-    const iconPx = Math.max(40, 32 * userScale);
+const n = 0.15;
+const userScale = window._poleScale || 1.0;
+const iconPx = PLAN_CONCRETE_ICON_BASE_PX * userScale; // Scales with white pillar boxes
 
     for (const [, entry] of cornerMap.entries()) {
         const arms = entry.arms.slice(0, 2);

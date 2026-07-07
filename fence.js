@@ -260,36 +260,27 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     if (!entry) return { count: 0 };
     const arms = entry.arms.slice(0, 2);
     if (arms.length < 2) {
-        drawPost(cornerPt, arms[0].outward, 'corner');
+        // Use bearing 0 so the post is axis-aligned (not rotated with the fence)
+        drawPost(cornerPt, 0, 'corner');
         return { count: 1 };
     }
-
     const [armRed, armBlue] = getCornerArms(entry);
     const theta = cornerAngle(armRed, armBlue);
     const mode = getCornerMode(cornerPt, theta);
-
     if (mode === 'single') {
-        // Bisect the two arms → single post on angle bisector
-        const bisect = (armRed + armBlue) / 2;
-        drawPost(cornerPt, bisect, 'corner');
+        // Bearing 0 = axis-aligned square, no rotation
+        drawPost(cornerPt, 0, 'corner');
         if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta);
         return { count: 1 };
     }
-
-    // mode === 'double' — use the same offset the panel-shortening code uses,
-    // so the drawn post and the shortened fence line always agree.
+    // mode === 'double'
+    // Offset still follows armBlue direction, but post itself is drawn at bearing 0
     const offset = getDualCornerOffset(n, theta);
-
-    const k = ptKey(cornerPt);
-
-    // Same pillar look as every other post (drawPost), just bigger —
-    // white fill with a red or blue outline to tell them apart.
-    drawPost(cornerPt, armRed, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
-    drawPost(offPt(cornerPt, armBlue, offset), armBlue, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
-
+    drawPost(cornerPt, 0, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+    drawPost(offPt(cornerPt, armBlue, offset), 0, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
     if (addHoverMarkers) {
+        const k = ptKey(cornerPt);
         _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue);
-        // existing ⇄ swap button
         L.marker(cornerPt, {
             icon: L.divIcon({
                 className: '',

@@ -111,30 +111,23 @@ function geoDrawCowboyCorners() {
     const scale = window._poleScale || 1.0;
     const vis = Math.max(n, 0.15) * scale * 3;
     const halfSz = vis / 2;
-
     for (const [, entry] of cornerMap.entries()) {
         const arms = entry.arms.slice(0, 2);
-
         if (arms.length < 2 || !useDualPillar) {
-            const b = arms.length >= 2 ? (arms[0].outward + arms[1].outward) / 2 : arms[0].outward;
-            drawVPost(entry.pt, b, true, n);
+            // Bearing 0 = axis-aligned post
+            drawVPost(entry.pt, 0, true, n);
             continue;
         }
-
         const [armRed, armBlue] = getCornerArms(entry);
         const theta = cornerAngle(armRed, armBlue);
         const mode = getCornerMode(entry.pt, theta);
-
         if (mode === 'single') {
-            const bisect = (armRed + armBlue) / 2;
-            drawVPost(entry.pt, bisect, true, n);
+            drawVPost(entry.pt, 0, true, n);
         } else {
-            // Same clearance offset the live map's post placement uses —
-            // must match exactly or the drawn post and the (already-
-            // shortened) panel line would visually disagree.
             const offset = getDualCornerOffset(n, theta);
-            geoRect(entry.pt, armRed, halfSz, halfSz, '#ffffff', '#dc2626');
-            geoRect(_geoOffset(entry.pt, armBlue, offset), armBlue, halfSz, halfSz, '#ffffff', '#2563eb');
+            // Posts drawn at bearing 0 (axis-aligned), offset still along armBlue
+            geoRect(entry.pt, 0, halfSz, halfSz, '#ffffff', '#dc2626');
+            geoRect(_geoOffset(entry.pt, armBlue, offset), 0, halfSz, halfSz, '#ffffff', '#2563eb');
         }
     }
 }
@@ -1012,22 +1005,18 @@ function renderPlanView() {
     // runFenceCalc() -> calcCowboy() rebuilds cornerMap from ALL cowboy
     // lines internally, which would otherwise clobber the visible-only
     // corner map that the actual plan drawing depends on.
-    if (typeof runFenceCalc === 'function') runFenceCalc();
-    if (typeof fenceLayerGroup !== 'undefined') fenceLayerGroup.clearLayers();
-
-    // Cowboy corners must be resolved using the SAME shared corner data as
-    // the map view (arm bearings, swap state, single/double mode) — never
-    // per line — otherwise two lines sharing a corner each draw their own
-    // rotated square on top of the other. Build that shared corner map from
-    // only the currently-visible cowboy lines before anything is drawn.
-const visibleCowboyLines = allLines.filter((ld, idx) => {
+if (typeof runFenceCalc === 'function') runFenceCalc();
+if (typeof fenceLayerGroup !== 'undefined') fenceLayerGroup.clearLayers();
+// Build cornerMap for ALL visible lines (cowboy + concrete + etc.) before
+// drawPlanLine, so concrete corners are properly recognized and don't
+// fall through to drawing a red box via drawPlanPost(isCorner=true).
+const allVisibleLines = allLines.filter((ld, idx) => {
     const cb = document.getElementById(`plan_cb_${idx}`);
-    return cb && cb.checked && (ld.fenceType || 'cowboy') === 'cowboy';
+    return cb && cb.checked;
 });
 if (typeof buildCornerMap === 'function') {
-    buildCornerMap(visibleCowboyLines.map(ld => ld.points));
+    buildCornerMap(allVisibleLines.map(ld => ld.points));
 }
-
 allLines.forEach((ld, idx) => {
     const cb = document.getElementById(`plan_cb_${idx}`);
     if (cb && cb.checked) drawPlanLine(ld, idx);

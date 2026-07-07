@@ -355,32 +355,29 @@ function drawPlanColorPost(pt, b, color, n) {
 // set of visible cowboy lines, so cornerMap reflects exactly what's drawn.
 function drawPlanCowboyCorners() {
     if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
-
     const dualPillarCheckbox = document.getElementById('doubleCornerPost')
         || document.getElementById('imDoubleCornerPost');
     const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
     const n = 0.15;
-
     for (const [, entry] of cornerMap.entries()) {
         const arms = entry.arms.slice(0, 2);
-
         if (arms.length < 2 || !useDualPillar) {
-            const b = arms.length >= 2 ? (arms[0].outward + arms[1].outward) / 2 : arms[0].outward;
+            // Bearing 0 = axis-aligned, not rotated with fence
+            const b = 0;
             drawPlanPost(entry.pt, b, true, n, 'cowboy');
             continue;
         }
-
         const [armRed, armBlue] = getCornerArms(entry);
         const theta = cornerAngle(armRed, armBlue);
         const mode = getCornerMode(entry.pt, theta);
-
         if (mode === 'single') {
-            const bisect = (armRed + armBlue) / 2;
-            drawPlanPost(entry.pt, bisect, true, n, 'cowboy');
+            // Bearing 0 = axis-aligned square
+            drawPlanPost(entry.pt, 0, true, n, 'cowboy');
         } else {
             const offset = getDualCornerOffset(n, theta);
-            drawPlanColorPost(entry.pt, armRed, '#dc2626', n);
-            drawPlanColorPost(offPt(entry.pt, armBlue, offset), armBlue, '#2563eb', n);
+            // Posts drawn at bearing 0 (axis-aligned), offset still along armBlue
+            drawPlanColorPost(entry.pt, 0, '#dc2626', n);
+            drawPlanColorPost(offPt(entry.pt, armBlue, offset), 0, '#2563eb', n);
         }
     }
 }
