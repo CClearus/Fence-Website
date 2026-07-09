@@ -1120,9 +1120,13 @@ function drawPlanLine(lineData, idx) {
 function drawPlanPost(pt, b, isCorner, n, fenceType) {
     const scale = window._poleScale || 1.0;
     const isBarbedEndpoint = (fenceType === 'barbed') && isCorner;
+    // Concrete corner/end posts are handled separately (start.png / end.png
+    // icons via drawPlanConcreteCorners / drawPlanConcreteLine). Drawing them
+    // red here would produce a phantom red box underneath — skip colour.
+    const isConcreteCorner = (fenceType === 'concrete') && isCorner;
     const visualN = Math.max(n, 0.15) * scale * 3;
     const halfSz = visualN / 2;
-    const color = (isCorner && !isBarbedEndpoint) ? '#dc2626' : '#ffffff';
+    const color = (isCorner && !isBarbedEndpoint && !isConcreteCorner) ? '#dc2626' : '#ffffff';
     const corners = [
         offPt(offPt(pt, b + 90, halfSz), b,        halfSz),
         offPt(offPt(pt, b - 90, halfSz), b,        halfSz),

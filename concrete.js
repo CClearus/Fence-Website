@@ -7,49 +7,24 @@ function drawConcretePost(latlng, b, type, borderColorOverride, fillColorOverrid
 
     const isEndCap = (type === 'start' || type === 'end');
     const isCorner = (type === 'corner' || type === 'endpoint');
-    const baseScale = (isCorner ? 1.6 : 5.4) * userScale;
+    const baseScale = (isCorner || isEndCap ? 1.6 : 5.4) * userScale;
     const SCALE = baseScale * (sizeMultiplier || 1);
 
     const halfAlong  = (0.15 * SCALE) / 2;
     const halfAcross = (0.15 * SCALE) / 2;
 
-if (isEndCap) {
-    const iconPx = PLAN_CONCRETE_ICON_BASE_PX * userScale
-    const iconUrl = (type === 'start') ? 'start.png' : 'end.png';
-    // start.png/end.png's channel is at top (0°) in the source art. The
-    // caller passes `b` as the OUTWARD-facing bearing along that post's own
-    // arm (for 'start': the direction back away from the fence, before we
-    // flip it here; for 'end': the direction the fence arrives FROM). Adding
-    // 180° flips the channel to face INTO the fence, so a 'start' cap
-    // rotates to align with the departing line, and an 'end' cap rotates to
-    // close up against the line arriving into it.
-    const rot = ((b + 180) % 360 + 360) % 360;
+    const borderColor = borderColorOverride || (isEndCap
+        ? (type === 'start' ? '#2563eb' : '#dc2626')
+        : (isCorner ? '#ffffff' : '#1f2937'));
+    const fillColor = fillColorOverride || (isEndCap ? '#ffffff' : (isCorner ? '#dc2626' : '#ffffff'));
 
-    const capMarker = L.marker(latlng, {
-        icon: L.divIcon({
-            className: '',
-            html: `<img src="${iconUrl}" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rot}deg);position:absolute;left:50%;top:50%;">`,
-            iconSize: [0, 0],
-            iconAnchor: [0, 0]
-        }),
-        zIndexOffset: 99999
-    }).addTo(fenceLayerGroup);
-    capMarker.setZIndexOffset(99999);
-    capMarker.bringToFront?.();
-} else {
-        // Plain box post — same look as cowboy's drawPost: white in-line
-        // posts, red corner/endpoint posts (unless overridden, e.g. for the
-        // red/blue dual-corner pair).
-        const borderColor = borderColorOverride || (isCorner ? '#ffffff' : '#1f2937');
-        const fillColor = fillColorOverride || (isCorner ? '#dc2626' : '#ffffff');
-        const webRect = [
-            offPt(offPt(latlng, b,       halfAlong), b + 90,  halfAcross),
-            offPt(offPt(latlng, b,       halfAlong), b - 90,  halfAcross),
-            offPt(offPt(latlng, b + 180, halfAlong), b - 90,  halfAcross),
-            offPt(offPt(latlng, b + 180, halfAlong), b + 90,  halfAcross),
-        ];
-        L.polygon(webRect, { color: borderColor, weight: isCorner ? 2 : 1.5, fillColor, fillOpacity: 1, opacity: 1 }).addTo(fenceLayerGroup);
-    }
+    const webRect = [
+        offPt(offPt(latlng, b,       halfAlong), b + 90,  halfAcross),
+        offPt(offPt(latlng, b,       halfAlong), b - 90,  halfAcross),
+        offPt(offPt(latlng, b + 180, halfAlong), b - 90,  halfAcross),
+        offPt(offPt(latlng, b + 180, halfAlong), b + 90,  halfAcross),
+    ];
+    L.polygon(webRect, { color: borderColor, weight: isEndCap ? 2.5 : (isCorner ? 2 : 1.5), fillColor, fillOpacity: 1, opacity: 1 }).addTo(fenceLayerGroup);
 }
 
 // ── Panel slab between two posts ─────────────────────────────────────────────
@@ -305,35 +280,16 @@ function drawConcreteDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     // (getDualCornerOffset, not the raw un-clamped cornerOffsetX), so the
     // two brackets sit cleanly apart instead of overlapping.
     const offset = getDualCornerOffset(n > 0 ? n : 0.15, theta);
-const userScale = window._poleScale || 1.0;
-const iconPx = PLAN_CONCRETE_ICON_BASE_PX * userScale;
 
     // armRed/armBlue are each arm's OUTWARD bearing (away from the corner,
-    // into that segment) — end.png's channel needs to face back along the
-    // arm it closes against, so no extra +180 flip is needed here (unlike
-    // drawConcretePost's isEndCap branch, which flips a true line-end's
-    // arriving bearing). start.png similarly just follows armBlue directly,
-    // since armBlue already points the way that segment departs.
-    const rotRed = ((armRed % 360) + 360) % 360;
-    L.marker(cornerPt, {
-        icon: L.divIcon({
-            className: '',
-            html: `<img src="end.png" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rotRed}deg);position:absolute;left:50%;top:50%;">`,
-            iconSize: [0, 0], iconAnchor: [0, 0]
-        }),
-        zIndexOffset: 99999
-    }).addTo(fenceLayerGroup);
+    // into that segment) — the red post sits right at the corner point,
+    // the blue post sits `offset` further out along armBlue. Both are drawn
+    // as plain colored-outline segment blocks via drawConcretePost (red
+    // border for 'end', blue border for 'start') — no image icons.
+    drawConcretePost(cornerPt, armRed, 'end');
 
-    const rotBlue = ((armBlue % 360) + 360) % 360;
     const bluePt = offPt(cornerPt, armBlue, offset);
-    L.marker(bluePt, {
-        icon: L.divIcon({
-            className: '',
-            html: `<img src="start.png" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rotBlue}deg);position:absolute;left:50%;top:50%;">`,
-            iconSize: [0, 0], iconAnchor: [0, 0]
-        }),
-        zIndexOffset: 99999
-    }).addTo(fenceLayerGroup);
+    drawConcretePost(bluePt, armBlue, 'start');
 
     if (addHoverMarkers) {
         _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue);
@@ -384,20 +340,27 @@ function drawPlanConcreteLine(lineData, idx) {
 
 const n = 0.15;
 const userScale = window._poleScale || 1.0;
-const iconPx = PLAN_CONCRETE_ICON_BASE_PX * userScale; // Scales with white pillar boxes
+// NEW — fixed 20px, no zoom scaling:
+const PLAN_ICON_FIXED_PX = 20; // fixed size — matches segment pillar box, no zoom dependency
 
-    function drawPlanConcreteIcon(pt, iconUrl, rot) {
-        L.marker(pt, {
-            icon: L.divIcon({
-                 className: 'plan-concrete-icon',  // Add unique class
-                html: `<img src="${iconUrl}" style="width:${iconPx}px !important;height:${iconPx}px !important;min-width:${iconPx}px;min-height:${iconPx}px;max-width:none !important;max-height:none !important;transform:translate(-50%,-50%) rotate(${rot}deg);position:absolute;left:50%;top:50%;">`,
-        iconSize: [iconPx, iconPx],  // Change from [0,0] to actual size
-        iconAnchor: [iconPx/2, iconPx/2]
-            }),
-            zIndexOffset: 99999,
-            autoPan: false  // Prevent any auto-adjustments
-        }).addTo(planLayerGroup);
-    }
+function drawPlanConcreteIcon(pt, iconUrl, rot) {
+    const scale = window._poleScale || 1.0;
+    const n = 0.15;
+    const visualN = Math.max(n, 0.15) * scale * 3;
+    const halfSz = visualN / 2;
+    const bearingDeg = rot;
+    const corners = [
+        offPt(offPt(pt, bearingDeg + 90, halfSz), bearingDeg,       halfSz),
+        offPt(offPt(pt, bearingDeg - 90, halfSz), bearingDeg,       halfSz),
+        offPt(offPt(pt, bearingDeg - 90, halfSz), bearingDeg + 180, halfSz),
+        offPt(offPt(pt, bearingDeg + 90, halfSz), bearingDeg + 180, halfSz),
+    ];
+    const borderColor = iconUrl === 'start.png' ? '#2563eb' : '#dc2626';
+    L.polygon(corners, {
+        color: borderColor, weight: 2,
+        fillColor: '#ffffff', fillOpacity: 1, opacity: 1
+    }).addTo(planLayerGroup);
+}
 
     function drawDualPair(pt, inB, outB) {
         const rotEnd   = ((inB + 180) % 360 + 360) % 360;
@@ -519,48 +482,48 @@ postDists.forEach((dist, pIdx) => {
     }
 }
 
+// NEW — red end.png at corner removed; blue start.png kept with fixed size:
 function drawPlanConcreteCorners() {
     if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
 
     const dualPillarCheckbox = document.getElementById('concreteDoubleCornerPost')
         || document.getElementById('doubleCornerPost');
     const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
-    if (!useDualPillar) return; // single-post corners are drawn inline by drawPlanConcreteLine
+    if (!useDualPillar) return;
 
-const n = 0.15;
-const userScale = window._poleScale || 1.0;
-const iconPx = PLAN_CONCRETE_ICON_BASE_PX * userScale; // Scales with white pillar boxes
+    const n = 0.15;
+    const PLAN_ICON_FIXED_PX = 20; // fixed — no zoom scaling
 
     for (const [, entry] of cornerMap.entries()) {
         const arms = entry.arms.slice(0, 2);
-        if (arms.length < 2) continue; // true line-end, handled inline
+        if (arms.length < 2) continue;
 
         const [armRed, armBlue] = getCornerArms(entry);
         const theta = cornerAngle(armRed, armBlue);
         const mode = getCornerMode(entry.pt, theta);
-        if (mode === 'single') continue; // handled inline as a normal single post
+        if (mode === 'single') continue;
 
         const offset = getDualCornerOffset(n, theta);
 
-        const rotRed = ((armRed % 360) + 360) % 360;
-        L.marker(entry.pt, {
-            icon: L.divIcon({
-                className: '',
-                html: `<img src="end.png" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rotRed}deg);position:absolute;left:50%;top:50%;">`,
-                iconSize: [0, 0], iconAnchor: [0, 0]
-            }),
-            zIndexOffset: 99999
-        }).addTo(planLayerGroup);
+        // ── RED end.png at the corner itself is intentionally removed ──
+        // In plan mode with dual fence enabled, the corner post (end.png)
+        // is replaced by a plain segment-pillar box drawn by drawPlanPost,
+        // so we only place the blue start.png at its offset position here.
 
         const rotBlue = ((armBlue % 360) + 360) % 360;
         const bluePt = offPt(entry.pt, armBlue, offset);
-        L.marker(bluePt, {
-            icon: L.divIcon({
-                className: '',
-                html: `<img src="start.png" style="width:${iconPx}px;height:${iconPx}px;transform:translate(-50%,-50%) rotate(${rotBlue}deg);position:absolute;left:50%;top:50%;">`,
-                iconSize: [0, 0], iconAnchor: [0, 0]
-            }),
-            zIndexOffset: 99999
-        }).addTo(planLayerGroup);
+const scale = window._poleScale || 1.0;
+const visualN = Math.max(n, 0.15) * scale * 3;
+const halfSz = visualN / 2;
+const bCorners = [
+    offPt(offPt(bluePt, armBlue + 90, halfSz), armBlue,       halfSz),
+    offPt(offPt(bluePt, armBlue - 90, halfSz), armBlue,       halfSz),
+    offPt(offPt(bluePt, armBlue - 90, halfSz), armBlue + 180, halfSz),
+    offPt(offPt(bluePt, armBlue + 90, halfSz), armBlue + 180, halfSz),
+];
+L.polygon(bCorners, {
+    color: '#2563eb', weight: 2,
+    fillColor: '#ffffff', fillOpacity: 1, opacity: 1
+}).addTo(planLayerGroup);
     }
 }
