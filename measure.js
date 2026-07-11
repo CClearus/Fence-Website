@@ -862,7 +862,6 @@ function metersToInches(meters) {
 // clamped to the window's edge (never left free); inside the window it
 // snaps exactly onto the target angle (0°/90°/-90°).
 
-const ANGLE_SNAP_TOLERANCE_DEG = 3;
 
 function getClampedPreviewPoint(startPoint, currentPoint, prevPoint) {
     if (prevPoint) {
@@ -871,8 +870,8 @@ function getClampedPreviewPoint(startPoint, currentPoint, prevPoint) {
         const len = Math.sqrt(dx * dx + dy * dy);
 
         if (len > 1e-10) {
-            const ux = dx / len, uy = dy / len;   // straight
-            const qx = uy,       qy = -ux;         // right perp
+            const ux = dx / len, uy = dy / len;
+            const qx = uy,       qy = -ux;
 
             const relLat = currentPoint[0] - startPoint[0];
             const relLng = currentPoint[1] - startPoint[1];
@@ -881,7 +880,7 @@ function getClampedPreviewPoint(startPoint, currentPoint, prevPoint) {
 
             const fComp = relLng * ux + relLat * uy;
             const rComp = relLng * qx + relLat * qy;
-            const theta = Math.atan2(rComp, fComp) * 180 / Math.PI; // 0=straight, +90=right, -90=left
+            const theta = Math.atan2(rComp, fComp) * 180 / Math.PI;
 
             const candidates = [0, 90, -90];
             let bestCandidate = 0, bestDelta = Infinity;
@@ -892,12 +891,8 @@ function getClampedPreviewPoint(startPoint, currentPoint, prevPoint) {
                 if (Math.abs(delta) < Math.abs(bestDelta)) { bestDelta = delta; bestCandidate = c; }
             });
 
-            // Clamp to the window's edge — angle can drift within
-            // ±3° of the right angle, but never past it.
-            const clampedDelta = Math.max(-ANGLE_SNAP_TOLERANCE_DEG, Math.min(ANGLE_SNAP_TOLERANCE_DEG, bestDelta));
-            const thetaFinal = bestCandidate + clampedDelta;
-
-            const rad = thetaFinal * Math.PI / 180;
+            // Force exactly onto the target — no ±3° drift allowed
+            const rad = bestCandidate * Math.PI / 180;
             const outLng = relLen * (Math.cos(rad) * ux + Math.sin(rad) * qx);
             const outLat = relLen * (Math.cos(rad) * uy + Math.sin(rad) * qy);
             return [startPoint[0] + outLat, startPoint[1] + outLng];
@@ -936,19 +931,29 @@ function getSnapPoint(startPoint, currentPoint, prevPoint) {
                 return { snapLat, snapLng, dist: dLat * dLat + dLng * dLng };
             });
 
+            // Force exactly onto the nearest axis — no tolerance, hard snap
             candidates.sort((a, b) => a.dist - b.dist);
             return [candidates[0].snapLat, candidates[0].snapLng];
         }
     }
 
-    const lat1 = startPoint[0], lng1 = startPoint[1];
+const lat1 = startPoint[0], lng1 = startPoint[1];
     const lat2 = currentPoint[0], lng2 = currentPoint[1];
-    const deltaLat = Math.abs(lat2 - lat1);
-    const deltaLng = Math.abs(lng2 - lng1);
-    if (deltaLat > deltaLng) return [lat2, lng1];
-    return [lat1, lng2];
+    const dLat = lat2 - lat1, dLng = lng2 - lng1;
+    const len2 = Math.sqrt(dLat * dLat + dLng * dLng);
+    if (len2 < 1e-10) return [...currentPoint];
+    const steps = [0, 45, 90, 135, 180, 225, 270, 315];
+    let best = null, bestDist = Infinity;
+    steps.forEach(deg => {
+        const rad = deg * Math.PI / 180;
+        const vLat = Math.cos(rad), vLng = Math.sin(rad);
+        const t = dLat * vLat + dLng * vLng;
+        const sLat = lat1 + t * vLat, sLng = lng1 + t * vLng;
+        const d = Math.pow(lat2 - sLat, 2) + Math.pow(lng2 - sLng, 2);
+        if (d < bestDist) { bestDist = d; best = [sLat, sLng]; }
+    });
+    return best || [...currentPoint];
 }
-
 function updateLineInfoBox() {
     const stack = document.getElementById('lineSummaryStack');
     const measureInfo = document.getElementById('measureInfo');

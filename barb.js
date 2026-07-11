@@ -49,8 +49,7 @@ let grandTotal = 0, grandPosts = 0;
 const allWarnings = [];
 let totalSharpAngles = 0, totalExtraSections = 0, totalExtraLength = 0;
 
-// Build corner map once for all barbed lines to identify bends and shared corners
-buildCornerMap(barbedLines.map(ld => ld.points));
+
 
 barbedLines.forEach(ld => {
      const linePoints = ld.points;
@@ -208,17 +207,7 @@ barbedLines.forEach(ld => {
  });
 
  // Draw corner posts at all vertices / shared corners (like cowboy fence)
- const drawnCorners = new Set();
- for (const [k, entry] of cornerMap.entries()) {
-     if (drawnCorners.has(k)) continue;
-     drawnCorners.add(k);
-     const arms = entry.arms.slice(0, 2);
-     if (arms.length >= 2) {
-         const b = (arms[0].outward + arms[1].outward) / 2;
-         drawPost(entry.pt, b, 'corner');
-         grandPosts++;
-     }
- }
+
 
  if (totalSharpAngles > 0) {
      _showSharpAngleToast(totalSharpAngles, totalExtraSections, m_barbed);
@@ -296,45 +285,55 @@ function interiorAngleAt(i) {
  });
  
  // Draw posts per segment
- const postPositions = [];
- let cumulDist = 0;
- const numSegs = pts.length - 1;
- for (let si = 0; si < numSegs; si++) {
-     const p0 = pts[si];
-     const p1 = pts[si+1];
-     const segLen = hav(p0, p1);
-     if (segLen < 0.1) { cumulDist += segLen; continue; }
-     const r_i = Math.ceil(segLen / m);
-     const dPrime = segLen / r_i;
-     for (let pi = 0; pi < r_i; pi++) {
-         const dist = cumulDist + pi * dPrime;
-         const pt = interp(pts, Math.min(dist, total));
-         const b = bearing(p0, p1);
-         const isTrueStart = (si === 0 && pi === 0);
-         drawPlanPost(pt, b, isTrueStart, 0.15, 'barbed');
-         postPositions.push({ dist, pt, b });
-     }
-     cumulDist += segLen;
- }
+// NEW — skips pi===0 on si>0 (intermediate vertices handled by bisector loop below)
+const postPositions = [];
+let cumulDist = 0;
+const numSegs = pts.length - 1;
+for (let si = 0; si < numSegs; si++) {
+    const p0 = pts[si];
+    const p1 = pts[si+1];
+    const segLen = hav(p0, p1);
+    if (segLen < 0.1) { cumulDist += segLen; continue; }
+    const r_i = Math.ceil(segLen / m);
+    const dPrime = segLen / r_i;
+    for (let pi = 0; pi < r_i; pi++) {
+        if (pi === 0 && si > 0) { postPositions.push({ dist: cumulDist, pt: p0, b: bearing(p0, p1) }); continue; } // skip — bisector loop handles this vertex
+        const dist = cumulDist + pi * dPrime;
+        const pt = interp(pts, Math.min(dist, total));
+        const b = bearing(p0, p1);
+        const isTrueStart = (si === 0 && pi === 0);
+        drawPlanPost(pt, b, isTrueStart, 0.15, 'barbed');
+        postPositions.push({ dist, pt, b });
+    }
+    cumulDist += segLen;
+}
  // Draw the very last point
  const lastPt = pts[pts.length - 1];
  const lastB = bearing(pts[pts.length - 2], lastPt);
  drawPlanPost(lastPt, lastB, true, 0.15, 'barbed');
  postPositions.push({ dist: total, pt: lastPt, b: lastB });
 
- // Draw corner posts at vertices (red squares)
- if (typeof cornerMap !== 'undefined') {
-     for (const [k, entry] of cornerMap.entries()) {
-         const isOnThisLine = pts.some(p => Math.abs(p[0] - entry.pt[0]) < 1e-5 && Math.abs(p[1] - entry.pt[1]) < 1e-5);
-         if (isOnThisLine) {
-             const arms = entry.arms.slice(0, 2);
-             if (arms.length >= 2) {
-                 const b = (arms[0].outward + arms[1].outward) / 2;
-                 drawPlanPost(entry.pt, b, true, 0.15, 'barbed');
-             }
-         }
-     }
- }
+// Draw corner posts at vertices — rotated to bisector (non-90°) or straight (90°)
+for (let i = 1; i < pts.length - 1; i++) {
+    const prev = pts[i - 1];
+    const vertex = pts[i];
+    const next = pts[i + 1];
+    const bIn  = bearing(prev, vertex);
+    const bOut = bearing(vertex, next);
+    let diff = ((bOut - bIn + 540) % 360) - 180;
+    const interiorAngle = 180 - Math.abs(diff);
+
+    let postBearing;
+    if (Math.abs(interiorAngle - 90) < 5) {
+        // 90° corner → post faces straight along incoming direction
+        postBearing = bIn;
+    } else {
+        // Non-90° corner → post faces the angle bisector (bisects interior angle)
+        const bisector = (bIn + 180 + (((bOut - (bIn + 180) + 540) % 360) / 2)) % 360;
+        postBearing = bisector;
+    }
+    drawPlanPost(vertex, postBearing, true, 0.15, 'barbed');
+}
 
 // Line label
 L.marker(pts[0], {
