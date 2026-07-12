@@ -34,6 +34,7 @@ const ANGLE_RULES = {
     let imSides      = [];   // [{ length, angle, bearingAbs }]
     let imFenceType  = 'cowboy';
     let imFreeAngle  = false; // true = cowboy angle dial unlocked from 90° steps
+    let imFreeAngleConcrete = false; // true = concrete angle dial unlocked from 90° steps
     let imLayerGroup = null; // L.layerGroup for preview lines
     let imActive     = false;
     let imOrigin     = null;
@@ -146,6 +147,7 @@ function buildPoints() {
 
     function angleStepFor(fenceType) {
         if (fenceType === 'cowboy' && imFreeAngle) return DEFAULT_ANGLE_STEP;
+        if (fenceType === 'concrete' && imFreeAngleConcrete) return DEFAULT_ANGLE_STEP;
         return (ANGLE_RULES[fenceType] || { step: DEFAULT_ANGLE_STEP }).step;
     }
 
@@ -433,7 +435,7 @@ function openAngleDial(idx, anchorEl) {
 function isForbidden(deg) {
     if (prevBearing === null) return false;
     const d = ((deg % 360) + 360) % 360;
-if (imFenceType === 'cowboy' && imFreeAngle) {
+if ((imFenceType === 'cowboy' && imFreeAngle) || (imFenceType === 'concrete' && imFreeAngleConcrete)) {
         return false; // unlocked — any angle allowed
     }
 if (imFenceType === 'cowboy' || imFenceType === 'brick' || imFenceType === 'concrete') {
@@ -1192,6 +1194,12 @@ function setIMFenceType(type) {
         <option value="6">6 ชั้น</option>
     </select>
 <div style="margin-top:12px;">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;">
+        <input type="checkbox" id="imFreeAngleToggleConcrete"
+            style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;"
+            onchange="imOnFreeAngleToggleConcrete()">
+        <span style="font-size:12px;color:#374151;">ปลดล็อคมุม (มุมไม่ตั้งฉาก)</span>
+    </label>
     <div class="sb-section-label">โหมดเสามุม</div>
     <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -1973,7 +1981,7 @@ function imOnCornerModeChange() {
         if (sharpCorner) {
             // Block the switch — revert UI back to double and inform the user
             const doubleRadio = document.getElementById(doubleRadioId);
-            if (doubleRadio) doubleRadio.checked = true;
+            if (doubleRadio) { doubleRadio.checked = true; doubleRadio.disabled = false; }
             if (globalEl) globalEl.value = 'double';
             const statusEl = document.getElementById('imStatus');
             if (statusEl) statusEl.textContent = '⚠️ ไม่สามารถใช้เสาเดียวที่มุมได้ เนื่องจากมีมุม < 120° อยู่ในรูปร่างนี้';
@@ -2009,11 +2017,47 @@ function imOnCornerModeChange() {
         // free-angle unlock — it must stay visible at all times, not just
         // after unlocking the angle dial. See imCornerModeWrap default style.
 
+        // Non-square (free-angle) mode and the dual corner post can't be
+        // used together — dual pillar placement assumes near-90° corners.
+        // Lock "double" out and force "single" (Mode 1) while unlocked.
+        const doubleRadio = document.getElementById('imCornerModeDouble');
+        const singleRadio = document.getElementById('imCornerModeSingle');
+        if (doubleRadio) doubleRadio.disabled = imFreeAngle;
+        if (imFreeAngle) {
+            if (singleRadio) singleRadio.checked = true;
+            imOnCornerModeChange();
+        } else if (doubleRadio) {
+            doubleRadio.checked = true;
+            imOnCornerModeChange();
+        }
+
         // Re-render so angle inputs/dial pick up the new step (1° vs 90°)
         renderSideList();
         redrawPreview();
     }
     window.imOnFreeAngleToggle = imOnFreeAngleToggle;
+
+    // Concrete counterpart — mirrors imOnFreeAngleToggle exactly, but for
+    // the concrete side's own free-angle checkbox and corner-mode radios.
+    function imOnFreeAngleToggleConcrete() {
+        const cb = document.getElementById('imFreeAngleToggleConcrete');
+        imFreeAngleConcrete = !!(cb && cb.checked);
+
+        const doubleRadio = document.getElementById('imConcreteCornerModeDouble');
+        const singleRadio = document.getElementById('imConcreteCornerModeSingle');
+        if (doubleRadio) doubleRadio.disabled = imFreeAngleConcrete;
+        if (imFreeAngleConcrete) {
+            if (singleRadio) singleRadio.checked = true;
+            imOnCornerModeChange();
+        } else if (doubleRadio) {
+            doubleRadio.checked = true;
+            imOnCornerModeChange();
+        }
+
+        renderSideList();
+        redrawPreview();
+    }
+    window.imOnFreeAngleToggleConcrete = imOnFreeAngleToggleConcrete;
 
 
 })();

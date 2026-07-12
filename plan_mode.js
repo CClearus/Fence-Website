@@ -71,8 +71,214 @@ function applyLockedRatio(ratio) {
     updatePlanScale();
 }
 
+async function downloadPlanPDF() {
+    const btn = document.getElementById('btnDownloadPDF');
+    if (!btn) return;
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ กำลังสร้าง PDF...';
+    
+    try {
+        if (typeof jspdf === 'undefined') throw new Error('jspdf ยังไม่ถูกโหลด');
+        if (typeof allLines === 'undefined' || allLines.length === 0) throw new Error('ยังไม่มีเส้นรั้ว กรุณาวาดก่อน');
 
-function geoBrickBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
+        let minLat = Infinity, maxLat = -Infinity;
+        let minLng = Infinity, maxLng = -Infinity;
+        allLines.forEach(ld => {
+            (ld.points || []).forEach(([la, ln]) => {
+                if (la < minLat) minLat = la; if (la > maxLat) maxLat = la;
+                if (ln < minLng) minLng = ln; if (ln > maxLng) maxLng = ln;
+            });
+        });
+        if (!isFinite(minLat)) throw new Error('ไม่พบพิกัดจากเส้นรั้ว');
+
+        const { jsPDF } = jspdf;
+        const PW = 420, PH = 297;
+        const MARGIN = 14, FOOTER_H = 10;
+        const drawW = PW - MARGIN * 2;
+        const drawH = PH - MARGIN * 2 - FOOTER_H - 8;
+
+        const R = 6378137;
+        function latToY(lat) { const s = Math.sin(lat * Math.PI / 180); return R * Math.log((1 + s) / (1 - s)) / 2; }
+        function lngToX(lng) { return R * lng * Math.PI / 180; }
+
+        const geoX0 = lngToX(minLng), geoX1 = lngToX(maxLng);
+        const geoY0 = latToY(minLat), geoY1 = latToY(maxLat);
+        const geoW  = geoX1 - geoX0 || 1;
+        const geoH  = geoY1 - geoY0 || 1;
+
+        const scaleX = drawW / geoW, scaleY = drawH / geoH;
+        const S = Math.min(scaleX, scaleY);
+        const offX = MARGIN + (drawW - geoW * S) / 2;
+        const offY = MARGIN + 8 + (drawH - geoH * S) / 2;
+
+        function project([lat, lng]) {
+            const x = offX + (lngToX(lng) - geoX0) * S;
+            const y = offY + (geoY1 - latToY(lat)) * S;
+            return [x, y];
+        }
+
+        const pdf = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a3', compress: true });
+
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, PW, PH, 'F');
+
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.2);
+        pdf.rect(MARGIN, MARGIN + 6, drawW, drawH + 2, 'S');
+
+        function hexRgb(h) {
+            const n = parseInt(h.replace('#',''), 16);
+            return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        }
+
+        function setStroke(hex, lw, dash) {
+            const [r,g,b] = hexRgb(hex);
+            pdf.setDrawColor(r, g, b);
+            pdf.setLineWidth(lw);
+            if (dash) pdf.setLineDashPattern(dash, 0);
+            else      pdf.setLineDashPattern([], 0);
+        }
+        function setFill(hex) {
+            const [r,g,b] = hexRgb(hex);
+            pdf.setFillColor(r, g, b);
+        }
+
+        function geoPolyline(pts, hex, lw, dash) {
+            if (pts.length < 2) return;
+            setStroke(hex, lw, dash);
+            const mapped = pts.map(project);
+            pdf.lines(
+                mapped.slice(1).map(([x,y], i) => [x - mapped[i][0], y - mapped[i][1]]),
+                mapped[0][0], mapped[0][1],
+                [1, 1], 'S', false
+            );
+        }
+
+        function geoRect(pt, bearingDeg, halfW, halfH, fillHex, strokeHex) {
+            const [cx, cy] = project(pt);
+            const rad = bearingDeg * Math.PI / 180;
+            const corners = [
+                [-halfW * S, -halfH * S],
+                [ halfW * S, -halfH * S],
+                [ halfW * S,  halfH * S],
+                [-halfW * S,  halfH * S],
+            ].map(([dx, dy]) => {
+                const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
+                const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
+                return [cx + rx, cy + ry];
+            });
+            const [fr, fg, fb] = hexRgb(fillHex);
+            const [sr, sg, sb] = hexRgb(strokeHex);
+            pdf.setFillColor(fr, fg, fb);
+            pdf.setDrawColor(sr, sg, sb);
+            pdf.setLineWidth(0.35);
+            pdf.setLineDashPattern([], 0);
+            pdf.lines(
+                corners.slice(1).map(([x,y],i) => [x - corners[i][0], y - corners[i][1]]),
+                corners[0][0], corners[0][1], [1,1], 'FD', true
+            );
+        }
+
+        function geoCircle(pt, rMm, fillHex, strokeHex, lw) {
+            const [x, y] = project(pt);
+            const [fr,fg,fb] = hexRgb(fillHex);
+            const [sr,sg,sb] = hexRgb(strokeHex);
+            pdf.setFillColor(fr,fg,fb);
+            pdf.setDrawColor(sr,sg,sb);
+            pdf.setLineWidth(lw || 0.3);
+            pdf.setLineDashPattern([], 0);
+            pdf.circle(x, y, rMm, 'FD');
+        }
+
+        function geoDimLine(p0, p1, offsetM, label, strokeHex) {
+            const b = _geoBearing(p0, p1);
+            const perpB = b + 90;
+            const s = _geoOffset(p0, perpB, offsetM);
+            const e = _geoOffset(p1, perpB, offsetM);
+            geoPolyline([p0, s], '#888888', 0.15, [0.8, 0.8]);
+            geoPolyline([p1, e], '#888888', 0.15, [0.8, 0.8]);
+            geoPolyline([s, e], strokeHex, 0.25, []);
+            const tk = offsetM * 0.12;
+            geoPolyline([_geoOffset(s, b, -tk), _geoOffset(s, b, tk)], strokeHex, 0.35, []);
+            geoPolyline([_geoOffset(e, b, -tk), _geoOffset(e, b, tk)], strokeHex, 0.35, []);
+            const mid = [(_geoOffset(s,perpB,0)[0]+_geoOffset(e,perpB,0)[0])/2,
+                          (_geoOffset(s,perpB,0)[1]+_geoOffset(e,perpB,0)[1])/2];
+            const [mx,my] = project(mid);
+            pdf.setFontSize(4.5);
+            pdf.setFont('Sarabun', 'bold');
+            const [tr,tg,tb] = hexRgb(strokeHex);
+            pdf.setTextColor(tr,tg,tb);
+            const tw = pdf.getTextWidth(label);
+            pdf.setFillColor(255,255,255);
+            pdf.setDrawColor(tr,tg,tb);
+            pdf.setLineWidth(0.1);
+            pdf.setLineDashPattern([],0);
+            pdf.rect(mx - tw/2 - 0.5, my - 2.2, tw + 1, 2.8, 'FD');
+            pdf.text(label, mx, my - 0.2, { align: 'center' });
+        }
+
+        function _geoBearing(p0, p1) {
+            const dLng = (p1[1] - p0[1]) * Math.cos(p0[0] * Math.PI / 180);
+            const dLat = p1[0] - p0[0];
+            return (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
+        }
+
+        function _geoOffset([lat, lng], bearingDeg, distM) {
+            const R2 = 6378137;
+            const d = distM / R2;
+            const b = bearingDeg * Math.PI / 180;
+            const lat1 = lat * Math.PI / 180;
+            const lng1 = lng * Math.PI / 180;
+            const lat2 = Math.asin(Math.sin(lat1)*Math.cos(d) + Math.cos(lat1)*Math.sin(d)*Math.cos(b));
+            const lng2 = lng1 + Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(lat1), Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
+            return [lat2 * 180 / Math.PI, lng2 * 180 / Math.PI];
+        }
+
+        function _geoHav([la0,lo0],[la1,lo1]) {
+            const R2=6378137, toR=Math.PI/180;
+            const dLa=(la1-la0)*toR, dLo=(lo1-lo0)*toR;
+            const a=Math.sin(dLa/2)**2+Math.cos(la0*toR)*Math.cos(la1*toR)*Math.sin(dLo/2)**2;
+            return R2*2*Math.asin(Math.sqrt(a));
+        }
+
+        function _geoInterp(pts, dist) {
+            let rem = dist;
+            for (let i = 0; i < pts.length - 1; i++) {
+                const segLen = _geoHav(pts[i], pts[i+1]);
+                if (rem <= segLen + 1e-9) {
+                    const t = Math.min(1, rem / (segLen || 1));
+                    return [pts[i][0] + (pts[i+1][0]-pts[i][0])*t, pts[i][1] + (pts[i+1][1]-pts[i][1])*t];
+                }
+                rem -= segLen;
+            }
+            return pts[pts.length-1];
+        }
+
+        function _geoBearingAt(pts, dist) {
+            let rem = dist;
+            for (let i = 0; i < pts.length - 1; i++) {
+                const segLen = _geoHav(pts[i], pts[i+1]);
+                if (rem <= segLen + 1e-9) return _geoBearing(pts[i], pts[i+1]);
+                rem -= segLen;
+            }
+            return _geoBearing(pts[pts.length-2], pts[pts.length-1]);
+        }
+
+        function _geoTotalLen(pts) {
+            let t = 0;
+            for (let i = 0; i < pts.length-1; i++) t += _geoHav(pts[i], pts[i+1]);
+            return t;
+        }
+
+        function drawVPost(pt, bearingDeg, isCorner, sizeM) {
+            const sc = window._poleScale || 1.0;
+            const vis = Math.max(sizeM, 0.15) * sc * 3;
+            const hSz = vis / 2;
+            geoRect(pt, bearingDeg, hSz, hSz, isCorner ? '#dc2626' : '#ffffff', '#1a1a1a');
+        }
+
+    function geoBrickBeamSymbol(bayStartPt, bayEndPt, segBearing, mode) {
     const midLat = (bayStartPt[0] + bayEndPt[0]) / 2;
     const midLng = (bayStartPt[1] + bayEndPt[1]) / 2;
     const mid = [midLat, midLng];
@@ -106,6 +312,10 @@ function geoDrawCowboyCorners() {
     if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
     const dualPillarCheckbox = document.getElementById('doubleCornerPost')
         || document.getElementById('imDoubleCornerPost');
+    // Mirrors the fix in cowboy.js's drawPlanCowboyCorners: the checkbox
+    // itself already reflects Mode 1 (single, unchecked) vs Mode 2 (dual,
+    // checked) once non-square mode's radios sync it — no separate
+    // non-square override needed.
     const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
     const n = 0.15;
     const scale = window._poleScale || 1.0;
@@ -114,20 +324,36 @@ function geoDrawCowboyCorners() {
     for (const [, entry] of cornerMap.entries()) {
         const arms = entry.arms.slice(0, 2);
         if (arms.length < 2 || !useDualPillar) {
-            // Bearing 0 = axis-aligned post
-            drawVPost(entry.pt, 0, true, n);
+            // Single post: face the angle bisector instead of staying
+            // axis-aligned, so it rotates to match non-square corners.
+            let b = 0;
+            if (arms.length >= 2) {
+                const [armRed, armBlue] = getCornerArms(entry);
+                b = bisectorBearing(armRed, armBlue);
+            }
+            drawVPost(entry.pt, b, true, n);
             continue;
         }
         const [armRed, armBlue] = getCornerArms(entry);
         const theta = cornerAngle(armRed, armBlue);
         const mode = getCornerMode(entry.pt, theta);
         if (mode === 'single') {
-            drawVPost(entry.pt, 0, true, n);
+            const b = bisectorBearing(armRed, armBlue);
+            drawVPost(entry.pt, b, true, n);
         } else {
             const offset = getDualCornerOffset(n, theta);
-            // Posts drawn at bearing 0 (axis-aligned), offset still along armBlue
-            geoRect(entry.pt, 0, halfSz, halfSz, '#ffffff', '#dc2626');
-            geoRect(_geoOffset(entry.pt, armBlue, offset), 0, halfSz, halfSz, '#ffffff', '#2563eb');
+            // Posts drawn at bearing 0 (axis-aligned), each offset along its own arm
+            const redPt = _geoOffset(entry.pt, armRed, offset);
+            const bluePt = _geoOffset(entry.pt, armBlue, offset);
+            geoRect(redPt, 0, halfSz, halfSz, '#ffffff', '#dc2626');
+            geoRect(bluePt, 0, halfSz, halfSz, '#ffffff', '#2563eb');
+            // Same x-offset labels as the interactive plan view, pushed to
+            // the outward side of each arm so they don't overlap in the
+            // notch between the two arms.
+            const redSign = cornerDimOutwardSign(armRed, armBlue);
+            const blueSign = cornerDimOutwardSign(armBlue, armRed);
+            geoDimLine(entry.pt, redPt, redSign * 0.2, offset.toFixed(2) + 'm', '#dc2626');
+            geoDimLine(entry.pt, bluePt, blueSign * 0.2, offset.toFixed(2) + 'm', '#2563eb');
         }
     }
 }
@@ -348,6 +574,39 @@ allLines.forEach((ld, idx) => {
         drawVPost(lastPt, lastB, true, 0.15);
     }
 
+    // Angle arc + label at every interior bend in the PDF
+    for (let i = 1; i < pts.length - 1; i++) {
+const pPrev = pts[i - 1], pVert = pts[i], pNext = pts[i + 1];
+const b1 = _geoBearing(pPrev, pVert);
+const b2 = _geoBearing(pVert, pNext);
+let intAngle = ((b2 - b1) + 360) % 360;
+if (intAngle > 180) intAngle = 360 - intAngle;
+
+const arcFrom = (b1 + 180) % 360;
+let s = ((b2 - arcFrom) + 360) % 360;
+if (s > 180) s -= 360;
+const R_ARC = 0.35;
+const steps = 24;
+const arcGeo = [];
+for (let k = 0; k <= steps; k++) {
+    arcGeo.push(_geoOffset(pVert, arcFrom + s * k / steps, R_ARC));
+}
+geoPolyline(arcGeo, '#1d4ed8', 0.3, []);
+
+const bisect = (arcFrom + s / 2 + 360) % 360;
+const lblPt = _geoOffset(pVert, bisect, R_ARC + 0.45);
+const [lbx, lby] = project(lblPt);
+const angleTxt = `\u2220 ${Math.round(intAngle)}\u00b0`;
+pdf.setFontSize(4); pdf.setFont('Sarabun', 'bold');
+pdf.setTextColor(29, 78, 216);
+const tw = pdf.getTextWidth(angleTxt);
+pdf.setFillColor(255, 255, 255);
+pdf.setDrawColor(29, 78, 216);
+pdf.setLineWidth(0.15);
+pdf.rect(lbx - tw / 2 - 0.4, lby - 2, tw + 0.8, 2.5, 'FD');
+pdf.text(angleTxt, lbx, lby - 0.2, { align: 'center' });
+    }
+
     const [lx, ly] = project(pts[0]);
     const colours = { cowboy:'#000000', concrete:'#000000', barbed:'#374151', brick:'#92400e' };
     const bgColours = { cowboy:'#ffffff', concrete:'#ffffff', barbed:'#f9fafb', brick:'#fff7ed' };
@@ -370,304 +629,6 @@ allLines.forEach((ld, idx) => {
 // Draw all cowboy dual/single corner posts once, after every line is done —
 // same reasoning as drawPlanCowboyCorners on the live map.
 geoDrawCowboyCorners();
-
-async function downloadPlanPDF() {
-    const btn = document.getElementById('btnDownloadPDF');
-    if (!btn) return;
-    const origText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '⏳ กำลังสร้าง PDF...';
-    
-    try {
-        if (typeof jspdf === 'undefined') throw new Error('jspdf ยังไม่ถูกโหลด');
-        if (typeof allLines === 'undefined' || allLines.length === 0) throw new Error('ยังไม่มีเส้นรั้ว กรุณาวาดก่อน');
-
-        let minLat = Infinity, maxLat = -Infinity;
-        let minLng = Infinity, maxLng = -Infinity;
-        allLines.forEach(ld => {
-            (ld.points || []).forEach(([la, ln]) => {
-                if (la < minLat) minLat = la; if (la > maxLat) maxLat = la;
-                if (ln < minLng) minLng = ln; if (ln > maxLng) maxLng = ln;
-            });
-        });
-        if (!isFinite(minLat)) throw new Error('ไม่พบพิกัดจากเส้นรั้ว');
-
-        const { jsPDF } = jspdf;
-        const PW = 420, PH = 297;
-        const MARGIN = 14, FOOTER_H = 10;
-        const drawW = PW - MARGIN * 2;
-        const drawH = PH - MARGIN * 2 - FOOTER_H - 8;
-
-        const R = 6378137;
-        function latToY(lat) { const s = Math.sin(lat * Math.PI / 180); return R * Math.log((1 + s) / (1 - s)) / 2; }
-        function lngToX(lng) { return R * lng * Math.PI / 180; }
-
-        const geoX0 = lngToX(minLng), geoX1 = lngToX(maxLng);
-        const geoY0 = latToY(minLat), geoY1 = latToY(maxLat);
-        const geoW  = geoX1 - geoX0 || 1;
-        const geoH  = geoY1 - geoY0 || 1;
-
-        const scaleX = drawW / geoW, scaleY = drawH / geoH;
-        const S = Math.min(scaleX, scaleY);
-        const offX = MARGIN + (drawW - geoW * S) / 2;
-        const offY = MARGIN + 8 + (drawH - geoH * S) / 2;
-
-        function project([lat, lng]) {
-            const x = offX + (lngToX(lng) - geoX0) * S;
-            const y = offY + (geoY1 - latToY(lat)) * S;
-            return [x, y];
-        }
-
-        const pdf = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a3', compress: true });
-
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, PW, PH, 'F');
-
-        pdf.setDrawColor(200, 200, 200);
-        pdf.setLineWidth(0.2);
-        pdf.rect(MARGIN, MARGIN + 6, drawW, drawH + 2, 'S');
-
-        function hexRgb(h) {
-            const n = parseInt(h.replace('#',''), 16);
-            return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-        }
-
-        function setStroke(hex, lw, dash) {
-            const [r,g,b] = hexRgb(hex);
-            pdf.setDrawColor(r, g, b);
-            pdf.setLineWidth(lw);
-            if (dash) pdf.setLineDashPattern(dash, 0);
-            else      pdf.setLineDashPattern([], 0);
-        }
-        function setFill(hex) {
-            const [r,g,b] = hexRgb(hex);
-            pdf.setFillColor(r, g, b);
-        }
-
-        function geoPolyline(pts, hex, lw, dash) {
-            if (pts.length < 2) return;
-            setStroke(hex, lw, dash);
-            const mapped = pts.map(project);
-            pdf.lines(
-                mapped.slice(1).map(([x,y], i) => [x - mapped[i][0], y - mapped[i][1]]),
-                mapped[0][0], mapped[0][1],
-                [1, 1], 'S', false
-            );
-        }
-
-        function geoRect(pt, bearingDeg, halfW, halfH, fillHex, strokeHex) {
-            const [cx, cy] = project(pt);
-            const rad = bearingDeg * Math.PI / 180;
-            const corners = [
-                [-halfW * S, -halfH * S],
-                [ halfW * S, -halfH * S],
-                [ halfW * S,  halfH * S],
-                [-halfW * S,  halfH * S],
-            ].map(([dx, dy]) => {
-                const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
-                const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
-                return [cx + rx, cy + ry];
-            });
-            const [fr, fg, fb] = hexRgb(fillHex);
-            const [sr, sg, sb] = hexRgb(strokeHex);
-            pdf.setFillColor(fr, fg, fb);
-            pdf.setDrawColor(sr, sg, sb);
-            pdf.setLineWidth(0.35);
-            pdf.setLineDashPattern([], 0);
-            pdf.lines(
-                corners.slice(1).map(([x,y],i) => [x - corners[i][0], y - corners[i][1]]),
-                corners[0][0], corners[0][1], [1,1], 'FD', true
-            );
-        }
-
-        function geoCircle(pt, rMm, fillHex, strokeHex, lw) {
-            const [x, y] = project(pt);
-            const [fr,fg,fb] = hexRgb(fillHex);
-            const [sr,sg,sb] = hexRgb(strokeHex);
-            pdf.setFillColor(fr,fg,fb);
-            pdf.setDrawColor(sr,sg,sb);
-            pdf.setLineWidth(lw || 0.3);
-            pdf.setLineDashPattern([], 0);
-            pdf.circle(x, y, rMm, 'FD');
-        }
-
-        function geoDimLine(p0, p1, offsetM, label, strokeHex) {
-            const b = _geoBearing(p0, p1);
-            const perpB = b + 90;
-            const s = _geoOffset(p0, perpB, offsetM);
-            const e = _geoOffset(p1, perpB, offsetM);
-            geoPolyline([p0, s], '#888888', 0.15, [0.8, 0.8]);
-            geoPolyline([p1, e], '#888888', 0.15, [0.8, 0.8]);
-            geoPolyline([s, e], strokeHex, 0.25, []);
-            const tk = offsetM * 0.12;
-            geoPolyline([_geoOffset(s, b, -tk), _geoOffset(s, b, tk)], strokeHex, 0.35, []);
-            geoPolyline([_geoOffset(e, b, -tk), _geoOffset(e, b, tk)], strokeHex, 0.35, []);
-            const mid = [(_geoOffset(s,perpB,0)[0]+_geoOffset(e,perpB,0)[0])/2,
-                          (_geoOffset(s,perpB,0)[1]+_geoOffset(e,perpB,0)[1])/2];
-            const [mx,my] = project(mid);
-            pdf.setFontSize(4.5);
-            pdf.setFont('Sarabun', 'bold');
-            const [tr,tg,tb] = hexRgb(strokeHex);
-            pdf.setTextColor(tr,tg,tb);
-            const tw = pdf.getTextWidth(label);
-            pdf.setFillColor(255,255,255);
-            pdf.setDrawColor(tr,tg,tb);
-            pdf.setLineWidth(0.1);
-            pdf.setLineDashPattern([],0);
-            pdf.rect(mx - tw/2 - 0.5, my - 2.2, tw + 1, 2.8, 'FD');
-            pdf.text(label, mx, my - 0.2, { align: 'center' });
-        }
-
-        function _geoBearing(p0, p1) {
-            const dLng = (p1[1] - p0[1]) * Math.cos(p0[0] * Math.PI / 180);
-            const dLat = p1[0] - p0[0];
-            return (Math.atan2(dLng, dLat) * 180 / Math.PI + 360) % 360;
-        }
-
-        function _geoOffset([lat, lng], bearingDeg, distM) {
-            const R2 = 6378137;
-            const d = distM / R2;
-            const b = bearingDeg * Math.PI / 180;
-            const lat1 = lat * Math.PI / 180;
-            const lng1 = lng * Math.PI / 180;
-            const lat2 = Math.asin(Math.sin(lat1)*Math.cos(d) + Math.cos(lat1)*Math.sin(d)*Math.cos(b));
-            const lng2 = lng1 + Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(lat1), Math.cos(d)-Math.sin(lat1)*Math.sin(lat2));
-            return [lat2 * 180 / Math.PI, lng2 * 180 / Math.PI];
-        }
-
-        function _geoHav([la0,lo0],[la1,lo1]) {
-            const R2=6378137, toR=Math.PI/180;
-            const dLa=(la1-la0)*toR, dLo=(lo1-lo0)*toR;
-            const a=Math.sin(dLa/2)**2+Math.cos(la0*toR)*Math.cos(la1*toR)*Math.sin(dLo/2)**2;
-            return R2*2*Math.asin(Math.sqrt(a));
-        }
-
-        function _geoInterp(pts, dist) {
-            let rem = dist;
-            for (let i = 0; i < pts.length - 1; i++) {
-                const segLen = _geoHav(pts[i], pts[i+1]);
-                if (rem <= segLen + 1e-9) {
-                    const t = Math.min(1, rem / (segLen || 1));
-                    return [pts[i][0] + (pts[i+1][0]-pts[i][0])*t, pts[i][1] + (pts[i+1][1]-pts[i][1])*t];
-                }
-                rem -= segLen;
-            }
-            return pts[pts.length-1];
-        }
-
-        function _geoBearingAt(pts, dist) {
-            let rem = dist;
-            for (let i = 0; i < pts.length - 1; i++) {
-                const segLen = _geoHav(pts[i], pts[i+1]);
-                if (rem <= segLen + 1e-9) return _geoBearing(pts[i], pts[i+1]);
-                rem -= segLen;
-            }
-            return _geoBearing(pts[pts.length-2], pts[pts.length-1]);
-        }
-
-        function _geoTotalLen(pts) {
-            let t = 0;
-            for (let i = 0; i < pts.length-1; i++) t += _geoHav(pts[i], pts[i+1]);
-            return t;
-        }
-
-        function drawVPost(pt, bearingDeg, isCorner, sizeM) {
-            const sc = window._poleScale || 1.0;
-            const vis = Math.max(sizeM, 0.15) * sc * 3;
-            const hSz = vis / 2;
-            geoRect(pt, bearingDeg, hSz, hSz, isCorner ? '#dc2626' : '#ffffff', '#1a1a1a');
-        }
-
-        allLines.forEach((ld, idx) => {
-            const pts = ld.points;
-            if (!pts || pts.length < 2) return;
-            const fenceType = ld.fenceType || 'cowboy';
-            const total = _geoTotalLen(pts);
-
-            if (fenceType === 'cowboy' || fenceType === 'concrete') {
-                geoPolyline(pts, '#1a1a1a', 0.6, []);
-                const spacing = parseFloat(document.getElementById('postSpacing')?.value) || 2.5;
-                let d = 0;
-                const postDists = [0];
-                while (d + spacing < total - 0.1) { d += spacing; postDists.push(d); }
-                postDists.push(total);
-
-                postDists.forEach((pd, pi) => {
-                    const pt = _geoInterp(pts, pd);
-                    const b  = _geoBearingAt(pts, pd);
-                    const isCorner = (pi === 0 || pi === postDists.length - 1);
-                    drawVPost(pt, b, isCorner, 0.15);
-                });
-
-                for (let i = 0; i < postDists.length - 1; i++) {
-                    const p0 = _geoInterp(pts, postDists[i]);
-                    const p1 = _geoInterp(pts, postDists[i+1]);
-                    const span = _geoHav(p0, p1);
-                    geoDimLine(p0, p1, 0.25, span.toFixed(2)+'m', '#000000');
-                }
-                for (let i = 0; i < pts.length-1; i++) {
-                    const segLen = _geoHav(pts[i], pts[i+1]);
-                    geoDimLine(pts[i], pts[i+1], 0.55, segLen.toFixed(2)+'m', '#000000');
-                } 
-            } else if (fenceType === 'barbed') {
-                const spacing = parseFloat(document.getElementById('postSpacingBarbed')?.value) || 2.5;
-                const offsets = [-0.25, 0, 0.25];
-                offsets.forEach((off, si) => {
-                    const strandPts = pts.map(p => _geoOffset(p, _geoBearing(pts[0], pts[pts.length > 1 ? 1 : 0]) + 90, off));
-                    geoPolyline(pts, '#4b5563', si===1 ? 0.5 : 0.2, si===1 ? [] : [1.2, 0.8]);
-                });
-                let d2 = 0;
-                while (d2 <= total + 1e-4) {
-                    const pt = _geoInterp(pts, Math.min(d2, total));
-                    const b  = _geoBearingAt(pts, Math.min(d2, total));
-                    const isEnd  = d2 < 1e-3 || d2 >= total - 1e-3;
-                    drawVPost(pt, b, isEnd, 0.15);
-                    d2 += spacing;
-                }
-                for (let i = 0; i < pts.length-1; i++) {
-                    const segLen = _geoHav(pts[i], pts[i+1]);
-                    geoDimLine(pts[i], pts[i+1], 0.5, segLen.toFixed(2)+'m', '#374151');
-                }
-            } else if (fenceType === 'brick') {
-                const spacing = parseFloat((document.getElementById('postSpacingBrick') || document.getElementById('imPostSpacingBrick'))?.value) || 2.5;
-                geoPolyline(pts, '#92400e', 0.9, []);
-                let cd = 0;
-                for (let si = 0; si < pts.length-1; si++) {
-                    const p0 = pts[si], p1 = pts[si+1];
-                    const segLen = _geoHav(p0, p1);
-                    const segB   = _geoBearing(p0, p1);
-                    let pCursor = cd;
-                    while (pCursor < cd + segLen - 0.1) {
-                        const pt = _geoInterp(pts, pCursor);
-                        drawVPost(pt, segB, pCursor < 0.01 || pCursor >= total-0.01, 0.15);
-                        pCursor += spacing;
-                    }
-                    geoDimLine(p0, p1, 0.55, segLen.toFixed(2)+'m', '#92400e');
-                    cd += segLen;
-                }
-                const lastPt = pts[pts.length-1];
-                const lastB  = _geoBearing(pts[pts.length-2], lastPt);
-                drawVPost(lastPt, lastB, true, 0.15);
-            }
-
-            const [lx, ly] = project(pts[0]);
-            const colours = { cowboy:'#000000', concrete:'#000000', barbed:'#374151', brick:'#92400e' };
-            const bgColours = { cowboy:'#ffffff', concrete:'#ffffff', barbed:'#f9fafb', brick:'#fff7ed' };
-            const typeNames = { cowboy:'คาวบอย', concrete:'คอนกรีต', barbed:'ลวดหนาม', brick:'อิฐ' };
-            const label = `Line ${idx+1} (${typeNames[fenceType]||fenceType})  L=${total.toFixed(1)}m`;
-            pdf.setFontSize(5.5);
-            pdf.setFont('Sarabun', 'bold');
-            const [cr,cg,cb2] = hexRgb(colours[fenceType]||'#000000');
-            pdf.setTextColor(cr,cg,cb2);
-            const lw2 = pdf.getTextWidth(label);
-            const [br2,bg2,bb2] = hexRgb(bgColours[fenceType]||'#ffffff');
-            pdf.setFillColor(br2,bg2,bb2);
-            pdf.setDrawColor(cr,cg,cb2);
-            pdf.setLineWidth(0.2);
-            pdf.setLineDashPattern([],0);
-            pdf.rect(lx+0.5, ly-4, lw2+2, 4.5, 'FD');
-            pdf.text(label, lx+1.5, ly-0.5);
-        });
 
         pdf.setFillColor(30, 41, 59);
         pdf.rect(0, 0, PW, MARGIN + 2, 'F');
@@ -1140,39 +1101,60 @@ function drawPlanPost(pt, b, isCorner, n, fenceType) {
     }).addTo(planLayerGroup);
 }
 
-function drawPlanAngle(prevPt, vertexPt, nextPt, idx) {
+function drawPlanAngle(prevPt, vertexPt, nextPt) {
+    // b1 = bearing INTO vertex, b2 = bearing OUT of vertex
     const b1 = bearing(prevPt, vertexPt);
     const b2 = bearing(vertexPt, nextPt);
-    let angle = ((b2 - b1) + 360) % 360;
-    if (angle > 180) angle = 360 - angle;
 
-    const radius = 0.4;
-    const bisectAngle = ((b1 + b2) / 2 + 360) % 360;
-    const labelPt = offPt(vertexPt, bisectAngle + 90, 0.65);
+    // Interior angle at the vertex (always 0–180)
+    let interiorAngle = ((b2 - b1) + 360) % 360;
+    if (interiorAngle > 180) interiorAngle = 360 - interiorAngle;
 
-    // Always draw arc regardless of angle value
-    const steps = 24;
+    // Arc drawn from reverse-of-incoming to outgoing direction
+    const arcFrom = (b1 + 180) % 360;  // direction back toward prevPt
+    const arcStart = arcFrom;
+    const arcEnd   = b2;                 // direction toward nextPt
+    // (shortest-path sweep direction is resolved below via `s`, so no
+    // pre-adjustment is needed here — doing it twice was corrupting arcEnd
+    // to equal arcStart for turns swept one particular rotational way,
+    // collapsing the arc to a single point.)
+
+    const radius = 0.5;
+    const steps = 32;
     const arcPts = [];
-    let startAngle = b1;
-    let endAngle = b2;
-    if (endAngle < startAngle) endAngle += 360;
+    let a0 = arcStart, a1 = arcEnd;
+    let s = ((a1 - a0) + 360) % 360;
+    if (s > 180) s -= 360;  // go shortest path
     for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const deg = startAngle + (endAngle - startAngle) * t;
+        const deg = a0 + (s * i / steps);
         arcPts.push(offPt(vertexPt, deg, radius));
     }
-    L.polyline(arcPts, { color: '#2563eb', weight: 2, opacity: 0.9, dashArray: null }).addTo(planLayerGroup);
-    L.circleMarker(vertexPt, { radius: 3, color: '#2563eb', fillColor: '#2563eb', fillOpacity: 1, weight: 1 }).addTo(planLayerGroup);
 
-    // Label box — same style as drawDimLine segment label
-L.marker(labelPt, {
-    icon: L.divIcon({
-        className: '',
-        html: `<div style="font-size:11px;color:#000;font-weight:bold;font-family:'Courier New',monospace;background:#ffffff;padding:2px 5px;border:1px solid #000;border-radius:2px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.2);">${angleDeg}°</div>`,
-        iconSize: [0, 0], iconAnchor: [0, 0]
-    }),
-    zIndexOffset: 1700
-}).addTo(planLayerGroup);
+    L.polyline(arcPts, { color: '#1d4ed8', weight: 1.5, opacity: 0.9 }).addTo(planLayerGroup);
+
+    // Small arrowhead at arc end
+    const arrowTip = arcPts[arcPts.length - 1];
+    const arrowBase = arcPts[arcPts.length - 2];
+    const arrowB = bearing(arrowBase, arrowTip);
+    const aw = 0.12;
+    L.polygon([
+        arrowTip,
+        offPt(offPt(arrowTip, arrowB + 180, aw), arrowB + 90, aw * 0.5),
+        offPt(offPt(arrowTip, arrowB + 180, aw), arrowB - 90, aw * 0.5),
+    ], { color: '#1d4ed8', fillColor: '#1d4ed8', fillOpacity: 1, weight: 0, opacity: 1 }).addTo(planLayerGroup);
+
+    // Label positioned along bisector, outside the arc
+    const bisect = (arcFrom + s / 2 + 360) % 360;
+    const labelPt = offPt(vertexPt, bisect, radius + 0.55);
+    L.marker(labelPt, {
+        icon: L.divIcon({
+            className: '',
+            html: `<div style="font-size:10px;line-height:1;color:#1d4ed8;font-weight:bold;font-family:'Courier New',monospace;background:rgba(255,255,255,0.92);padding:2px 5px;border:1px solid #1d4ed8;border-radius:2px;white-space:nowrap;">${Math.round(interiorAngle)}°</div>`,
+            iconSize: null,
+            iconAnchor: [0, 0]
+        }),
+        zIndexOffset: 1800
+    }).addTo(planLayerGroup);
 }
 
 function drawPostSizeLabel(pt, b, n, inches) {

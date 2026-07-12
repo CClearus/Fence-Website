@@ -229,6 +229,19 @@ function cornerOffsetX(n, thetaDeg) {
 // fence-line/panel shortening (cornerShortenAmount in cowboy.js) MUST use
 // this exact same value, or the panel will stop short at the wrong spot
 // relative to where the post is actually drawn.
+// For a corner dimension line running along one arm (ownArmBearing), returns
+// +1 or -1 to pick whichever perpendicular side sits away from the OTHER
+// arm. Used to push the x-offset labels out to the flanks of a corner
+// instead of into the notch between the two arms, where they'd overlap the
+// angle bisector, dashed guide lines, and each other.
+function cornerDimOutwardSign(ownArmBearing, otherArmBearing) {
+    const perpPlus = ((ownArmBearing + 90) % 360 + 360) % 360;
+    const otherNorm = ((otherArmBearing % 360) + 360) % 360;
+    let diff = Math.abs(perpPlus - otherNorm);
+    if (diff > 180) diff = 360 - diff;
+    return diff > 90 ? 1 : -1; // >90° away from the other arm = the outward side
+}
+
 function getDualCornerOffset(n, thetaDeg) {
     const userScale = window._poleScale || 1.0;
     const minVisualClearance = 0.35 * DUAL_POST_SIZE_MULTIPLIER * userScale; // scaled to match the pillar size
@@ -274,9 +287,12 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
         return { count: 1 };
     }
     // mode === 'double'
-    // Offset still follows armBlue direction, but post itself is drawn at bearing 0
+    // Both posts sit offset by x along their OWN arm — neither stays pinned
+    // to the vertex. That's what leaves the required x gap on both sides of
+    // the corner for the fence panels to stop at (see cornerShortenAmount
+    // in cowboy.js, which now shortens both arms of every corner).
     const offset = getDualCornerOffset(n, theta);
-    drawPost(cornerPt, 0, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+    drawPost(offPt(cornerPt, armRed, offset), 0, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
     drawPost(offPt(cornerPt, armBlue, offset), 0, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
     if (addHoverMarkers) {
         const k = ptKey(cornerPt);

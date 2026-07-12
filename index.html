@@ -141,11 +141,35 @@
 <div id="postSpacingHint" class="spacing-hint" style="display:none;"></div>
 
                 <div style="margin-top:12px;">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                    <label id="doubleCornerPostLabel" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
                         <input type="checkbox" id="doubleCornerPost"
-                            style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;">
+                            style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;"
+                            onchange="onDoubleCornerCheckboxChange('cowboy')">
                         <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
                     </label>
+                </div>
+
+                <div style="margin-top:12px;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="nonSquareMode"
+                            style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed;"
+                            onchange="onNonSquareModeChange('cowboy')">
+                        <span style="font-size:13px;color:#374151;">โหมดมุมไม่ตั้งฉาก (ไม่ใช่ 90°)</span>
+                    </label>
+                    <div id="nonSquareModeWrap" style="display:none;margin-top:8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;flex-direction:column;gap:6px;">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="radio" name="cornerModeRadio_cowboy" id="cornerMode1"
+                                onchange="onCornerModeRadioChange('cowboy')"
+                                style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;">
+                            <span style="font-size:12px;color:#374151;">Mode 1 — แต่งร่องเสา/ตัดปลายคาน (ใช้ได้เมื่อ θ ≥ 120°)</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="radio" name="cornerModeRadio_cowboy" id="cornerMode2"
+                                onchange="onCornerModeRadioChange('cowboy')"
+                                style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;">
+                            <span style="font-size:12px;color:#374151;">Mode 2 — ใช้เสาคู่ที่มุมต่อ (รองรับทุกมุม)</span>
+                        </label>
+                    </div>
                 </div>
 
                 <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (กว้าง, เมตร)</div>
@@ -202,11 +226,35 @@
 <div id="postSpacingConcreteHint" class="spacing-hint" style="display:none;"></div>
 
                 <div style="margin-top:12px;">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                    <label id="concreteDoubleCornerPostLabel" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
                         <input type="checkbox" id="concreteDoubleCornerPost"
-                            style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;">
+                            style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;"
+                            onchange="onDoubleCornerCheckboxChange('concrete')">
                         <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
                     </label>
+                </div>
+
+                <div style="margin-top:12px;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="nonSquareModeConcrete"
+                            style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed;"
+                            onchange="onNonSquareModeChange('concrete')">
+                        <span style="font-size:13px;color:#374151;">โหมดมุมไม่ตั้งฉาก (ไม่ใช่ 90°)</span>
+                    </label>
+                    <div id="nonSquareModeWrapConcrete" style="display:none;margin-top:8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;flex-direction:column;gap:6px;">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="radio" name="cornerModeRadio_concrete" id="cornerMode1Concrete"
+                                onchange="onCornerModeRadioChange('concrete')"
+                                style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;">
+                            <span style="font-size:12px;color:#374151;">Mode 1 — แต่งร่องเสา/ตัดปลายคาน (ใช้ได้เมื่อ θ ≥ 120°)</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="radio" name="cornerModeRadio_concrete" id="cornerMode2Concrete"
+                                onchange="onCornerModeRadioChange('concrete')"
+                                style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;">
+                            <span style="font-size:12px;color:#374151;">Mode 2 — ใช้เสาคู่ที่มุมต่อ (รองรับทุกมุม)</span>
+                        </label>
+                    </div>
                 </div>
 
                 <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (กว้าง, เมตร)</div>
@@ -669,6 +717,97 @@ function switchSbTab(n) {
         function setSpacing(val)         { _applySpacingSelect(val, 'postSpacing',         'postSpacingHint',         2.5); }
         function setSpacingConcrete(val) { _applySpacingSelect(val, 'postSpacingConcrete', 'postSpacingConcreteHint', 2.0); }
 
+        // ── Non-square (non-90°) angle mode — corner-mode elements ─────────────
+        // Small lookup so every corner-mode helper below shares the exact same
+        // element ids for a given fence type instead of re-deriving them.
+        function _cornerModeEls(type) {
+            const isConcrete = (type === 'concrete');
+            return {
+                isConcrete,
+                nonSquareCb: document.getElementById(isConcrete ? 'nonSquareModeConcrete' : 'nonSquareMode'),
+                wrap:        document.getElementById(isConcrete ? 'nonSquareModeWrapConcrete' : 'nonSquareModeWrap'),
+                dualCb:      document.getElementById(isConcrete ? 'concreteDoubleCornerPost' : 'doubleCornerPost'),
+                dualLabel:   document.getElementById(isConcrete ? 'concreteDoubleCornerPostLabel' : 'doubleCornerPostLabel'),
+                mode1:       document.getElementById(isConcrete ? 'cornerMode1Concrete' : 'cornerMode1'),
+                mode2:       document.getElementById(isConcrete ? 'cornerMode2Concrete' : 'cornerMode2'),
+            };
+        }
+
+        // Single source of truth for the 3-way link between Mode 1 (single
+        // corner post), Mode 2 (dual corner post — works at any angle, per
+        // the x = n/(2·tan(θ/2)) + n/2 formula already implemented in
+        // getDualCornerOffset), and the top-level "ใช้เสา 2 ต้นที่มุมต่อ"
+        // checkbox. `mode` is 'single' or 'double'.
+        //
+        //   mode === 'single' → Mode 1 selected, dualCb forced OFF + greyed
+        //   mode === 'double' → Mode 2 selected, dualCb forced ON  + greyed
+        //
+        // dualCb is always locked (non-interactive) while non-square mode is
+        // on, since in that context its value is entirely derived from which
+        // radio is selected — Mode 1 and Mode 2 remain freely toggleable so
+        // the user can always switch between them.
+        function setCornerModeSelection(type, mode) {
+            const els = _cornerModeEls(type);
+            if (!els.mode1 || !els.mode2) return;
+            els.mode1.checked = (mode === 'single');
+            els.mode2.checked = (mode === 'double');
+            if (els.dualCb) {
+                els.dualCb.checked  = (mode === 'double');
+                els.dualCb.disabled = true;
+                if (els.dualLabel) {
+                    els.dualLabel.style.opacity       = '0.4';
+                    els.dualLabel.style.pointerEvents = 'none';
+                    els.dualLabel.style.cursor        = 'not-allowed';
+                }
+            }
+            if (typeof runFenceCalc === 'function') runFenceCalc();
+        }
+
+        // Fires when the user clicks either radio directly.
+        function onCornerModeRadioChange(type) {
+            const els = _cornerModeEls(type);
+            const mode = (els.mode2 && els.mode2.checked) ? 'double' : 'single';
+            setCornerModeSelection(type, mode);
+        }
+
+        // Fires on the top-level "ใช้เสา 2 ต้นที่มุมต่อ" checkbox. Only
+        // reachable when non-square mode is OFF (it's locked/disabled while
+        // non-square mode is on) — used here purely to remember the user's
+        // preference so that turning non-square mode on afterwards can pick
+        // it up as the starting mode (see onNonSquareModeChange below).
+        function onDoubleCornerCheckboxChange(type) {
+            if (typeof runFenceCalc === 'function') runFenceCalc();
+        }
+
+        // Ticking "โหมดมุมไม่ตั้งฉาก" reveals the Mode 1 / Mode 2 radios and
+        // hands control of "ใช้เสา 2 ต้นที่มุมต่อ" over to whichever radio is
+        // selected. The starting radio is chosen from whatever the double-
+        // corner-post checkbox already was: if the user had it checked
+        // (square-corner dual-post fence) before switching to non-square
+        // mode, Mode 2 starts selected; otherwise Mode 1 does. Turning
+        // non-square mode back off restores full control of the checkbox to
+        // the user, leaving it at whatever the last selected mode set it to.
+        function onNonSquareModeChange(type) {
+            const els = _cornerModeEls(type);
+            const on = !!(els.nonSquareCb && els.nonSquareCb.checked);
+
+            if (els.wrap) els.wrap.style.display = on ? 'flex' : 'none';
+
+            if (on) {
+                const startMode = (els.dualCb && els.dualCb.checked) ? 'double' : 'single';
+                setCornerModeSelection(type, startMode); // also runs fence calc
+            } else {
+                if (els.dualCb) {
+                    els.dualCb.disabled = false;
+                    if (els.dualLabel) {
+                        els.dualLabel.style.opacity       = '';
+                        els.dualLabel.style.pointerEvents = '';
+                        els.dualLabel.style.cursor        = '';
+                    }
+                }
+                if (typeof runFenceCalc === 'function') runFenceCalc();
+            }
+        }
         // ── Spacing inline hint (3 tiers) ─────────────────────────────────────
         // Called via oninput on the custom number inputs.
         // Renders an inline hint and resets the soft-warning override so the

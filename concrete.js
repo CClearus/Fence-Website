@@ -109,20 +109,10 @@ function drawConcreteFence(linePoints, m, n, splitAtStart, doubleCorner, lineCol
     let cumulDist = 0;
     let postIndex = 0; // used to alternate bracket direction
 
-    function blueArmFacesInto(cornerPt, towardPt) {
-        const entry = cornerMap.get(ptKey(cornerPt));
-        if (!entry || entry.arms.length < 2) return false;
-        const k = ptKey(cornerPt);
-        const arms = entry.arms.slice(0, 2);
-        const isSwapped = swappedCorners.get(k) || false;
-        const blueArm = isSwapped ? arms[0] : arms[1];
-        const segDir = bearing(cornerPt, towardPt);
-        const a = ((blueArm.outward % 360) + 360) % 360;
-        const b2 = ((segDir % 360) + 360) % 360;
-        let diff = Math.abs(a - b2);
-        if (diff > 180) diff = 360 - diff;
-        return diff < 90;
-    }
+    // A corner shortens BOTH of its arms — a single bisector post needs
+    // clearance on both sides, and a dual (red+blue) post sits offset
+    // along BOTH arms (see drawConcreteDoubleCornerPost), not just one.
+    // (Mirrors the same fix already applied to cowboy.js.)
 
     for (let si = 0; si < numSegs; si++) {
         const p0 = linePoints[si], p1 = linePoints[si + 1];
@@ -132,8 +122,8 @@ function drawConcreteFence(linePoints, m, n, splitAtStart, doubleCorner, lineCol
         if (si > 0 || closed) B_i++;
         if (si < numSegs - 1 || closed) B_i++;
 
-        const startIsDC = doubleCorner && isCornerPoint(p0) && blueArmFacesInto(p0, p1);
-        const endIsDC   = doubleCorner && isCornerPoint(p1) && blueArmFacesInto(p1, p0);
+        const startIsDC = doubleCorner && isCornerPoint(p0);
+        const endIsDC   = doubleCorner && isCornerPoint(p1);
 
         // Mirrors cowboy's cornerShortenAmount: respects whichever mode
         // (single bisector post vs double red/blue pair) this specific
@@ -281,12 +271,15 @@ function drawConcreteDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     // two brackets sit cleanly apart instead of overlapping.
     const offset = getDualCornerOffset(n > 0 ? n : 0.15, theta);
 
-    // armRed/armBlue are each arm's OUTWARD bearing (away from the corner,
-    // into that segment) — the red post sits right at the corner point,
-    // the blue post sits `offset` further out along armBlue. Both are drawn
-    // as plain colored-outline segment blocks via drawConcretePost (red
-    // border for 'end', blue border for 'start') — no image icons.
-    drawConcretePost(cornerPt, armRed, 'end');
+    // Both posts sit offset by x along their OWN arm — neither stays
+    // pinned to the vertex. That's what leaves the required x gap on both
+    // sides of the corner for the panels to stop at (see
+    // cornerShortenAmount above, which now shortens both arms of every
+    // corner). Both are drawn as plain colored-outline segment blocks via
+    // drawConcretePost (red border for 'end', blue border for 'start') —
+    // no image icons.
+    const redPt = offPt(cornerPt, armRed, offset);
+    drawConcretePost(redPt, armRed, 'end');
 
     const bluePt = offPt(cornerPt, armBlue, offset);
     drawConcretePost(bluePt, armBlue, 'start');
@@ -379,21 +372,7 @@ function drawPlanConcreteIcon(pt, iconUrl, rot) {
     // raw segment length straight into calcConcretePanels, so its leftover
     // "split" panel near a corner was the wrong size and its dimension
     // label ended up sitting on top of the corner post / total-length label.
-    function blueArmFacesInto(cornerPt, towardPt) {
-        const entry = cornerMap.get(ptKey(cornerPt));
-        if (!entry || entry.arms.length < 2) return false;
-        const k = ptKey(cornerPt);
-        const arms = entry.arms.slice(0, 2);
-        const isSwapped = swappedCorners.get(k) || false;
-        const blueArm = isSwapped ? arms[0] : arms[1];
-        const segDir = bearing(cornerPt, towardPt);
-        const a = ((blueArm.outward % 360) + 360) % 360;
-        const b2 = ((segDir % 360) + 360) % 360;
-        let diff = Math.abs(a - b2);
-        if (diff > 180) diff = 360 - diff;
-        return diff < 90;
-    }
-
+    // A corner shortens BOTH of its arms (mirrors the map view / cowboy.js).
     function cornerShortenAmount(cornerPt) {
         const entry = cornerMap.get(ptKey(cornerPt));
         if (!entry) return 0;
@@ -413,8 +392,8 @@ function drawPlanConcreteIcon(pt, iconUrl, rot) {
         const segLen = hav(p0, p1);
         const b = bearing(p0, p1);
 
-        const startIsDC = useDualPillar && isCornerPoint(p0) && blueArmFacesInto(p0, p1);
-        const endIsDC   = useDualPillar && isCornerPoint(p1) && blueArmFacesInto(p1, p0);
+        const startIsDC = useDualPillar && isCornerPoint(p0);
+        const endIsDC   = useDualPillar && isCornerPoint(p1);
         const leftOff  = startIsDC ? cornerShortenAmount(p0) : 0;
         const rightOff = endIsDC   ? cornerShortenAmount(p1) : 0;
         const panelSpace = Math.max(0, segLen - leftOff - rightOff);
@@ -479,9 +458,11 @@ postDists.forEach((dist, pIdx) => {
         }
 drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
 
-        // First 2 posts of this side get their own footprint-length label,
-        // mirrored to the inner side (opposite the outward length above).
-        postDists.slice(0, 2).forEach(dist => {
+        // Only the FIRST post of this side gets its own footprint-length
+        // label — every post is the same size, so repeating it per post
+        // was just noise. Mirrored to the inner side (opposite the
+        // outward length above).
+        postDists.slice(0, 1).forEach(dist => {
             drawPostLengthLabel(pts, dAcc + dist, n, '#000');
         });
 
@@ -489,14 +470,28 @@ drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '
     }
 }
 
-// NEW — red end.png at corner removed; blue start.png kept with fixed size:
+// Shared by concrete.js and cowboy.js (concrete.js loads first) — returns
+// the bearing that bisects the angle between two arm bearings, so a
+// single corner post can rotate to face non-square corners instead of
+// staying axis-aligned.
+function bisectorBearing(b1, b2) {
+    b1 = ((b1 % 360) + 360) % 360;
+    b2 = ((b2 % 360) + 360) % 360;
+    let diff = b2 - b1;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    return ((b1 + diff / 2) % 360 + 360) % 360;
+}
+
 function drawPlanConcreteCorners() {
     if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
 
     const dualPillarCheckbox = document.getElementById('concreteDoubleCornerPost')
         || document.getElementById('doubleCornerPost');
-    const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
-    if (!useDualPillar) return;
+    const nonSquareCheckbox = document.getElementById('nonSquareModeConcrete')
+        || document.getElementById('imFreeAngleToggleConcrete');
+    const nonSquareOn = !!(nonSquareCheckbox && nonSquareCheckbox.checked);
+    const useDualPillar = !nonSquareOn && (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
 
     const n = 0.15;
     const PLAN_ICON_FIXED_PX = 20; // fixed — no zoom scaling
@@ -507,30 +502,61 @@ function drawPlanConcreteCorners() {
 
         const [armRed, armBlue] = getCornerArms(entry);
         const theta = cornerAngle(armRed, armBlue);
+
+        // Single-mode corner (dual pillar off): one post rotated to face
+        // the angle bisector. Drawn even for a corner shared between two
+        // lines — previously this function returned early whenever dual
+        // pillar was off, so shared single-mode corners drew nothing.
+        if (!useDualPillar) {
+            const b = bisectorBearing(armRed, armBlue);
+            drawPlanPost(entry.pt, b, true, n, 'concrete');
+            continue;
+        }
+
         const mode = getCornerMode(entry.pt, theta);
-        if (mode === 'single') continue;
+        if (mode === 'single') {
+            const b = bisectorBearing(armRed, armBlue);
+            drawPlanPost(entry.pt, b, true, n, 'concrete');
+            continue;
+        }
 
         const offset = getDualCornerOffset(n, theta);
+        const scale = window._poleScale || 1.0;
+        const visualN = Math.max(n, 0.15) * scale * 3;
+        const halfSz = visualN / 2;
 
-        // ── RED end.png at the corner itself is intentionally removed ──
-        // In plan mode with dual fence enabled, the corner post (end.png)
-        // is replaced by a plain segment-pillar box drawn by drawPlanPost,
-        // so we only place the blue start.png at its offset position here.
+        function drawCornerBox(pt, armBearing, color) {
+            const b2 = ((armBearing % 360) + 360) % 360;
+            const corners = [
+                offPt(offPt(pt, b2 + 90, halfSz), b2,       halfSz),
+                offPt(offPt(pt, b2 - 90, halfSz), b2,       halfSz),
+                offPt(offPt(pt, b2 - 90, halfSz), b2 + 180, halfSz),
+                offPt(offPt(pt, b2 + 90, halfSz), b2 + 180, halfSz),
+            ];
+            L.polygon(corners, {
+                color, weight: 2,
+                fillColor: '#ffffff', fillOpacity: 1, opacity: 1
+            }).addTo(planLayerGroup);
+        }
 
-        const rotBlue = ((armBlue % 360) + 360) % 360;
+        // Both posts sit offset by x along their OWN arm — the red post
+        // was previously left pinned to the vertex (and never actually
+        // drawn here at all), which is what made the concrete dual-corner
+        // look broken compared to the cowboy fence. Mirrors
+        // drawPlanCowboyCorners exactly.
+        const redPt = offPt(entry.pt, armRed, offset);
         const bluePt = offPt(entry.pt, armBlue, offset);
-const scale = window._poleScale || 1.0;
-const visualN = Math.max(n, 0.15) * scale * 3;
-const halfSz = visualN / 2;
-const bCorners = [
-    offPt(offPt(bluePt, armBlue + 90, halfSz), armBlue,       halfSz),
-    offPt(offPt(bluePt, armBlue - 90, halfSz), armBlue,       halfSz),
-    offPt(offPt(bluePt, armBlue - 90, halfSz), armBlue + 180, halfSz),
-    offPt(offPt(bluePt, armBlue + 90, halfSz), armBlue + 180, halfSz),
-];
-L.polygon(bCorners, {
-    color: '#2563eb', weight: 2,
-    fillColor: '#ffffff', fillOpacity: 1, opacity: 1
-}).addTo(planLayerGroup);
+        drawCornerBox(redPt, armRed, '#dc2626');
+        drawCornerBox(bluePt, armBlue, '#2563eb');
+
+        // Label the x offset from the true corner vertex to each post,
+        // pushed to the outward side of each arm (away from the other
+        // arm) so it doesn't land in the crowded notch between them.
+        if (typeof drawDimLine === 'function' && typeof cornerDimOutwardSign === 'function') {
+            const redSign = cornerDimOutwardSign(armRed, armBlue);
+            const blueSign = cornerDimOutwardSign(armBlue, armRed);
+            drawDimLine(entry.pt, redPt, redSign * 0.2, offset.toFixed(2) + 'm', '#dc2626');
+            drawDimLine(entry.pt, bluePt, blueSign * 0.2, offset.toFixed(2) + 'm', '#2563eb');
+        }
     }
 }

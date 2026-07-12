@@ -65,20 +65,12 @@ function drawCowboyFence(linePoints, m, n, splitAtStart, doubleCorner, lineColor
     // included).
     const segGeom = [];
 
-   function blueArmFacesInto(cornerPt, towardPt) {
-    const entry = cornerMap.get(ptKey(cornerPt));
-    if (!entry || entry.arms.length < 2) return false;
-    const k = ptKey(cornerPt);
-    const arms = entry.arms.slice(0, 2);
-    const isSwapped = swappedCorners.get(k) || false;
-    const blueArm = isSwapped ? arms[0] : arms[1];
-    const segDir = bearing(cornerPt, towardPt);
-    const a = ((blueArm.outward % 360) + 360) % 360;
-    const b2 = ((segDir % 360) + 360) % 360;
-    let diff = Math.abs(a - b2);
-    if (diff > 180) diff = 360 - diff;
-    return diff < 1; // must match blue arm's own bearing, not just be within 90°
-}
+    // A corner shortens BOTH of its arms — a single bisector post needs
+    // clearance on both sides, and a dual (red+blue) post now sits offset
+    // along BOTH arms (see drawDoubleCornerPost), not just one. This used
+    // to be gated by "is this the blue arm", which only ever shortened one
+    // side of a corner and left the other arm's panel running straight
+    // into the vertex — that was the dual-corner-not-moving-away bug.
 
     for (let si = 0; si < numSegs; si++) {
         const p0 = linePoints[si], p1 = linePoints[si+1];
@@ -98,8 +90,8 @@ function cornerShortenAmount(cornerPt, n) {
     return getDualCornerOffset(n, theta); // double post — must match drawDoubleCornerPost's post placement exactly
 }
 
-const startIsDC = doubleCorner && isCornerPoint(p0) && blueArmFacesInto(p0, p1);
-const endIsDC = doubleCorner && isCornerPoint(p1) && blueArmFacesInto(p1, p0);
+const startIsDC = doubleCorner && isCornerPoint(p0);
+const endIsDC = doubleCorner && isCornerPoint(p1);
 
 const n_post = 0.15; // post size in metres
 const leftOff = startIsDC ? cornerShortenAmount(p0, n_post) : 0;
@@ -315,13 +307,22 @@ function drawPlanCowboyLine(lineData, idx) {
         }
        drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
 
-        // First 2 posts of this side get their own footprint-length label,
-        // mirrored to the inner side (opposite the outward length above).
-        poleDists.slice(0, 2).forEach(dist => {
+        // Only the FIRST post of this side gets its own footprint-length
+        // label — every post is the same size, so repeating it per post was
+        // just noise. Mirrored to the inner side (opposite the outward
+        // length above).
+        poleDists.slice(0, 1).forEach(dist => {
             drawPostLengthLabel(pts, dAcc + dist, n, '#000');
         });
 
         dAcc += segLen;
+        
+    }
+    // Draw interior angle at every bend point (not at start/end endpoints)
+    for (let i = 1; i < pts.length - 1; i++) {
+        if (typeof drawPlanAngle === 'function') {
+            drawPlanAngle(pts[i - 1], pts[i], pts[i + 1]);
+        }
     }
 }
 
@@ -364,13 +365,23 @@ function drawPlanCowboyCorners() {
     if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
     const dualPillarCheckbox = document.getElementById('doubleCornerPost')
         || document.getElementById('imDoubleCornerPost');
+    // The checkbox itself is now the single source of truth: in non-square
+    // mode it's driven by the Mode 1 / Mode 2 radio (see
+    // setCornerModeSelection in index.html) — checked means Mode 2 (dual
+    // corner post, valid at any angle), unchecked means Mode 1 (single
+    // post). No separate non-square override needed here anymore.
     const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
     const n = 0.15;
     for (const [, entry] of cornerMap.entries()) {
         const arms = entry.arms.slice(0, 2);
         if (arms.length < 2 || !useDualPillar) {
-            // Bearing 0 = axis-aligned, not rotated with fence
-            const b = 0;
+            // Single post: face the angle bisector instead of staying
+            // axis-aligned, so it rotates to match non-square corners.
+            let b = 0;
+            if (arms.length >= 2) {
+                const [armRed, armBlue] = getCornerArms(entry);
+                b = bisectorBearing(armRed, armBlue);
+            }
             drawPlanPost(entry.pt, b, true, n, 'cowboy');
             continue;
         }
@@ -378,13 +389,23 @@ function drawPlanCowboyCorners() {
         const theta = cornerAngle(armRed, armBlue);
         const mode = getCornerMode(entry.pt, theta);
         if (mode === 'single') {
-            // Bearing 0 = axis-aligned square
-            drawPlanPost(entry.pt, 0, true, n, 'cowboy');
+            const b = bisectorBearing(armRed, armBlue);
+            drawPlanPost(entry.pt, b, true, n, 'cowboy');
         } else {
             const offset = getDualCornerOffset(n, theta);
-            // Posts drawn at bearing 0 (axis-aligned), offset still along armBlue
-            drawPlanColorPost(entry.pt, 0, '#dc2626', n);
-            drawPlanColorPost(offPt(entry.pt, armBlue, offset), 0, '#2563eb', n);
+            const redPt = offPt(entry.pt, armRed, offset);
+            const bluePt = offPt(entry.pt, armBlue, offset);
+            drawPlanColorPost(redPt, 0, '#dc2626', n);
+            drawPlanColorPost(bluePt, 0, '#2563eb', n);
+            // Label the x offset from the true corner vertex to each post,
+            // pushed to the outward side of each arm (away from the other
+            // arm) so it doesn't land in the crowded notch between them.
+            if (typeof drawDimLine === 'function') {
+                const redSign = cornerDimOutwardSign(armRed, armBlue);
+                const blueSign = cornerDimOutwardSign(armBlue, armRed);
+                drawDimLine(entry.pt, redPt, redSign * 0.2, offset.toFixed(2) + 'm', '#dc2626');
+                drawDimLine(entry.pt, bluePt, blueSign * 0.2, offset.toFixed(2) + 'm', '#2563eb');
+            }
         }
     }
 }

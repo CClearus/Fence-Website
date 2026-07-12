@@ -12,9 +12,56 @@ let tempSegmentLabels = [];
 // Fence type tracking
 let selectedFenceType = null;
 function isCowboyFence() { return selectedFenceType === 'cowboy'; }
-// Fence types that must snap to 90° increments while drawing on the map
+
+// Returns true when Mode 1 (non-square / ≥120° corner mode) is active
+// for whichever fence type is currently selected.
+function isNonSquareModeOn() {
+    if (selectedFenceType === 'cowboy') {
+        const wrap = document.getElementById('nonSquareModeWrap');
+        return !!(wrap && wrap.style.display !== 'none');
+    }
+    if (selectedFenceType === 'concrete') {
+        const wrap = document.getElementById('nonSquareModeWrapConcrete');
+        return !!(wrap && wrap.style.display !== 'none');
+    }
+    return false;
+}
+
+// Returns true when Mode 1 (single bisector post) is the active corner
+// mode for whichever fence type is currently selected, and false for
+// Mode 2 (dual red/blue post). Same source of truth as the map/plan/PDF
+// corner drawing: the "double corner post" checkbox — checked = Mode 2,
+// unchecked = Mode 1 — scoped per fence type and, when available, via
+// _activeCornerCheckbox() so Input Mode (page 2) reads its own checkbox
+// instead of page 1's.
+function isMode1Active() {
+    if (!isNonSquareModeOn()) return false;
+    let dcEl;
+    if (selectedFenceType === 'cowboy') {
+        dcEl = typeof _activeCornerCheckbox === 'function'
+            ? _activeCornerCheckbox('doubleCornerPost', 'imDoubleCornerPost')
+            : (document.getElementById('doubleCornerPost') || document.getElementById('imDoubleCornerPost'));
+    } else if (selectedFenceType === 'concrete') {
+        dcEl = typeof _activeCornerCheckbox === 'function'
+            ? _activeCornerCheckbox('concreteDoubleCornerPost', 'imConcreteDoubleCorner')
+            : (document.getElementById('concreteDoubleCornerPost') || document.getElementById('imConcreteDoubleCorner'));
+    } else {
+        return false;
+    }
+    return dcEl ? !dcEl.checked : true;
+}
+
+// Fence types that must snap to 90° increments while drawing on the map.
+// When Mode 1 is active the user is explicitly working with non-90° angles,
+// so we lift the 90° restriction and allow 120° snapping instead.
 function forces90deg() {
+    if (isNonSquareModeOn()) return false;
     return selectedFenceType === 'cowboy' || selectedFenceType === 'concrete';
+}
+
+function forcesMode1snap() {
+    return isMode1Active() &&
+           (selectedFenceType === 'cowboy' || selectedFenceType === 'concrete');
 }
 
 // Max 1 connection per dot (counts how many lines use this point as endpoint)
@@ -882,16 +929,27 @@ function getClampedPreviewPoint(startPoint, currentPoint, prevPoint) {
             const rComp = relLng * qx + relLat * qy;
             const theta = Math.atan2(rComp, fComp) * 180 / Math.PI;
 
+            if (forcesMode1snap()) {
+                // Mode 1: free drawing allowed between -60° and +60°
+                // (interior angle 120°–240° on unit circle).
+                // If cursor goes outside that zone, clamp hard to the nearest boundary.
+                const clamped = Math.max(-60, Math.min(60, theta));
+                const rad = clamped * Math.PI / 180;
+                const outLng = relLen * (Math.cos(rad) * ux + Math.sin(rad) * qx);
+                const outLat = relLen * (Math.cos(rad) * uy + Math.sin(rad) * qy);
+                return [startPoint[0] + outLat, startPoint[1] + outLng];
+            }
+
+            // Normal 90° mode: snap to exactly 0°, +90°, or -90°
             const candidates = [0, 90, -90];
             let bestCandidate = 0, bestDelta = Infinity;
             candidates.forEach(c => {
                 let delta = theta - c;
-                while (delta > 180) delta -= 360;
+                while (delta > 180)  delta -= 360;
                 while (delta <= -180) delta += 360;
                 if (Math.abs(delta) < Math.abs(bestDelta)) { bestDelta = delta; bestCandidate = c; }
             });
 
-            // Force exactly onto the target — no ±3° drift allowed
             const rad = bestCandidate * Math.PI / 180;
             const outLng = relLen * (Math.cos(rad) * ux + Math.sin(rad) * qx);
             const outLat = relLen * (Math.cos(rad) * uy + Math.sin(rad) * qy);
@@ -942,7 +1000,10 @@ const lat1 = startPoint[0], lng1 = startPoint[1];
     const dLat = lat2 - lat1, dLng = lng2 - lng1;
     const len2 = Math.sqrt(dLat * dLat + dLng * dLng);
     if (len2 < 1e-10) return [...currentPoint];
-    const steps = [0, 45, 90, 135, 180, 225, 270, 315];
+    // Mode 1: add 60° and 120° family to the cardinal/diagonal grid
+const steps = isMode1Active()
+    ? [0, 60, 120, 180, 240, 300]
+    : [0, 45, 90, 135, 180, 225, 270, 315];
     let best = null, bestDist = Infinity;
     steps.forEach(deg => {
         const rad = deg * Math.PI / 180;
@@ -1211,10 +1272,10 @@ if (isClosing && currentLine.points.length >= 3) {
 
             // Cowboy: force 90° from 2nd segment onward (relative to prev segment); Shift: always snap
 // AFTER:
-if (refPt && (shiftPressed || (forces90deg() && currentLine.points.length >= 2))) {
-                const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
-                clickPoint = getSnapPoint(refPt, clickPoint, prevPt);
-            }
+if (refPt && (shiftPressed || (forces90deg() && currentLine.points.length >= 2) || (forcesMode1snap() && currentLine.points.length >= 2))) {
+    const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
+    clickPoint = getClampedPreviewPoint(refPt, clickPoint, prevPt);
+}
 
             currentLine.points.push(clickPoint);
             const newMarker = addMarkerToLine(clickPoint, currentLine);
@@ -1259,9 +1320,12 @@ map.on('mousemove', function (e) {
             ? currentLine.points[currentLine.points.length - 1] : null;
 
         // Snap: cowboy forces 90° from 2nd segment (relative to prev segment), Shift always snaps
-if (referencePoint && (shiftPressed || (forces90deg() && currentLine.points.length >= 2))) {
+const _needsSnap = shiftPressed ||
+    (forces90deg()     && currentLine.points.length >= 2) ||
+    (forcesMode1snap() && currentLine.points.length >= 2);
+if (referencePoint && _needsSnap) {
     const prevPt = currentLine.points.length >= 2 ? currentLine.points[currentLine.points.length - 2] : null;
-    previewPoint = getClampedPreviewPoint(referencePoint, previewPoint, prevPt); // was getSnapPoint
+    previewPoint = getClampedPreviewPoint(referencePoint, previewPoint, prevPt);
 }
 
         const previewPoints = [...currentLine.points, previewPoint];
