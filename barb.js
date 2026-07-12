@@ -223,6 +223,7 @@ const pts = lineData.points;
 if (!pts || pts.length < 2) return;
 const m = Math.min(3, Math.max(1, parseFloat(document.getElementById('postSpacingBarbed')?.value) || 2.5));
 const total = totalLen(pts);
+const n = parseFloat((document.getElementById('postSizeBarbed') || document.getElementById('imPostSizeBarbed'))?.value) || 0.10;
 function interiorAngleAt(i) {
      if (i <= 0 || i >= pts.length - 1) return 180;
      const bIn = bearing(pts[i - 1], pts[i]);
@@ -287,22 +288,24 @@ function interiorAngleAt(i) {
  // Draw posts per segment
 // NEW — skips pi===0 on si>0 (intermediate vertices handled by bisector loop below)
 const postPositions = [];
+const segGeomList = [];
 let cumulDist = 0;
 const numSegs = pts.length - 1;
 for (let si = 0; si < numSegs; si++) {
     const p0 = pts[si];
     const p1 = pts[si+1];
     const segLen = hav(p0, p1);
-    if (segLen < 0.1) { cumulDist += segLen; continue; }
+    if (segLen < 0.1) { segGeomList.push(null); cumulDist += segLen; continue; }
     const r_i = Math.ceil(segLen / m);
     const dPrime = segLen / r_i;
+    segGeomList.push({ r_i, dPrime });
     for (let pi = 0; pi < r_i; pi++) {
         if (pi === 0 && si > 0) { postPositions.push({ dist: cumulDist, pt: p0, b: bearing(p0, p1) }); continue; } // skip — bisector loop handles this vertex
         const dist = cumulDist + pi * dPrime;
         const pt = interp(pts, Math.min(dist, total));
         const b = bearing(p0, p1);
         const isTrueStart = (si === 0 && pi === 0);
-        drawPlanPost(pt, b, isTrueStart, 0.15, 'barbed');
+        drawPlanPost(pt, b, isTrueStart, n, 'barbed');
         postPositions.push({ dist, pt, b });
     }
     cumulDist += segLen;
@@ -310,7 +313,7 @@ for (let si = 0; si < numSegs; si++) {
  // Draw the very last point
  const lastPt = pts[pts.length - 1];
  const lastB = bearing(pts[pts.length - 2], lastPt);
- drawPlanPost(lastPt, lastB, true, 0.15, 'barbed');
+ drawPlanPost(lastPt, lastB, true, n, 'barbed');
  postPositions.push({ dist: total, pt: lastPt, b: lastB });
 
 // Draw corner posts at vertices — rotated to bisector (non-90°) or straight (90°)
@@ -332,7 +335,7 @@ for (let i = 1; i < pts.length - 1; i++) {
         const bisector = (bIn + 180 + (((bOut - (bIn + 180) + 540) % 360) / 2)) % 360;
         postBearing = bisector;
     }
-    drawPlanPost(vertex, postBearing, true, 0.15, 'barbed');
+    drawPlanPost(vertex, postBearing, true, n, 'barbed');
 }
 
 // Line label
@@ -345,12 +348,49 @@ L.marker(pts[0], {
     zIndexOffset: 1600
 }).addTo(planLayerGroup);
 
-// Segment dimension lines
+// Segment dimension lines — one label per side (p0→p1 is already a single
+// user-drawn side, so this loop never repeats a side). Offset is computed
+// with outwardOffset(), same as brick fence, so the label always lands on
+// the true outer side of the shape instead of a fixed distance that can
+// end up pointing inward on some geometries.
  for (let i = 0; i < pts.length - 1; i++) {
      const p0 = pts[i], p1 = pts[i + 1];
      const segLen = hav(p0, p1);
-     drawDimLine(p0, p1, 0.8, segLen.toFixed(2) + 'm', '#374151');
+     drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 1.4), segLen.toFixed(2) + 'm', '#374151');
  }
+
+// Bay (post-spacing) tick labels — every bay within a side is the same
+// length (dPrime), so only the first bay of each side gets a label,
+// same "label first standard bay only" rule brick fence uses for its
+// repeating d-spaced bays. Skipped when a side is just one bay long,
+// since the full-side label above already shows that length.
+{
+    let bayCumul = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i], p1 = pts[i + 1];
+        const segLen = hav(p0, p1);
+        const g = segGeomList[i];
+        if (g && g.r_i > 1) {
+            const sPt = interp(pts, bayCumul);
+            const ePt = interp(pts, bayCumul + g.dPrime);
+            drawDimLine(sPt, ePt, 0.3, g.dPrime.toFixed(2) + 'm', '#374151');
+        }
+        bayCumul += segLen;
+    }
+
+    {
+    let sideCumul = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i], p1 = pts[i + 1];
+        const segLen = hav(p0, p1);
+        const g = segGeomList[i];
+        const dPrime = g ? g.dPrime : segLen;
+        const offsets = [0, dPrime].filter(o => o <= segLen + 1e-6).slice(0, 2);
+        offsets.forEach(o => drawPostLengthLabel(pts, sideCumul + o, n, '#374151'));
+        sideCumul += segLen;
+    }
+}
+}
  const nbSolo  = (document.getElementById('nBraceSolo')  || document.getElementById('imNBraceSolo'))?.checked  ?? false;
  const nbDual  = (document.getElementById('nBraceDual')  || document.getElementById('imNBraceDual'))?.checked  ?? false;
  const nbAngle = (document.getElementById('nBraceAngle') || document.getElementById('imNBraceAngle'))?.checked ?? false;

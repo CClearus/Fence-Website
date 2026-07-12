@@ -338,7 +338,7 @@ function drawPlanConcreteLine(lineData, idx) {
     const useDualPillar = fenceOpts.doubleCorner
         ?? (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
 
-const n = 0.15;
+const n = parseFloat((document.getElementById('postSizeConcrete') || document.getElementById('imPostSizeConcrete'))?.value) || 0.15;
 const userScale = window._poleScale || 1.0;
 // NEW — fixed 20px, no zoom scaling:
 const PLAN_ICON_FIXED_PX = 20; // fixed size — matches segment pillar box, no zoom dependency
@@ -477,7 +477,14 @@ postDists.forEach((dist, pIdx) => {
             const ePt = interp(pts, dAcc + tickDists[j + 1]);
             drawDimLine(sPt, ePt, 0.25, hav(sPt, ePt).toFixed(2) + 'm', '#000');
         }
-        drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
+drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
+
+        // First 2 posts of this side get their own footprint-length label,
+        // mirrored to the inner side (opposite the outward length above).
+        postDists.slice(0, 2).forEach(dist => {
+            drawPostLengthLabel(pts, dAcc + dist, n, '#000');
+        });
+
         dAcc += segLen;
     }
 }

@@ -241,7 +241,7 @@ function drawPlanCowboyLine(lineData, idx) {
     }).addTo(planLayerGroup);
 
     const m = parseFloat(document.getElementById('postSpacing')?.value) || 2.5;
-    const n = 0.15;
+    const n = parseFloat((document.getElementById('postSizeCowboy') || document.getElementById('imPostSizeCowboy'))?.value) || 0.15;
 
     // Reuse the exact geometry the map-mode calculation already produced
     // (see calcCowboy/drawCowboyFence in this file) — same panel boundaries,
@@ -313,7 +313,14 @@ function drawPlanCowboyLine(lineData, idx) {
             const ePt = interp(pts, dAcc + poleDists[j + 1]);
             drawDimLine(sPt, ePt, 0.25, hav(sPt, ePt).toFixed(2) + 'm', '#000');
         }
-        drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
+       drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
+
+        // First 2 posts of this side get their own footprint-length label,
+        // mirrored to the inner side (opposite the outward length above).
+        poleDists.slice(0, 2).forEach(dist => {
+            drawPostLengthLabel(pts, dAcc + dist, n, '#000');
+        });
+
         dAcc += segLen;
     }
 }

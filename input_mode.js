@@ -1110,6 +1110,10 @@ function setIMFenceType(type) {
     <input type="hidden" id="globalCornerMode" value="double">
 </div>
 
+        <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (กว้าง, เมตร)</div>
+        <input type="number" class="sb-number-input" id="imPostSizeCowboy" value="0.15"
+            min="0.05" max="0.50" step="0.01" style="width:100%;" placeholder="ความกว้างเสา (ม.)">
+
         <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
         <div style="display:flex;align-items:center;gap:6px;">
             <input type="number" class="sb-number-input-sm" id="imCowboyPricePerM" value="850"
@@ -1148,6 +1152,10 @@ function setIMFenceType(type) {
             <input type="checkbox" id="imNBraceAngle" style="width:16px;height:16px;accent-color:#7c3aed;">
             <span style="font-size:12px;color:#374151;">N-Brace มุม (เสาคู่ที่มุม)</span>
         </label>
+
+        <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (กว้าง, เมตร)</div>
+        <input type="number" class="sb-number-input" id="imPostSizeBarbed" value="0.10"
+            min="0.05" max="0.50" step="0.01" style="width:100%;" placeholder="ความกว้างเสา (ม.)">
 
         <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -1201,6 +1209,10 @@ function setIMFenceType(type) {
     </div>
     <input type="checkbox" id="imConcreteDoubleCorner" style="display:none;" checked>
 </div>
+
+    <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (กว้าง, เมตร)</div>
+    <input type="number" class="sb-number-input" id="imPostSizeConcrete" value="0.15"
+        min="0.05" max="0.50" step="0.01" style="width:100%;" placeholder="ความกว้างเสา (ม.)">
 
     <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
     <div style="display:flex;align-items:center;gap:6px;">
@@ -1259,6 +1271,13 @@ function setIMFenceType(type) {
     <div id="imBrickPillarCustomLabel" style="display:none;font-size:10px;color:#9ca3af;margin-top:3px;">
         กรอก ซม. เช่น 20 = 20×20 ซม.
     </div>
+
+    <!-- Pillar Size (meters) — this is the value actually used for corner
+         footprint math and the plan-mode post-length label; the cm picker
+         above is kept for its preset display but doesn't feed the calc. -->
+    <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (กว้าง, เมตร)</div>
+    <input type="number" class="sb-number-input" id="imBrickPostSize" value="0.20"
+        min="0.05" max="0.50" step="0.01" style="width:100%;" placeholder="ความกว้างเสา (ม.)">
 
     <!-- Brick Type -->
     <div class="sb-section-label" style="margin-top:10px;">ประเภทอิฐ</div>

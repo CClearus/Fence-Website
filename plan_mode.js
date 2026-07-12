@@ -1015,7 +1015,8 @@ const allVisibleLines = allLines.filter((ld, idx) => {
     return cb && cb.checked;
 });
 if (typeof buildCornerMap === 'function') {
-    buildCornerMap(allVisibleLines.map(ld => ld.points));
+    const visibleCowboyLines = allVisibleLines.filter(ld => (ld.fenceType || 'cowboy') === 'cowboy');
+    buildCornerMap(visibleCowboyLines.map(ld => ld.points));
 }
 allLines.forEach((ld, idx) => {
     const cb = document.getElementById(`plan_cb_${idx}`);
@@ -1225,6 +1226,26 @@ function drawDimLine(startPt, endPt, offsetM, label, color) {
         }),
         zIndexOffset: 1600
     }).addTo(planLayerGroup);
+}
+
+// ============================================
+// SHARED: single post's footprint-length label (plan mode)
+// ============================================
+// Same visual language as drawDimLine — reuses it directly — but sized to
+// just one post's own footprint length along the fence line (posts are
+// square, so this is also the post's width), and mirrored to the INNER
+// side of the fence line by negating outwardOffset()'s sign. This puts it
+// on the opposite side from the full side-length label, which always
+// renders on the OUTER side.
+function drawPostLengthLabel(pts, distAlong, postSize, color) {
+    if (!postSize || postSize <= 0) return;
+    const half = postSize / 2;
+    const from = Math.max(0, distAlong - half);
+    const to = distAlong + half;
+    const startPt = interp(pts, from);
+    const endPt = interp(pts, to);
+    const innerOffset = -outwardOffset(pts, startPt, endPt, 0.3);
+    drawDimLine(startPt, endPt, innerOffset, postSize.toFixed(2) + 'm', color);
 }
 
 function updatePlanScale() {

@@ -14,7 +14,7 @@ let selectedFenceType = null;
 function isCowboyFence() { return selectedFenceType === 'cowboy'; }
 // Fence types that must snap to 90° increments while drawing on the map
 function forces90deg() {
-    return selectedFenceType === 'cowboy' || selectedFenceType === 'brick' || selectedFenceType === 'concrete';
+    return selectedFenceType === 'cowboy' || selectedFenceType === 'concrete';
 }
 
 // Max 1 connection per dot (counts how many lines use this point as endpoint)
