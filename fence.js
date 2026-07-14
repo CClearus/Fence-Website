@@ -273,30 +273,71 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     if (!entry) return { count: 0 };
     const arms = entry.arms.slice(0, 2);
     if (arms.length < 2) {
-        // Use bearing 0 so the post is axis-aligned (not rotated with the fence)
-        drawPost(cornerPt, 0, 'corner');
+        drawPost(cornerPt, arms[0].outward, 'corner');
         return { count: 1 };
     }
+
     const [armRed, armBlue] = getCornerArms(entry);
     const theta = cornerAngle(armRed, armBlue);
-    const mode = getCornerMode(cornerPt, theta);
-    if (mode === 'single') {
-        // Bearing 0 = axis-aligned square, no rotation
-        drawPost(cornerPt, 0, 'corner');
-        if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta);
-        return { count: 1 };
+    const k = ptKey(cornerPt);
+
+    const nonSquareCb = document.getElementById('nonSquareMode') || document.getElementById('imNonSquareMode');
+    const nonSquareActive = nonSquareCb ? nonSquareCb.checked : false;
+
+    if (nonSquareActive) {
+        const mode = getCornerMode(cornerPt, theta);
+        if (mode === 'single') {
+            const bisect = (armRed + armBlue) / 2;
+            drawPost(cornerPt, bisect, 'corner');
+            if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta);
+            return { count: 1 };
+        }
+        // Mode 2 — posts offset along their own arm away from the vertex
+const offset = getDualCornerOffset(n, theta);
+        const bisect = (armRed + armBlue) / 2;
+        drawPost(offPt(cornerPt, armRed,  offset), bisect, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+        drawPost(offPt(cornerPt, armBlue, offset), bisect, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+        if (addHoverMarkers) {
+            _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue);
+            L.marker(cornerPt, {
+                icon: L.divIcon({
+                    className: '',
+                    html: `<div class="dc-swap-btn" data-k="${k}" title="Swap corner side">⇄</div>`,
+                    iconSize: [24, 24], iconAnchor: [12, 12]
+                }),
+                zIndexOffset: 3000, interactive: true
+            }).addTo(fenceLayerGroup);
+        }
+        return { count: 2 };
     }
-    // mode === 'double'
-    // Both posts sit offset by x along their OWN arm — neither stays pinned
-    // to the vertex. That's what leaves the required x gap on both sides of
-    // the corner for the fence panels to stop at (see cornerShortenAmount
-    // in cowboy.js, which now shortens both arms of every corner).
-    const offset = getDualCornerOffset(n, theta);
-    drawPost(offPt(cornerPt, armRed, offset), 0, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
-    drawPost(offPt(cornerPt, armBlue, offset), 0, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+
+// mode === 'double' — two posts sit SIDE BY SIDE along the corner
+    // bisector, sharing the SAME orientation, so their edges meet flush
+    // instead of overlapping. Previously each post was rotated to its own
+    // arm's bearing (armRed vs armBlue, ~90° apart at a square corner),
+    // which made the two squares cross each other like a pinwheel.
+    const bisect = (armRed + armBlue) / 2;
+    const perp = bisect + 90;
+    const _angleDiff = (a, b) => { let d = Math.abs(a - b) % 360; if (d > 180) d = 360 - d; return d; };
+    // Pick whichever perpendicular side is closer to armRed's own
+    // direction — that's the side the red post belongs on; blue takes
+    // the opposite side. This flips automatically when the user swaps.
+    const redSide = _angleDiff(perp, armRed) < _angleDiff(perp + 180, armRed) ? perp : perp + 180;
+    const blueSide = redSide + 180;
+
+    const postSize = 0.15;
+    const userScale = window._poleScale || 1.0;
+    const halfW = (postSize * 1.6 * userScale * DUAL_POST_VISUAL_MULTIPLIER) / 2;
+
+const redPt  = offPt(cornerPt, redSide,  halfW);
+    const bluePt = offPt(cornerPt, blueSide, halfW);
+
+    drawPost(redPt,  bisect, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+    drawPost(bluePt, bisect, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+
     if (addHoverMarkers) {
-        const k = ptKey(cornerPt);
         _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue);
+        // existing ⇄ swap button
         L.marker(cornerPt, {
             icon: L.divIcon({
                 className: '',
@@ -408,12 +449,20 @@ function runFenceCalc() {
     // removed, when Page 2/Input Mode is shown), that `||` fallback to the
     // "im..." id never fired, so Input Mode's corner-mode radios had zero
     // effect on the actual calculation.
-    const cowboyDcEl = _activeCornerCheckbox('doubleCornerPost', 'imDoubleCornerPost');
-    const cowboyDoubleCorner = cowboyDcEl ? cowboyDcEl.checked : false;
+const cowboyDcEl = _activeCornerCheckbox('doubleCornerPost', 'imDoubleCornerPost');
+const cowboyMode2 = document.getElementById('cornerMode2') || document.getElementById('imCornerMode2');
+const cowboyNonSquare = document.getElementById('nonSquareMode') || document.getElementById('imNonSquareMode');
+const cowboyDoubleCorner = (cowboyNonSquare && cowboyNonSquare.checked)
+    ? (cowboyMode2 ? cowboyMode2.checked : false)
+    : (cowboyDcEl ? cowboyDcEl.checked : false);
 
     // Concrete double-corner: read its own separate checkbox
-    const concreteDcEl = _activeCornerCheckbox('concreteDoubleCornerPost', 'imConcreteDoubleCorner');
-    const concreteDoubleCorner = concreteDcEl ? concreteDcEl.checked : false;
+const concreteDcEl = _activeCornerCheckbox('concreteDoubleCornerPost', 'imConcreteDoubleCorner');
+const concreteDcMode2 = document.getElementById('cornerMode2Concrete') || document.getElementById('imCornerMode2Concrete');
+const concreteNonSquare = document.getElementById('nonSquareModeConcrete') || document.getElementById('imNonSquareModeConcrete');
+const concreteDoubleCorner = (concreteNonSquare && concreteNonSquare.checked)
+    ? (concreteDcMode2 ? concreteDcMode2.checked : false)
+    : (concreteDcEl ? concreteDcEl.checked : false);
 
     // ── Spacing validation — collect typed results ───────────────────────────
     // spacingValidations: [{ type:'hard'|'soft'|'ok', message }]

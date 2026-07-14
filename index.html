@@ -746,22 +746,27 @@ function switchSbTab(n) {
         // on, since in that context its value is entirely derived from which
         // radio is selected — Mode 1 and Mode 2 remain freely toggleable so
         // the user can always switch between them.
-        function setCornerModeSelection(type, mode) {
-            const els = _cornerModeEls(type);
-            if (!els.mode1 || !els.mode2) return;
-            els.mode1.checked = (mode === 'single');
-            els.mode2.checked = (mode === 'double');
-            if (els.dualCb) {
-                els.dualCb.checked  = (mode === 'double');
-                els.dualCb.disabled = true;
-                if (els.dualLabel) {
-                    els.dualLabel.style.opacity       = '0.4';
-                    els.dualLabel.style.pointerEvents = 'none';
-                    els.dualLabel.style.cursor        = 'not-allowed';
-                }
-            }
-            if (typeof runFenceCalc === 'function') runFenceCalc();
+function setCornerModeSelection(type, mode) {
+    const els = _cornerModeEls(type);
+    if (!els.mode1 || !els.mode2) return;
+    els.mode1.checked = (mode === 'single');
+    els.mode2.checked = (mode === 'double');
+    if (els.dualCb) {
+        // Grey out the checkbox so it's visually locked while non-square
+        // mode is active — but do NOT force-tick it. The radio (Mode 1 /
+        // Mode 2) is now the authoritative source; the checkbox just
+        // mirrors whatever the calc reads from the radio. Forcing it
+        // checked was causing dual-post mode to activate even when the
+        // user had it unchecked and only switched to Mode 2 momentarily.
+        els.dualCb.disabled = true;
+        if (els.dualLabel) {
+            els.dualLabel.style.opacity       = '0.4';
+            els.dualLabel.style.pointerEvents = 'none';
+            els.dualLabel.style.cursor        = 'not-allowed';
         }
+    }
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+}
 
         // Fires when the user clicks either radio directly.
         function onCornerModeRadioChange(type) {

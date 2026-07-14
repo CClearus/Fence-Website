@@ -85,9 +85,12 @@ function cornerShortenAmount(cornerPt, n) {
     if (!entry) return 0;
     const [a1, a2] = getCornerArms(entry);
     const theta = cornerAngle(a1, a2);
-    const mode = getCornerMode(cornerPt, theta); // 'single' or 'double' — same source of truth as drawDoubleCornerPost
-    if (mode === 'single') return n / 2; // bisector post — panel only needs to clear half its width
-    return getDualCornerOffset(n, theta); // double post — must match drawDoubleCornerPost's post placement exactly
+    const nonSquareCb = document.getElementById('nonSquareMode') || document.getElementById('imNonSquareMode');
+    const nonSquareActive = nonSquareCb ? nonSquareCb.checked : false;
+    if (!nonSquareActive) return n / 2; // plain dual: posts at vertex, just clear half a post-width
+    const mode = getCornerMode(cornerPt, theta);
+    if (mode === 'single') return n / 2; // Mode 1: bisector post at vertex
+    return getDualCornerOffset(n, theta); // Mode 2: posts offset by angle formula
 }
 
 const startIsDC = doubleCorner && isCornerPoint(p0);
@@ -349,63 +352,77 @@ function drawPlanColorPost(pt, b, color, n) {
     }).addTo(planLayerGroup);
 }
 
-// ============================================
-// COWBOY FENCE — Plan Mode: unified corner-post pass
-// ============================================
-// Draws every corner exactly once, reusing the SAME arm bearings, swap
-// state (swappedCorners), and single/double mode (getCornerMode) as the
-// map view. Plan mode has no swap button of its own — it always mirrors
-// whichever side/orientation is currently set on the map (e.g. if the
-// blue post sits on the vertical arm on the map, it sits on the vertical
-// arm here too).
-//
-// Caller MUST have already called buildCornerMap(...) with the current
-// set of visible cowboy lines, so cornerMap reflects exactly what's drawn.
 function drawPlanCowboyCorners() {
     if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
+
     const dualPillarCheckbox = document.getElementById('doubleCornerPost')
         || document.getElementById('imDoubleCornerPost');
-    // The checkbox itself is now the single source of truth: in non-square
-    // mode it's driven by the Mode 1 / Mode 2 radio (see
-    // setCornerModeSelection in index.html) — checked means Mode 2 (dual
-    // corner post, valid at any angle), unchecked means Mode 1 (single
-    // post). No separate non-square override needed here anymore.
-    const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
+    const nonSquareCb = document.getElementById('nonSquareMode') || document.getElementById('imNonSquareMode');
+    const nonSquareActive = nonSquareCb ? nonSquareCb.checked : false;
+    const mode2Radio = document.getElementById('cornerMode2') || document.getElementById('imCornerMode2');
+
+    const useDualPillar = nonSquareActive
+        ? (mode2Radio ? mode2Radio.checked : false)
+        : (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
     const n = 0.15;
+
     for (const [, entry] of cornerMap.entries()) {
         const arms = entry.arms.slice(0, 2);
+
         if (arms.length < 2 || !useDualPillar) {
-            // Single post: face the angle bisector instead of staying
-            // axis-aligned, so it rotates to match non-square corners.
-            let b = 0;
-            if (arms.length >= 2) {
-                const [armRed, armBlue] = getCornerArms(entry);
-                b = bisectorBearing(armRed, armBlue);
-            }
+            const b = arms.length >= 2 ? (arms[0].outward + arms[1].outward) / 2 : arms[0].outward;
             drawPlanPost(entry.pt, b, true, n, 'cowboy');
             continue;
         }
+
         const [armRed, armBlue] = getCornerArms(entry);
         const theta = cornerAngle(armRed, armBlue);
-        const mode = getCornerMode(entry.pt, theta);
-        if (mode === 'single') {
-            const b = bisectorBearing(armRed, armBlue);
-            drawPlanPost(entry.pt, b, true, n, 'cowboy');
-        } else {
-            const offset = getDualCornerOffset(n, theta);
-            const redPt = offPt(entry.pt, armRed, offset);
-            const bluePt = offPt(entry.pt, armBlue, offset);
-            drawPlanColorPost(redPt, 0, '#dc2626', n);
-            drawPlanColorPost(bluePt, 0, '#2563eb', n);
-            // Label the x offset from the true corner vertex to each post,
-            // pushed to the outward side of each arm (away from the other
-            // arm) so it doesn't land in the crowded notch between them.
-            if (typeof drawDimLine === 'function') {
-                const redSign = cornerDimOutwardSign(armRed, armBlue);
-                const blueSign = cornerDimOutwardSign(armBlue, armRed);
-                drawDimLine(entry.pt, redPt, redSign * 0.2, offset.toFixed(2) + 'm', '#dc2626');
-                drawDimLine(entry.pt, bluePt, blueSign * 0.2, offset.toFixed(2) + 'm', '#2563eb');
+
+        if (nonSquareActive) {
+            const mode = getCornerMode(entry.pt, theta);
+            if (mode === 'single') {
+                // Mode 1 — single bisector post at vertex
+                const bisect = (armRed + armBlue) / 2;
+                drawPlanPost(entry.pt, bisect, true, n, 'cowboy');
+            } else {
+                // Mode 2 — both posts offset along each arm by angle formula
+// Mode 2 — same fix as the map view: positions stay offset
+                // along each arm (matches the panel-clearance math), but
+                // both posts share the SAME orientation (the bisector)
+                // instead of each other's arm bearing, so they don't cross
+                // like a pinwheel.
+                const offset = getDualCornerOffset(n, theta);
+                const bisect = (armRed + armBlue) / 2;
+                const redPt  = offPt(entry.pt, armRed,  offset);
+                const bluePt = offPt(entry.pt, armBlue, offset);
+                drawPlanColorPost(redPt,  bisect, '#dc2626', n);
+                drawPlanColorPost(bluePt, bisect, '#2563eb', n);
+                if (typeof drawDimLine === 'function') {
+                    const redSign  = cornerDimOutwardSign(armRed,  armBlue);
+                    const blueSign = cornerDimOutwardSign(armBlue, armRed);
+                    drawDimLine(entry.pt, redPt,  redSign  * 0.2, offset.toFixed(2) + 'm', '#dc2626');
+                    drawDimLine(entry.pt, bluePt, blueSign * 0.2, offset.toFixed(2) + 'm', '#2563eb');
+                }
             }
+} else {
+            // Mirrors the map view's side-by-side layout (see
+            // drawDoubleCornerPost in fence.js): same bisector orientation
+            // for both posts, offset sideways so they sit flush instead of
+            // overlapping.
+            const bisect = (armRed + armBlue) / 2;
+            const perp = bisect + 90;
+            const _angleDiff = (a, b) => { let d = Math.abs(a - b) % 360; if (d > 180) d = 360 - d; return d; };
+            const redSide = _angleDiff(perp, armRed) < _angleDiff(perp + 180, armRed) ? perp : perp + 180;
+            const blueSide = redSide + 180;
+
+            const scale = window._poleScale || 1.0;
+            const visualN = Math.max(n, 0.15) * scale * 3;
+            const halfW = visualN / 2;
+
+            const redPt  = offPt(entry.pt, redSide,  halfW);
+            const bluePt = offPt(entry.pt, blueSide, halfW);
+            drawPlanColorPost(redPt,  bisect, '#dc2626', n);
+            drawPlanColorPost(bluePt, bisect, '#2563eb', n);
         }
     }
 }
