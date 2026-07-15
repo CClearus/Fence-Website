@@ -80,14 +80,29 @@ function drawCowboyFence(linePoints, m, n, splitAtStart, doubleCorner, lineColor
         if (si > 0 || closed) B_i++;
         if (si < numSegs-1 || closed) B_i++;
 
-function cornerShortenAmount(cornerPt, n) {
+function cornerShortenAmount(cornerPt, n, armBearing) {
     const entry = cornerMap.get(ptKey(cornerPt));
     if (!entry) return 0;
-    const [a1, a2] = getCornerArms(entry);
+    const [a1, a2] = getCornerArms(entry); // a1 = armRed, a2 = armBlue
     const theta = cornerAngle(a1, a2);
     const nonSquareCb = document.getElementById('nonSquareMode') || document.getElementById('imNonSquareMode');
     const nonSquareActive = nonSquareCb ? nonSquareCb.checked : false;
-    if (!nonSquareActive) return n / 2; // plain dual: posts at vertex, just clear half a post-width
+    if (!nonSquareActive) {
+        // Plain "duel" (square-corner) mode — see drawDoubleCornerPost in
+        // fence.js. Red sits AT the vertex (clears only n/2 along its own
+        // arm), blue sits offset by a full post-width n further out along
+        // ITS OWN arm (clears n + n/2 along that arm). Which arm this call
+        // is shortening is passed in as armBearing by the caller, so we
+        // match it against the (swap-aware) red/blue arms to know which
+        // clearance applies. This is a separate calculation from Mode 1/
+        // Mode 2 below and never runs at the same time as them.
+        if (typeof armBearing === 'number') {
+            const angTo = (b) => { let d = Math.abs(((b - armBearing) % 360 + 360) % 360); if (d > 180) d = 360 - d; return d; };
+            const isBlueArm = angTo(a2) < angTo(a1);
+            return isBlueArm ? n + n / 2 : n / 2;
+        }
+        return n / 2; // fallback if the caller couldn't identify the arm
+    }
     const mode = getCornerMode(cornerPt, theta);
     if (mode === 'single') return n / 2; // Mode 1: bisector post at vertex
     return getDualCornerOffset(n, theta); // Mode 2: posts offset by angle formula
@@ -97,9 +112,13 @@ const startIsDC = doubleCorner && isCornerPoint(p0);
 const endIsDC = doubleCorner && isCornerPoint(p1);
 
 const n_post = 0.15; // post size in metres
-const leftOff = startIsDC ? cornerShortenAmount(p0, n_post) : 0;
+// Each corner's clearance depends on which of its two arms THIS segment
+// is — pass the segment's own outward-from-corner bearing so
+// cornerShortenAmount can match it against the (swap-aware) red/blue
+// arms and return the right amount for that side.
+const leftOff = startIsDC ? cornerShortenAmount(p0, n_post, bearing(p0, p1)) : 0;
 const endsAtDC = doubleCorner && isCornerPoint(p1);
-const rightOff = endIsDC ? cornerShortenAmount(p1, n_post) : 0;
+const rightOff = endIsDC ? cornerShortenAmount(p1, n_post, bearing(p1, p0)) : 0;
         const panelSpace = A_i - leftOff - rightOff;
 
 if (panelSpace < 0.5) {
@@ -369,22 +388,20 @@ function drawPlanCowboyCorners() {
     for (const [, entry] of cornerMap.entries()) {
         const arms = entry.arms.slice(0, 2);
 
-        if (arms.length < 2 || !useDualPillar) {
-            const b = arms.length >= 2 ? (arms[0].outward + arms[1].outward) / 2 : arms[0].outward;
-            drawPlanPost(entry.pt, b, true, n, 'cowboy');
-            continue;
-        }
+if (arms.length < 2 || !useDualPillar) {
+    const [armRed] = arms.length >= 2 ? getCornerArms(entry) : [arms[0].outward];
+    drawPlanPost(entry.pt, armRed, true, n, 'cowboy');
+    continue;
+}
 
         const [armRed, armBlue] = getCornerArms(entry);
         const theta = cornerAngle(armRed, armBlue);
 
         if (nonSquareActive) {
             const mode = getCornerMode(entry.pt, theta);
-            if (mode === 'single') {
-                // Mode 1 — single bisector post at vertex
-                const bisect = (armRed + armBlue) / 2;
-                drawPlanPost(entry.pt, bisect, true, n, 'cowboy');
-            } else {
+if (mode === 'single') {
+    drawPlanPost(entry.pt, armRed, true, n, 'cowboy');
+} else {
                 // Mode 2 — both posts offset along each arm by angle formula
 // Mode 2 — same fix as the map view: positions stay offset
                 // along each arm (matches the panel-clearance math), but
@@ -392,7 +409,7 @@ function drawPlanCowboyCorners() {
                 // instead of each other's arm bearing, so they don't cross
                 // like a pinwheel.
                 const offset = getDualCornerOffset(n, theta);
-                const bisect = (armRed + armBlue) / 2;
+                const bisect = bisectorBearing(armRed, armBlue);
                 const redPt  = offPt(entry.pt, armRed,  offset);
                 const bluePt = offPt(entry.pt, armBlue, offset);
                 drawPlanColorPost(redPt,  bisect, '#dc2626', n);
@@ -405,24 +422,33 @@ function drawPlanCowboyCorners() {
                 }
             }
 } else {
-            // Mirrors the map view's side-by-side layout (see
-            // drawDoubleCornerPost in fence.js): same bisector orientation
-            // for both posts, offset sideways so they sit flush instead of
-            // overlapping.
-            const bisect = (armRed + armBlue) / 2;
-            const perp = bisect + 90;
-            const _angleDiff = (a, b) => { let d = Math.abs(a - b) % 360; if (d > 180) d = 360 - d; return d; };
-            const redSide = _angleDiff(perp, armRed) < _angleDiff(perp + 180, armRed) ? perp : perp + 180;
-            const blueSide = redSide + 180;
-
+            // Mirrors the map view's plain "duel" (square-corner) layout
+            // (see drawDoubleCornerPost in fence.js): red sits ON the
+            // vertex, rotated flush with its own arm; blue sits one
+            // post-width out along ITS OWN arm, rotated flush with that
+            // line. Independent of the non-square Mode 1/Mode 2 branch
+            // above — never runs at the same time as it.
+            //
+            // drawPlanColorPost renders posts oversized for visibility
+            // (visualN = n·scale·3, not the true n), so positioning blue
+            // using the raw physical n makes the two squares overlap on
+            // screen. renderOffset matches that same oversized footprint
+            // so blue just touches red instead — the dimension label below
+            // still reports the true physical clearance (n), not the
+            // inflated render distance.
             const scale = window._poleScale || 1.0;
-            const visualN = Math.max(n, 0.15) * scale * 3;
-            const halfW = visualN / 2;
-
-            const redPt  = offPt(entry.pt, redSide,  halfW);
-            const bluePt = offPt(entry.pt, blueSide, halfW);
-            drawPlanColorPost(redPt,  bisect, '#dc2626', n);
-            drawPlanColorPost(bluePt, bisect, '#2563eb', n);
+            const renderOffset = Math.max(n, 0.15) * scale * 3;
+            const blueBearing = (typeof forcedPerpendicularBearing === 'function')
+                ? forcedPerpendicularBearing(armRed, armBlue)
+                : armBlue; // fallback if fence.js hasn't loaded yet
+            const redPt  = entry.pt;
+            const bluePt = offPt(entry.pt, blueBearing, renderOffset);
+            drawPlanColorPost(redPt,  armRed,     '#dc2626', n);
+            drawPlanColorPost(bluePt, blueBearing, '#2563eb', n);
+            if (typeof drawDimLine === 'function') {
+                const blueSign = cornerDimOutwardSign(armBlue, armRed);
+                drawDimLine(entry.pt, bluePt, blueSign * 0.2, n.toFixed(2) + 'm', '#2563eb');
+            }
         }
     }
 }

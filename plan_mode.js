@@ -321,26 +321,26 @@ function geoDrawCowboyCorners() {
     const scale = window._poleScale || 1.0;
     const vis = Math.max(n, 0.15) * scale * 3;
     const halfSz = vis / 2;
-    for (const [, entry] of cornerMap.entries()) {
-        const arms = entry.arms.slice(0, 2);
-        if (arms.length < 2 || !useDualPillar) {
-            // Single post: face the angle bisector instead of staying
-            // axis-aligned, so it rotates to match non-square corners.
-            let b = 0;
-            if (arms.length >= 2) {
-                const [armRed, armBlue] = getCornerArms(entry);
-                b = bisectorBearing(armRed, armBlue);
-            }
-            drawVPost(entry.pt, b, true, n);
-            continue;
+for (const [, entry] of cornerMap.entries()) {
+    const arms = entry.arms.slice(0, 2);
+    if (arms.length < 2 || !useDualPillar) {
+        // Single post: stay flush/axis-aligned with the fence line —
+        // no diagonal rotation for a square corner.
+        let b = 0;
+        if (arms.length >= 2) {
+            const [armRed] = getCornerArms(entry);
+            b = armRed;
         }
-        const [armRed, armBlue] = getCornerArms(entry);
-        const theta = cornerAngle(armRed, armBlue);
-        const mode = getCornerMode(entry.pt, theta);
-        if (mode === 'single') {
-            const b = bisectorBearing(armRed, armBlue);
-            drawVPost(entry.pt, b, true, n);
-        } else {
+        drawVPost(entry.pt, b, true, n);
+        continue;
+    }
+    const [armRed, armBlue] = getCornerArms(entry);
+    const theta = cornerAngle(armRed, armBlue);
+    const mode = getCornerMode(entry.pt, theta);
+    if (mode === 'single') {
+        const b = armRed;
+        drawVPost(entry.pt, b, true, n);
+    } else {
             const offset = getDualCornerOffset(n, theta);
             // Posts drawn at bearing 0 (axis-aligned), each offset along its own arm
             const redPt = _geoOffset(entry.pt, armRed, offset);

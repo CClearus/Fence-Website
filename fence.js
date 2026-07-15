@@ -141,6 +141,23 @@ function bearing(p1, p2) {
     return Math.atan2(Math.sin(dl)*Math.cos(f2), Math.cos(f1)*Math.sin(f2) - Math.sin(f1)*Math.cos(f2)*Math.cos(dl)) * 180/Math.PI;
 }
 
+// Correct circular mean of two bearings — NOT (a+b)/2. A plain arithmetic
+// average is wrong as soon as the two bearings straddle the 0°/360° wrap
+// (e.g. 350° and 10°, whose true bisector is 0°): (350+10)/2 = 180, which
+// is the bisector rotated a full 180° from correct. This was the root
+// cause of single/bisector corner posts occasionally rendering rotated
+// the wrong way instead of as a clean square. Works by summing the two
+// bearings as unit vectors and taking the angle of the result, which
+// always lands on the bisector of the smaller (interior) angle between
+// them — exactly what a corner post needs.
+function bisectorBearing(a, b) {
+    const ar = a * Math.PI / 180, br = b * Math.PI / 180;
+    const x = Math.cos(ar) + Math.cos(br);
+    const y = Math.sin(ar) + Math.sin(br);
+    if (Math.abs(x) < 1e-9 && Math.abs(y) < 1e-9) return a; // degenerate: arms exactly opposite (180° apart)
+    return Math.atan2(y, x) * 180 / Math.PI;
+}
+
 function bearingAt(pts, d) {
     let acc = 0;
     for(let i = 0; i < pts.length - 1; i++){
@@ -248,6 +265,36 @@ function getDualCornerOffset(n, thetaDeg) {
     return Math.max(cornerOffsetX(n, thetaDeg), minVisualClearance);
 }
 
+// Duel mode (square corner) always assumes a right angle, but the two arms
+// as actually drawn on the map are rarely EXACTLY 90° apart — a hand-drawn
+// corner might be 88° or 93°. Using the real armBlue bearing for rendering
+// then makes the blue post look "rotated" relative to red instead of
+// sitting flush at a clean right angle. This snaps blue's RENDER bearing
+// to the nearest exact multiple of 90° from armRed (picking whichever of
+// +90°/−90° actually sits closer to the real armBlue direction, so it
+// still picks the correct side). Only used for rendering (post rotation +
+// offset direction) — never for the physical arm-identity matching in
+// cornerShortenAmount, which must keep using the real bearings.
+function forcedPerpendicularBearing(armRed, armBlue) {
+    const plus90 = ((armRed + 90) % 360 + 360) % 360;
+    const minus90 = ((armRed - 90) % 360 + 360) % 360;
+    const diff = (a, b) => { let d = Math.abs(a - b) % 360; if (d > 180) d = 360 - d; return d; };
+    return diff(plus90, armBlue) <= diff(minus90, armBlue) ? plus90 : minus90;
+}
+
+// The duel (square-corner) posts are drawn oversized for visibility — see
+// DUAL_POST_VISUAL_MULTIPLIER above — so positioning the blue post using
+// the true physical post width n makes the two squares overlap on screen
+// (the render is ~3.4× bigger than n). This returns the post's ACTUAL
+// rendered footprint (matches drawPost's own SCALE math exactly), so the
+// blue post can be placed one full rendered-width from the vertex and
+// just touch red without overlapping — purely a rendering position, not
+// used for the physical panel-shortening math (that stays real n/cowboy.js).
+function dualPostFootprint(n) {
+    const userScale = window._poleScale || 1.0;
+    return n * 1.6 * userScale * DUAL_POST_VISUAL_MULTIPLIER;
+}
+
 // Returns the corner mode for a given corner point.
 // Reads per-corner overrides from window._cornerModes map, falls back to global UI setting.
 // Returns 'single' or 'double'. If angle < 120° and mode would be 'single', falls back to 'double'.
@@ -286,15 +333,14 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
 
     if (nonSquareActive) {
         const mode = getCornerMode(cornerPt, theta);
-        if (mode === 'single') {
-            const bisect = (armRed + armBlue) / 2;
-            drawPost(cornerPt, bisect, 'corner');
-            if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta);
-            return { count: 1 };
-        }
+if (mode === 'single') {
+    drawPost(cornerPt, armRed, 'corner');
+    if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta);
+    return { count: 1 };
+}
         // Mode 2 — posts offset along their own arm away from the vertex
 const offset = getDualCornerOffset(n, theta);
-        const bisect = (armRed + armBlue) / 2;
+        const bisect = bisectorBearing(armRed, armBlue);
         drawPost(offPt(cornerPt, armRed,  offset), bisect, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
         drawPost(offPt(cornerPt, armBlue, offset), bisect, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
         if (addHoverMarkers) {
@@ -311,33 +357,41 @@ const offset = getDualCornerOffset(n, theta);
         return { count: 2 };
     }
 
-// mode === 'double' — two posts sit SIDE BY SIDE along the corner
-    // bisector, sharing the SAME orientation, so their edges meet flush
-    // instead of overlapping. Previously each post was rotated to its own
-    // arm's bearing (armRed vs armBlue, ~90° apart at a square corner),
-    // which made the two squares cross each other like a pinwheel.
-    const bisect = (armRed + armBlue) / 2;
-    const perp = bisect + 90;
-    const _angleDiff = (a, b) => { let d = Math.abs(a - b) % 360; if (d > 180) d = 360 - d; return d; };
-    // Pick whichever perpendicular side is closer to armRed's own
-    // direction — that's the side the red post belongs on; blue takes
-    // the opposite side. This flips automatically when the user swaps.
-    const redSide = _angleDiff(perp, armRed) < _angleDiff(perp + 180, armRed) ? perp : perp + 180;
-    const blueSide = redSide + 180;
+// ── Plain "duel" fence corner (square / 90°) ─────────────────────────────
+    // This branch only ever runs when the non-square checkbox is OFF, so it
+    // always assumes a right-angle corner. It is intentionally its own
+    // self-contained code path — separate from Mode 1 (single bisector post)
+    // and Mode 2 (both arms offset by the angle formula) above, which only
+    // run when non-square mode is active — so edits here can never bleed
+    // into those two modes.
+    //
+    // Geometry: the RED post sits exactly ON the vertex, rotated so it lies
+    // flush along ITS OWN arm (armRed) — the fence is "on the line". The
+    // BLUE post sits one post-width (n) further out along ITS OWN arm
+    // (armBlue), also rotated flush with that line. On a true 90° corner,
+    // red's footprint already extends n/2 past the vertex in the blue
+    // arm's direction, and blue's near edge sits at n − n/2 = n/2 too — so
+    // the two posts meet flush without overlapping.
+    //
+    // Which arm is "red" and which is "blue" comes entirely from
+    // getCornerArms() above, which already respects swappedCorners — so
+    // clicking the ⇄ swap button flips red/blue here automatically, and
+    // cornerShortenAmount() (cowboy.js) picks up the same swapped arms when
+    // it recalculates each side's fence-shortening distance.
+    const blueBearing = forcedPerpendicularBearing(armRed, armBlue); // always exactly 90° from red, for rendering only
+    const blueOffset = dualPostFootprint(n); // rendered post width — keeps red/blue touching, not overlapping, on screen
+    const redPt  = cornerPt;
+    const bluePt = offPt(cornerPt, blueBearing, blueOffset);
 
-    const postSize = 0.15;
-    const userScale = window._poleScale || 1.0;
-    const halfW = (postSize * 1.6 * userScale * DUAL_POST_VISUAL_MULTIPLIER) / 2;
-
-const redPt  = offPt(cornerPt, redSide,  halfW);
-    const bluePt = offPt(cornerPt, blueSide, halfW);
-
-    drawPost(redPt,  bisect, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
-    drawPost(bluePt, bisect, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+    drawPost(redPt,  armRed,      'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+    drawPost(bluePt, blueBearing, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
 
     if (addHoverMarkers) {
-        _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue);
-        // existing ⇄ swap button
+        // No single/double mode toggle here — that toggle belongs only to
+        // the non-square Mode 1/Mode 2 corners above. Showing it on a duel
+        // (square) corner would let its state leak into non-square mode
+        // when the user later switches, which is exactly the overlap this
+        // separation is meant to prevent.
         L.marker(cornerPt, {
             icon: L.divIcon({
                 className: '',
@@ -367,7 +421,7 @@ function _addCornerModeToggle(cornerPt, currentMode, thetaDeg, armRed, armBlue) 
         border:1.5px solid #6b7280;box-shadow:0 1px 3px rgba(0,0,0,0.2);">${label}</div>`;
     // Place it opposite the bisector of the two arms so it clears both posts
     const outwardBisector = (typeof armRed === 'number' && typeof armBlue === 'number')
-        ? ((armRed + armBlue) / 2) + 180
+        ? bisectorBearing(armRed, armBlue) + 180
         : 0;
     L.marker(offPt(cornerPt, outwardBisector, 0.6), {
         icon: L.divIcon({ className: '', html: btnHtml, iconSize: [22, 22], iconAnchor: [11, 11] }),
