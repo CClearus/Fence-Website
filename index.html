@@ -751,6 +751,13 @@ function setCornerModeSelection(type, mode) {
     if (!els.mode1 || !els.mode2) return;
     els.mode1.checked = (mode === 'single');
     els.mode2.checked = (mode === 'double');
+    // Persist into the type-scoped global default that getCornerMode()
+    // (fence.js) actually reads. Previously this radio selection was
+    // purely cosmetic — the calc always fell back to Mode 2 (double)
+    // because it looked for a #globalCornerMode element that never
+    // existed. 'cowboy' and 'concrete' keep fully independent defaults.
+    if (!window._globalCornerModeByType) window._globalCornerModeByType = { cowboy: 'double', concrete: 'double' };
+    window._globalCornerModeByType[type === 'concrete' ? 'concrete' : 'cowboy'] = mode;
     if (els.dualCb) {
         // Grey out the checkbox so it's visually locked while non-square
         // mode is active — but do NOT force-tick it. The radio (Mode 1 /

@@ -108,6 +108,11 @@ function drawConcreteFence(linePoints, m, n, splitAtStart, doubleCorner, lineCol
     const warnings = [];
     let cumulDist = 0;
     let postIndex = 0; // used to alternate bracket direction
+    // Per-segment geometry, exactly as computed for the map — Plan Mode
+    // reads this instead of recalculating panels/ticks itself, so it can
+    // never drift from what the map actually draws (mirrors cowboy.js's
+    // segGeom / _cowboyPlanGeom exactly).
+    const segGeom = [];
 
     // A corner shortens BOTH of its arms — a single bisector post needs
     // clearance on both sides, and a dual (red+blue) post sits offset
@@ -125,29 +130,46 @@ function drawConcreteFence(linePoints, m, n, splitAtStart, doubleCorner, lineCol
         const startIsDC = doubleCorner && isCornerPoint(p0);
         const endIsDC   = doubleCorner && isCornerPoint(p1);
 
-        // Mirrors cowboy's cornerShortenAmount: respects whichever mode
-        // (single bisector post vs double red/blue pair) this specific
-        // corner is currently in, and uses the same clearance-floor offset
-        // (getDualCornerOffset) that drawConcreteDoubleCornerPost draws
-        // its posts at — so the panel never stops short of, or overlaps,
-        // where the post actually is.
-        function cornerShortenAmount(cornerPt, n) {
+        // Concrete's own corner-shortening — a separate function/system from
+        // cowboy's, but the SAME calculation, copied over verbatim:
+        //   - Non-square mode OFF ("plain duel"): assumes a square corner.
+        //     Red sits AT the vertex (clears only n/2 along its own arm);
+        //     blue sits a full post-width n further out along ITS OWN arm
+        //     (clears n + n/2 along that arm). Which arm this call is
+        //     shortening is passed in as armBearing, matched against the
+        //     (swap-aware) red/blue arms.
+        //   - Non-square mode ON: Mode 1 (single bisector post, n/2 on both
+        //     arms) or Mode 2 (both arms offset by the angle formula), via
+        //     getCornerMode. Never runs at the same time as the plain-duel
+        //     branch above.
+        function cornerShortenAmount(cornerPt, n, armBearing) {
             const entry = cornerMap.get(ptKey(cornerPt));
             if (!entry) return 0;
-            const [a1, a2] = getCornerArms(entry);
+            const [a1, a2] = getCornerArms(entry); // a1 = armRed, a2 = armBlue
             const theta = cornerAngle(a1, a2);
-            const mode = getCornerMode(cornerPt, theta);
-            if (mode === 'single') return n / 2;
-            return getDualCornerOffset(n, theta);
+            const nonSquareCb = document.getElementById('nonSquareModeConcrete') || document.getElementById('imNonSquareModeConcrete');
+            const nonSquareActive = nonSquareCb ? nonSquareCb.checked : false;
+            if (!nonSquareActive) {
+                if (typeof armBearing === 'number') {
+                    const angTo = (b) => { let d = Math.abs(((b - armBearing) % 360 + 360) % 360); if (d > 180) d = 360 - d; return d; };
+                    const isBlueArm = angTo(a2) < angTo(a1);
+                    return isBlueArm ? n + n / 2 : n / 2;
+                }
+                return n / 2; // fallback if the caller couldn't identify the arm
+            }
+            const mode = getCornerMode(cornerPt, theta, 'concrete');
+            if (mode === 'single') return n / 2; // Mode 1: bisector post at vertex
+            return getDualCornerOffset(n, theta); // Mode 2: posts offset by angle formula
         }
 
         const n_post = 0.15;
-        const leftOff = startIsDC ? cornerShortenAmount(p0, n_post) : 0;
-        const rightOff = endIsDC ? cornerShortenAmount(p1, n_post) : 0;
+        const leftOff = startIsDC ? cornerShortenAmount(p0, n_post, bearing(p0, p1)) : 0;
+        const rightOff = endIsDC ? cornerShortenAmount(p1, n_post, bearing(p1, p0)) : 0;
         const panelSpace = A_i - leftOff - rightOff;
 
 if (panelSpace < 0.5) {
     warnings.push(`⚠️ ด้านที่ ${si + 1}: A<sub>${si+1}</sub> − B<sub>${si+1}</sub>·n = <b>${panelSpace.toFixed(2)} ม.</b> — ระยะรั้วต้องไม่ต่ำกว่า 0.5 เมตร`);
+            segGeom.push({ A_i, leftOff, rightOff, boundsRel: [0, A_i], standardCount: 0, splitCount: 0, tooShort: true });
             cumulDist += A_i;
             const pts = [interp(linePoints, cumulDist - A_i), interp(linePoints, cumulDist)];
             L.polyline(pts, { color: '#f87171', weight: 4, opacity: 0.7, dashArray: '6,4' }).addTo(fenceLayerGroup);
@@ -162,9 +184,17 @@ if (panelSpace < 0.5) {
             isSplit: t.isSplit
         }));
 
+        const segStart = cumulDist;
         const panelStart = cumulDist + leftOff;
         const panelEnd   = cumulDist + A_i - rightOff;
         const allBounds  = [panelStart, ...absTicks.map(t => t.dist), panelEnd];
+
+        segGeom.push({
+            A_i, leftOff, rightOff,
+            boundsRel: allBounds.map(d => d - segStart),
+            standardCount: calc.standardCount,
+            splitCount: calc.splitCount
+        });
 
         // Draw panel slabs between each pair of posts
         for (let i = 0; i < allBounds.length - 1; i++) {
@@ -215,7 +245,7 @@ if (panelSpace < 0.5) {
         }
     }
 
-    return { grandTotal, totalPosts, totalBeams, warnings };
+    return { grandTotal, totalPosts, totalBeams, warnings, segGeom };
 }
 
 function calcConcrete(concreteLines, m_concrete, n, useDoubleCorner, layers) {
@@ -233,6 +263,8 @@ function calcConcrete(concreteLines, m_concrete, n, useDoubleCorner, layers) {
         grandPosts += res.totalPosts;
         grandBeams += res.totalBeams * layers;
         if (res.warnings) allWarnings.push(...res.warnings);
+        // Plan Mode reuses this verbatim — no separate recalculation there.
+        ld._concretePlanGeom = res.segGeom;
     });
 
     if (useDoubleCorner) {
@@ -257,36 +289,61 @@ function drawConcreteDoubleCornerPost(cornerPt, n, addHoverMarkers) {
 
     const [armRed, armBlue] = getCornerArms(entry);
     const theta = cornerAngle(armRed, armBlue);
-    const mode = getCornerMode(cornerPt, theta);
+    const k = ptKey(cornerPt);
 
-    if (mode === 'single') {
-        const bisect = (armRed + armBlue) / 2;
-        drawConcretePost(cornerPt, bisect, 'corner');
-        if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta);
-        return { count: 1 };
+    const nonSquareCb = document.getElementById('nonSquareModeConcrete') || document.getElementById('imNonSquareModeConcrete');
+    const nonSquareActive = nonSquareCb ? nonSquareCb.checked : false;
+
+    // Mode 1 / Mode 2 (non-square corners) — same math as cowboy, only
+    // active while the "โหมดมุมไม่ตั้งฉาก" checkbox for concrete is on.
+    if (nonSquareActive) {
+        const mode = getCornerMode(cornerPt, theta, 'concrete');
+        if (mode === 'single') {
+            const bisect = bisectorBearing(armRed, armBlue);
+            drawConcretePost(cornerPt, bisect, 'corner');
+            if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta, undefined, undefined, 'concrete');
+            return { count: 1 };
+        }
+        // Mode 2 — same clearance-floor offset as cowboy's dual corner
+        // (getDualCornerOffset, not the raw un-clamped cornerOffsetX), so
+        // the two posts sit cleanly apart instead of overlapping.
+        const offset = getDualCornerOffset(n > 0 ? n : 0.15, theta);
+        const bisect = bisectorBearing(armRed, armBlue);
+        const redPt  = offPt(cornerPt, armRed,  offset);
+        const bluePt = offPt(cornerPt, armBlue, offset);
+        drawConcretePost(redPt,  bisect, 'end');
+        drawConcretePost(bluePt, bisect, 'start');
+        if (addHoverMarkers) {
+            _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue, 'concrete');
+            L.marker(cornerPt, {
+                icon: L.divIcon({
+                    className: '',
+                    html: `<div class="dc-swap-btn" data-k="${k}" title="Swap corner side">⇄</div>`,
+                    iconSize: [24, 24], iconAnchor: [12, 12]
+                }),
+                zIndexOffset: 3000, interactive: true
+            }).addTo(fenceLayerGroup);
+        }
+        return { count: 2 };
     }
 
-    // double mode — same clearance-floor offset as cowboy's dual corner
-    // (getDualCornerOffset, not the raw un-clamped cornerOffsetX), so the
-    // two brackets sit cleanly apart instead of overlapping.
-    const offset = getDualCornerOffset(n > 0 ? n : 0.15, theta);
+    // ── Plain "duel" fence corner (square / 90°) ─────────────────────────
+    // Own, self-contained code path for concrete — only runs when non-square
+    // mode is OFF, so it always assumes a right-angle corner. Mirrors
+    // cowboy's plain-duel branch exactly: the RED post sits ON the vertex,
+    // rotated flush along ITS OWN arm (armRed) — the fence is "on the
+    // line". The BLUE post sits one post-width (n) further out along ITS
+    // OWN arm (armBlue), also rotated flush with that line, matching the
+    // n / (n + n/2) clearance cornerShortenAmount already gives each arm.
+    const blueBearing = forcedPerpendicularBearing(armRed, armBlue); // snap to nearest 90° for clean rendering
+    const blueOffset = dualPostFootprint(n > 0 ? n : 0.15); // rendered post width — keeps red/blue touching, not overlapping
+    const redPt  = cornerPt;
+    const bluePt = offPt(cornerPt, blueBearing, blueOffset);
 
-    // Both posts sit offset by x along their OWN arm — neither stays
-    // pinned to the vertex. That's what leaves the required x gap on both
-    // sides of the corner for the panels to stop at (see
-    // cornerShortenAmount above, which now shortens both arms of every
-    // corner). Both are drawn as plain colored-outline segment blocks via
-    // drawConcretePost (red border for 'end', blue border for 'start') —
-    // no image icons.
-    const redPt = offPt(cornerPt, armRed, offset);
-    drawConcretePost(redPt, armRed, 'end');
-
-    const bluePt = offPt(cornerPt, armBlue, offset);
-    drawConcretePost(bluePt, armBlue, 'start');
+    drawConcretePost(redPt,  armRed,      'end');
+    drawConcretePost(bluePt, blueBearing, 'start');
 
     if (addHoverMarkers) {
-        _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue);
-        const k = ptKey(cornerPt);
         L.marker(cornerPt, {
             icon: L.divIcon({
                 className: '',
@@ -365,24 +422,13 @@ function drawPlanConcreteIcon(pt, iconUrl, rot) {
         drawPlanConcreteIcon(ptStart, 'start.png', rotStart);
     }
 
-    // --- FIX: mirror drawConcreteFence's corner clearance -----------------
-    // The real map never splits the FULL segment length into panels — it
-    // first pulls back `leftOff`/`rightOff` at any dual-corner post, then
-    // divides only the remaining `panelSpace`. Plan Mode was feeding the
-    // raw segment length straight into calcConcretePanels, so its leftover
-    // "split" panel near a corner was the wrong size and its dimension
-    // label ended up sitting on top of the corner post / total-length label.
-    // A corner shortens BOTH of its arms (mirrors the map view / cowboy.js).
-    function cornerShortenAmount(cornerPt) {
-        const entry = cornerMap.get(ptKey(cornerPt));
-        if (!entry) return 0;
-        const [a1, a2] = getCornerArms(entry);
-        const theta = cornerAngle(a1, a2);
-        const mode = getCornerMode(cornerPt, theta);
-        if (mode === 'single') return n / 2;
-        return getDualCornerOffset(n, theta);
-    }
-    // ------------------------------------------------------------------------
+    // Reuse the exact geometry the map-mode calculation already produced
+    // (see calcConcrete/drawConcreteFence above) — same panel boundaries,
+    // same corner shortening (plain-duel AND Mode 1/Mode 2) — rather than
+    // recalculating it here from scratch. This is what keeps Plan Mode's
+    // dimension labels from drifting out of sync with what the map itself
+    // draws. Falls back to a local calc only if that hasn't run yet.
+    const geom = lineData._concretePlanGeom;
 
     const numSegs = pts.length - 1;
     let dAcc = 0;
@@ -392,21 +438,46 @@ function drawPlanConcreteIcon(pt, iconUrl, rot) {
         const segLen = hav(p0, p1);
         const b = bearing(p0, p1);
 
-        const startIsDC = useDualPillar && isCornerPoint(p0);
-        const endIsDC   = useDualPillar && isCornerPoint(p1);
-        const leftOff  = startIsDC ? cornerShortenAmount(p0) : 0;
-        const rightOff = endIsDC   ? cornerShortenAmount(p1) : 0;
-        const panelSpace = Math.max(0, segLen - leftOff - rightOff);
-
-        // tickDists = panel/slab boundaries, bounded by the shortened span
-        let tickDists = [leftOff];
-        let stdCount = 1;
-        if (panelSpace > 0.5) {
-            const calc = calcConcretePanels(panelSpace, m);
-            calc.ticks.forEach(t => tickDists.push(leftOff + t.pos));
-            stdCount = calc.standardCount;
+        const g = geom && geom[i];
+        let tickDists, stdCount;
+        if (g) {
+            tickDists = g.boundsRel.slice();
+            stdCount = g.standardCount;
+        } else {
+            // Fallback: no stored map geometry yet — recompute locally.
+            const startIsDC = useDualPillar && isCornerPoint(p0);
+            const endIsDC   = useDualPillar && isCornerPoint(p1);
+            function cornerShortenAmount(cornerPt, armBearing) {
+                const entry = cornerMap.get(ptKey(cornerPt));
+                if (!entry) return 0;
+                const [a1, a2] = getCornerArms(entry);
+                const theta = cornerAngle(a1, a2);
+                const nonSquareCb = document.getElementById('nonSquareModeConcrete') || document.getElementById('imNonSquareModeConcrete');
+                const nonSquareActive = nonSquareCb ? nonSquareCb.checked : false;
+                if (!nonSquareActive) {
+                    if (typeof armBearing === 'number') {
+                        const angTo = (bb) => { let d = Math.abs(((bb - armBearing) % 360 + 360) % 360); if (d > 180) d = 360 - d; return d; };
+                        const isBlueArm = angTo(a2) < angTo(a1);
+                        return isBlueArm ? n + n / 2 : n / 2;
+                    }
+                    return n / 2;
+                }
+                const mode = getCornerMode(cornerPt, theta, 'concrete');
+                if (mode === 'single') return n / 2;
+                return getDualCornerOffset(n, theta);
+            }
+            const leftOff  = startIsDC ? cornerShortenAmount(p0, bearing(p0, p1)) : 0;
+            const rightOff = endIsDC   ? cornerShortenAmount(p1, bearing(p1, p0)) : 0;
+            const panelSpace = Math.max(0, segLen - leftOff - rightOff);
+            tickDists = [leftOff];
+            stdCount = 1;
+            if (panelSpace > 0.5) {
+                const calc = calcConcretePanels(panelSpace, m);
+                calc.ticks.forEach(t => tickDists.push(leftOff + t.pos));
+                stdCount = calc.standardCount;
+            }
+            tickDists.push(segLen - rightOff);
         }
-        tickDists.push(segLen - rightOff);
 
         // postDists = actual post render points — corners/ends still sit at
         // the TRUE endpoint; drawDualPair applies its own visual offset,
@@ -483,6 +554,27 @@ function bisectorBearing(b1, b2) {
     return ((b1 + diff / 2) % 360 + 360) % 360;
 }
 
+// Draws a colored plan-mode corner-post box for concrete, sized/rotated the
+// same way as cowboy's drawPlanColorPost — kept as its own function (not
+// shared) per concrete/cowboy staying separate systems.
+function drawPlanConcreteColorPost(pt, armBearing, color) {
+    const n = 0.15;
+    const scale = window._poleScale || 1.0;
+    const visualN = Math.max(n, 0.15) * scale * 3;
+    const halfSz = visualN / 2;
+    const b2 = ((armBearing % 360) + 360) % 360;
+    const corners = [
+        offPt(offPt(pt, b2 + 90, halfSz), b2,       halfSz),
+        offPt(offPt(pt, b2 - 90, halfSz), b2,       halfSz),
+        offPt(offPt(pt, b2 - 90, halfSz), b2 + 180, halfSz),
+        offPt(offPt(pt, b2 + 90, halfSz), b2 + 180, halfSz),
+    ];
+    L.polygon(corners, {
+        color, weight: 2,
+        fillColor: '#ffffff', fillOpacity: 1, opacity: 1
+    }).addTo(planLayerGroup);
+}
+
 function drawPlanConcreteCorners() {
     if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
 
@@ -490,73 +582,73 @@ function drawPlanConcreteCorners() {
         || document.getElementById('doubleCornerPost');
     const nonSquareCheckbox = document.getElementById('nonSquareModeConcrete')
         || document.getElementById('imFreeAngleToggleConcrete');
-    const nonSquareOn = !!(nonSquareCheckbox && nonSquareCheckbox.checked);
-    const useDualPillar = !nonSquareOn && (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
+    const mode2Radio = document.getElementById('cornerMode2Concrete') || document.getElementById('imCornerMode2Concrete');
+    const nonSquareActive = !!(nonSquareCheckbox && nonSquareCheckbox.checked);
+
+    // Mirrors drawPlanCowboyCorners exactly: while non-square mode is on,
+    // whether the dual pillar renders comes from the Mode 2 radio, not the
+    // (now-locked/greyed) checkbox; while it's off, the checkbox is
+    // authoritative.
+    const useDualPillar = nonSquareActive
+        ? (mode2Radio ? mode2Radio.checked : false)
+        : (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
 
     const n = 0.15;
-    const PLAN_ICON_FIXED_PX = 20; // fixed — no zoom scaling
 
     for (const [, entry] of cornerMap.entries()) {
         const arms = entry.arms.slice(0, 2);
-        if (arms.length < 2) continue;
+
+        if (arms.length < 2 || !useDualPillar) {
+            const [armRed] = arms.length >= 2 ? getCornerArms(entry) : [arms[0].outward];
+            drawPlanPost(entry.pt, armRed, true, n, 'concrete');
+            continue;
+        }
 
         const [armRed, armBlue] = getCornerArms(entry);
         const theta = cornerAngle(armRed, armBlue);
 
-        // Single-mode corner (dual pillar off): one post rotated to face
-        // the angle bisector. Drawn even for a corner shared between two
-        // lines — previously this function returned early whenever dual
-        // pillar was off, so shared single-mode corners drew nothing.
-        if (!useDualPillar) {
-            const b = bisectorBearing(armRed, armBlue);
-            drawPlanPost(entry.pt, b, true, n, 'concrete');
-            continue;
-        }
-
-        const mode = getCornerMode(entry.pt, theta);
-        if (mode === 'single') {
-            const b = bisectorBearing(armRed, armBlue);
-            drawPlanPost(entry.pt, b, true, n, 'concrete');
-            continue;
-        }
-
-        const offset = getDualCornerOffset(n, theta);
-        const scale = window._poleScale || 1.0;
-        const visualN = Math.max(n, 0.15) * scale * 3;
-        const halfSz = visualN / 2;
-
-        function drawCornerBox(pt, armBearing, color) {
-            const b2 = ((armBearing % 360) + 360) % 360;
-            const corners = [
-                offPt(offPt(pt, b2 + 90, halfSz), b2,       halfSz),
-                offPt(offPt(pt, b2 - 90, halfSz), b2,       halfSz),
-                offPt(offPt(pt, b2 - 90, halfSz), b2 + 180, halfSz),
-                offPt(offPt(pt, b2 + 90, halfSz), b2 + 180, halfSz),
-            ];
-            L.polygon(corners, {
-                color, weight: 2,
-                fillColor: '#ffffff', fillOpacity: 1, opacity: 1
-            }).addTo(planLayerGroup);
-        }
-
-        // Both posts sit offset by x along their OWN arm — the red post
-        // was previously left pinned to the vertex (and never actually
-        // drawn here at all), which is what made the concrete dual-corner
-        // look broken compared to the cowboy fence. Mirrors
-        // drawPlanCowboyCorners exactly.
-        const redPt = offPt(entry.pt, armRed, offset);
-        const bluePt = offPt(entry.pt, armBlue, offset);
-        drawCornerBox(redPt, armRed, '#dc2626');
-        drawCornerBox(bluePt, armBlue, '#2563eb');
-
-        // Label the x offset from the true corner vertex to each post,
-        // pushed to the outward side of each arm (away from the other
-        // arm) so it doesn't land in the crowded notch between them.
-        if (typeof drawDimLine === 'function' && typeof cornerDimOutwardSign === 'function') {
-            const redSign = cornerDimOutwardSign(armRed, armBlue);
-            const blueSign = cornerDimOutwardSign(armBlue, armRed);
-            drawDimLine(entry.pt, redPt, redSign * 0.2, offset.toFixed(2) + 'm', '#dc2626');
-            drawDimLine(entry.pt, bluePt, blueSign * 0.2, offset.toFixed(2) + 'm', '#2563eb');
+        if (nonSquareActive) {
+            const mode = getCornerMode(entry.pt, theta, 'concrete');
+            if (mode === 'single') {
+                const b = bisectorBearing(armRed, armBlue);
+                drawPlanPost(entry.pt, b, true, n, 'concrete');
+                continue;
+            }
+            // Mode 2 — both posts offset along each arm by the angle
+            // formula, sharing the SAME orientation (the bisector) instead
+            // of each other's arm bearing, so they don't cross like a
+            // pinwheel. Mirrors drawPlanCowboyCorners exactly.
+            const offset = getDualCornerOffset(n, theta);
+            const bisect = bisectorBearing(armRed, armBlue);
+            const redPt  = offPt(entry.pt, armRed,  offset);
+            const bluePt = offPt(entry.pt, armBlue, offset);
+            drawPlanConcreteColorPost(redPt,  bisect, '#dc2626');
+            drawPlanConcreteColorPost(bluePt, bisect, '#2563eb');
+            if (typeof drawDimLine === 'function' && typeof cornerDimOutwardSign === 'function') {
+                const redSign  = cornerDimOutwardSign(armRed,  armBlue);
+                const blueSign = cornerDimOutwardSign(armBlue, armRed);
+                drawDimLine(entry.pt, redPt,  redSign  * 0.2, offset.toFixed(2) + 'm', '#dc2626');
+                drawDimLine(entry.pt, bluePt, blueSign * 0.2, offset.toFixed(2) + 'm', '#2563eb');
+            }
+        } else {
+            // Plain "duel" (square-corner) layout — mirrors
+            // drawConcreteDoubleCornerPost's plain-duel branch and
+            // drawPlanCowboyCorners' else branch: red sits ON the vertex,
+            // rotated flush with its own arm; blue sits one post-width out
+            // along ITS OWN arm, rotated flush with that line.
+            const scale = window._poleScale || 1.0;
+            const renderOffset = Math.max(n, 0.15) * scale * 3;
+            const blueBearing = (typeof forcedPerpendicularBearing === 'function')
+                ? forcedPerpendicularBearing(armRed, armBlue)
+                : armBlue;
+            const redPt  = entry.pt;
+            const bluePt = offPt(entry.pt, blueBearing, renderOffset);
+            drawPlanConcreteColorPost(redPt,  armRed,     '#dc2626');
+            drawPlanConcreteColorPost(bluePt, blueBearing, '#2563eb');
+            if (typeof drawDimLine === 'function' && typeof cornerDimOutwardSign === 'function') {
+                const blueSign = cornerDimOutwardSign(armBlue, armRed);
+                drawDimLine(entry.pt, bluePt, blueSign * 0.2, n.toFixed(2) + 'm', '#2563eb');
+            }
         }
     }
 }

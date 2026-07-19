@@ -103,7 +103,7 @@ function cornerShortenAmount(cornerPt, n, armBearing) {
         }
         return n / 2; // fallback if the caller couldn't identify the arm
     }
-    const mode = getCornerMode(cornerPt, theta);
+    const mode = getCornerMode(cornerPt, theta, 'cowboy');
     if (mode === 'single') return n / 2; // Mode 1: bisector post at vertex
     return getDualCornerOffset(n, theta); // Mode 2: posts offset by angle formula
 }
@@ -398,7 +398,7 @@ if (arms.length < 2 || !useDualPillar) {
         const theta = cornerAngle(armRed, armBlue);
 
         if (nonSquareActive) {
-            const mode = getCornerMode(entry.pt, theta);
+            const mode = getCornerMode(entry.pt, theta, 'cowboy');
 if (mode === 'single') {
     drawPlanPost(entry.pt, armRed, true, n, 'cowboy');
 } else {

@@ -296,24 +296,38 @@ function dualPostFootprint(n) {
 }
 
 // Returns the corner mode for a given corner point.
-// Reads per-corner overrides from window._cornerModes map, falls back to global UI setting.
+// Reads per-corner overrides from window._cornerModes map, falls back to the
+// global Mode 1 / Mode 2 radio selection for the given fence TYPE.
 // Returns 'single' or 'double'. If angle < 120° and mode would be 'single', falls back to 'double'.
-function getCornerMode(cornerPt, thetaDeg) {
-    const k = ptKey(cornerPt);
+//
+// `type` is 'cowboy' or 'concrete' — cowboy and concrete are separate fence
+// systems with their own independent Mode 1/Mode 2 radios (#cornerMode1 /
+// #cornerMode2 vs #cornerMode1Concrete / #cornerMode2Concrete), so both the
+// per-corner override key AND the global fallback must be scoped per type.
+// Sharing a single un-scoped lookup here (the old bug) meant the radios
+// never actually changed anything: the code fell through to a global
+// setting that didn't exist, silently defaulting to Mode 2 (double) always.
+function getCornerMode(cornerPt, thetaDeg, type) {
+    type = (type === 'concrete') ? 'concrete' : 'cowboy';
+    const k = type + ':' + ptKey(cornerPt);
     const perCorner = window._cornerModes && window._cornerModes.get(k);
     if (perCorner) {
         if (perCorner === 'single' && thetaDeg < 120) return 'double'; // enforce angle limit
         return perCorner;
     }
-    // Global default from UI (hidden input #globalCornerMode, value 'single'|'double', default 'double')
-    const globalEl = document.getElementById('globalCornerMode');
-    const globalMode = globalEl ? globalEl.value : 'double';
+    // Global default — driven by the Mode 1 / Mode 2 radio buttons via
+    // setCornerModeSelection() in index.html, which writes into this map
+    // whenever the user picks a radio (or toggles non-square mode on).
+    if (!window._globalCornerModeByType) window._globalCornerModeByType = { cowboy: 'double', concrete: 'double' };
+    const globalMode = window._globalCornerModeByType[type] || 'double';
     if (globalMode === 'single' && thetaDeg < 120) return 'double';
     return globalMode;
 }
 
-// Initialize per-corner mode store
+// Initialize per-corner mode store (keys are "type:latlngkey")
 if (!window._cornerModes) window._cornerModes = new Map();
+// Initialize per-type global default (mirrors the Mode 1 / Mode 2 radios)
+if (!window._globalCornerModeByType) window._globalCornerModeByType = { cowboy: 'double', concrete: 'double' };
 
 function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     const entry = cornerMap.get(ptKey(cornerPt));
@@ -331,11 +345,15 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     const nonSquareCb = document.getElementById('nonSquareMode') || document.getElementById('imNonSquareMode');
     const nonSquareActive = nonSquareCb ? nonSquareCb.checked : false;
 
+    // This is the COWBOY-specific double-corner-post function, so it always
+    // reads/writes the 'cowboy' side of the type-scoped corner mode store
+    // (see getCornerMode in this file). Concrete has its own parallel
+    // function, drawConcreteDoubleCornerPost, in concrete.js.
     if (nonSquareActive) {
-        const mode = getCornerMode(cornerPt, theta);
+        const mode = getCornerMode(cornerPt, theta, 'cowboy');
 if (mode === 'single') {
     drawPost(cornerPt, armRed, 'corner');
-    if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta);
+    if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta, undefined, undefined, 'cowboy');
     return { count: 1 };
 }
         // Mode 2 — posts offset along their own arm away from the vertex
@@ -344,7 +362,7 @@ const offset = getDualCornerOffset(n, theta);
         drawPost(offPt(cornerPt, armRed,  offset), bisect, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
         drawPost(offPt(cornerPt, armBlue, offset), bisect, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
         if (addHoverMarkers) {
-            _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue);
+            _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue, 'cowboy');
             L.marker(cornerPt, {
                 icon: L.divIcon({
                     className: '',
@@ -407,14 +425,15 @@ const offset = getDualCornerOffset(n, theta);
 // Renders a small toggle button on the corner to switch single/double mode.
 // Placed on the OUTWARD bisector (opposite side from the two posts) so it
 // doesn't sit on top of the red/blue pillars.
-function _addCornerModeToggle(cornerPt, currentMode, thetaDeg, armRed, armBlue) {
+function _addCornerModeToggle(cornerPt, currentMode, thetaDeg, armRed, armBlue, type) {
+    type = (type === 'concrete') ? 'concrete' : 'cowboy';
     const k = ptKey(cornerPt);
     const canSingle = thetaDeg >= 120;
     const label = currentMode === 'double' ? '1️⃣' : '2️⃣';
     const title = currentMode === 'double'
         ? (canSingle ? 'Switch to single post' : `ต้องการมุม ≥ 120° (ปัจจุบัน ${thetaDeg.toFixed(0)}°)`)
         : 'Switch to double post';
-    const btnHtml = `<div class="dc-mode-btn" data-k="${k}" data-theta="${thetaDeg.toFixed(1)}"
+    const btnHtml = `<div class="dc-mode-btn" data-k="${k}" data-type="${type}" data-theta="${thetaDeg.toFixed(1)}"
         title="${title}" style="cursor:${canSingle||currentMode==='single'?'pointer':'not-allowed'};
         opacity:${canSingle||currentMode==='single'?1:0.4};font-size:14px;background:#fff;
         border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
@@ -713,7 +732,8 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('.dc-mode-btn');
     if (!btn) return;
-    const k = btn.dataset.k;
+    const type = (btn.dataset.type === 'concrete') ? 'concrete' : 'cowboy';
+    const k = type + ':' + btn.dataset.k;
     const theta = parseFloat(btn.dataset.theta);
     if (!window._cornerModes) window._cornerModes = new Map();
     const cur = window._cornerModes.get(k) || 'double';
