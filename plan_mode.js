@@ -310,12 +310,9 @@ async function downloadPlanPDF() {
 // skipped.
 function geoDrawCowboyCorners() {
     if (typeof cornerMap === 'undefined' || cornerMap.size === 0) return;
-    const dualPillarCheckbox = document.getElementById('doubleCornerPost')
-        || document.getElementById('imDoubleCornerPost');
-    // Mirrors the fix in cowboy.js's drawPlanCowboyCorners: the checkbox
-    // itself already reflects Mode 1 (single, unchecked) vs Mode 2 (dual,
-    // checked) once non-square mode's radios sync it — no separate
-    // non-square override needed.
+    const dualPillarCheckbox = _isNonSquareActive('cowboy')
+        ? _activeCornerCheckbox('cornerMode2', 'imCornerModeDouble')
+        : _activeCornerCheckbox('doubleCornerPost', 'imDoubleCornerPost');
     const useDualPillar = dualPillarCheckbox ? dualPillarCheckbox.checked : false;
     const n = 0.15;
     const scale = window._poleScale || 1.0;
@@ -323,14 +320,22 @@ function geoDrawCowboyCorners() {
     const halfSz = vis / 2;
 for (const [, entry] of cornerMap.entries()) {
     const arms = entry.arms.slice(0, 2);
-    if (arms.length < 2 || !useDualPillar) {
-        // Single post: stay flush/axis-aligned with the fence line —
-        // no diagonal rotation for a square corner.
-        let b = 0;
-        if (arms.length >= 2) {
-            const [armRed] = getCornerArms(entry);
-            b = armRed;
-        }
+    if (arms.length < 2) {
+        drawVPost(entry.pt, arms[0].outward, true, n);
+        continue;
+    }
+    if (!useDualPillar) {
+        // Single post. Mirrors the fix in cowboy.js's drawPlanCowboyCorners:
+        // this early branch used to always draw flush with armRed and
+        // `continue`, which left the mode==='single' bisector code below
+        // unreachable whenever the checkbox read as unchecked (i.e. Mode 1).
+        // Non-square mode needs the bisector; plain square mode keeps the
+        // old flush-with-armRed, axis-aligned look.
+        const [armRed, armBlue] = getCornerArms(entry);
+        const theta = cornerAngle(armRed, armBlue);
+        const nonSquareActive = _isNonSquareActive('cowboy');
+        const mode = nonSquareActive ? getCornerMode(entry.pt, theta) : 'double_n_a';
+        const b = (mode === 'single') ? bisectorBearing(armRed, armBlue) : armRed;
         drawVPost(entry.pt, b, true, n);
         continue;
     }
@@ -338,15 +343,22 @@ for (const [, entry] of cornerMap.entries()) {
     const theta = cornerAngle(armRed, armBlue);
     const mode = getCornerMode(entry.pt, theta);
     if (mode === 'single') {
-        const b = armRed;
+        // Mode 1 only: rotate the post to the bisector between the two
+        // arms, mirroring the same fix applied in fence.js / cowboy.js.
+        // Mode 2 below (offset dual posts) and the arms.length<2/!useDualPillar
+        // branch above are untouched.
+        const b = bisectorBearing(armRed, armBlue);
         drawVPost(entry.pt, b, true, n);
     } else {
             const offset = getDualCornerOffset(n, theta);
-            // Posts drawn at bearing 0 (axis-aligned), each offset along its own arm
+            // Each post offset along, AND rotated to face, its own arm
+            // direction — matches the interactive map/plan-mode fix (posts
+            // stay flush with the actual fence line instead of a shared
+            // bisector or a fixed axis-aligned bearing).
             const redPt = _geoOffset(entry.pt, armRed, offset);
             const bluePt = _geoOffset(entry.pt, armBlue, offset);
-            geoRect(redPt, 0, halfSz, halfSz, '#ffffff', '#dc2626');
-            geoRect(bluePt, 0, halfSz, halfSz, '#ffffff', '#2563eb');
+            geoRect(redPt, armRed, halfSz, halfSz, '#ffffff', '#dc2626');
+            geoRect(bluePt, armBlue, halfSz, halfSz, '#ffffff', '#2563eb');
             // Same x-offset labels as the interactive plan view, pushed to
             // the outward side of each arm so they don't overlap in the
             // notch between the two arms.
@@ -968,38 +980,47 @@ function renderPlanView() {
     // corner map that the actual plan drawing depends on.
 if (typeof runFenceCalc === 'function') runFenceCalc();
 if (typeof fenceLayerGroup !== 'undefined') fenceLayerGroup.clearLayers();
-// Build cornerMap for ALL visible lines (cowboy + concrete + etc.) before
-// drawPlanLine, so concrete corners are properly recognized and don't
-// fall through to drawing a red box via drawPlanPost(isCorner=true).
 const allVisibleLines = allLines.filter((ld, idx) => {
     const cb = document.getElementById(`plan_cb_${idx}`);
     return cb && cb.checked;
 });
-if (typeof buildCornerMap === 'function') {
-    const visibleCowboyLines = allVisibleLines.filter(ld => (ld.fenceType || 'cowboy') === 'cowboy');
-    buildCornerMap(visibleCowboyLines.map(ld => ld.points));
-}
+
+// cornerMap is a single shared, destructive global map (buildCornerMap
+// wipes and rebuilds it) — it can only be scoped to ONE fence type at a
+// time. Each type's lines must therefore be drawn in their OWN pass, with
+// cornerMap (re)built for that type immediately beforehand — otherwise
+// isCornerPoint() inside drawPlanConcreteLine/drawPlanCowboyLine checks
+// against the WRONG type's corners (or an empty map) and always reads
+// false, making those lines draw their own corner post locally in
+// addition to the one drawPlanCowboyCorners/drawPlanConcreteCorners draws
+// afterward — the duplicated/rotated-wrong corner squares seen in Plan
+// Mode. Previously all lines were drawn in one combined pass while
+// cornerMap only ever held cowboy's corners, so every concrete corner hit
+// this bug.
+const visibleCowboyLines = allVisibleLines.filter(ld => (ld.fenceType || 'cowboy') === 'cowboy');
+if (typeof buildCornerMap === 'function') buildCornerMap(visibleCowboyLines.map(ld => ld.points));
 allLines.forEach((ld, idx) => {
     const cb = document.getElementById(`plan_cb_${idx}`);
-    if (cb && cb.checked) drawPlanLine(ld, idx);
+    if (cb && cb.checked && (ld.fenceType || 'cowboy') === 'cowboy') drawPlanLine(ld, idx);
 });
-
-// Cowboy corners: single shared pass, same corner data the map used.
 if (typeof drawPlanCowboyCorners === 'function') drawPlanCowboyCorners();
 
-// Concrete corners: same idea — rebuild cornerMap scoped to only the
-// visible concrete lines (buildCornerMap is destructive/global, so this
-// must happen in its own scoped call, after the cowboy pass above has
-// already used and finished with the shared cornerMap), then draw each
-// dual red/blue corner pillar exactly once.
-const visibleConcreteLines = allLines.filter((ld, idx) => {
+const visibleConcreteLines = allVisibleLines.filter(ld => (ld.fenceType || 'cowboy') === 'concrete');
+if (typeof buildCornerMap === 'function') buildCornerMap(visibleConcreteLines.map(ld => ld.points));
+allLines.forEach((ld, idx) => {
     const cb = document.getElementById(`plan_cb_${idx}`);
-    return cb && cb.checked && (ld.fenceType || 'cowboy') === 'concrete';
+    if (cb && cb.checked && (ld.fenceType || 'cowboy') === 'concrete') drawPlanLine(ld, idx);
 });
-if (typeof buildCornerMap === 'function') {
-    buildCornerMap(visibleConcreteLines.map(ld => ld.points));
-}
 if (typeof drawPlanConcreteCorners === 'function') drawPlanConcreteCorners();
+
+// Remaining fence types (barbed, brick, ...) don't use the shared
+// cornerMap-based corner-post system, so draw order relative to it
+// doesn't matter for them.
+allLines.forEach((ld, idx) => {
+    const cb = document.getElementById(`plan_cb_${idx}`);
+    const type = ld.fenceType || 'cowboy';
+    if (cb && cb.checked && type !== 'cowboy' && type !== 'concrete') drawPlanLine(ld, idx);
+});
 
     _drawPlanLegend();
     renderPlanSummaryTable();

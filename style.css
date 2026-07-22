@@ -1202,6 +1202,128 @@ FORM SPACING & INPUT FIXES
 }
 .sbr-unit { font-size: 12px; color: #6b7280; white-space: nowrap; }
 
+.sbr-breakdown {
+  margin: 2px 0 2px 15px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  color: #6b7280;
+  letter-spacing: 0.01em;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Price "hero" card — one unified section: compact detail rows (length,
+   post/beam counts, brick specifics) on top, one dominant animated price
+   number on the bottom with a small per-unit price line underneath.
+   Replaces the separate boxed result rows now that the manual "คำนวณวัสดุ"
+   button is gone and everything here updates live as the fence is drawn.
+   ══════════════════════════════════════════════════════════════════════ */
+.sb-price-hero-card {
+  background: #fff;
+  border: 1.5px solid #e9ecef;
+  border-radius: 14px;
+  overflow: hidden;
+  animation: sbPriceCardIn 0.35s cubic-bezier(.22,1,.36,1) both;
+}
+
+.sbph-details {
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sbph-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  padding: 3px 0;
+}
+.sbph-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sbph-detail-label { color: #6b7280; font-weight: 500; }
+.sbph-detail-val {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  color: #1f2937;
+  font-weight: 700;
+}
+.sbph-inline-num {
+  border: none;
+  background: transparent;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2937;
+  padding: 0;
+  width: 4.5em;
+  min-width: 0;
+}
+.sbph-inline-num:focus { outline: none; }
+.sbph-detail-unit { font-size: 11px; color: #9ca3af; font-weight: 500; }
+
+.sbph-price-section {
+  position: relative;
+  padding: 16px 14px 14px;
+  text-align: center;
+  background: linear-gradient(180deg, #f0fdf9, #ecfdf5);
+  border-top: 1.5px solid #d1fae5;
+}
+.sbph-price-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.sbph-price-big {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+}
+.sbph-price-value {
+  display: inline-flex;
+  font-size: 32px;
+  font-weight: 800;
+  color: #059669;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.sbph-price-unit { font-size: 14px; font-weight: 600; color: #10b981; }
+.sbph-price-sub { margin-top: 5px; font-size: 11px; color: #6b7280; font-weight: 500; }
+
+/* Per-digit "odometer" roll — see setPriceHeroValue() in fence.js. Each
+   changed character gets its own overflow-hidden slot with the old face
+   sliding out and the new face sliding in, upward for an increase and
+   downward for a decrease. */
+.phv-slot {
+  position: relative;
+  display: inline-block;
+  height: 1.15em;
+  overflow: hidden;
+  vertical-align: top;
+}
+.phv-face {
+  display: block;
+  transition: transform 0.45s cubic-bezier(.22,1,.36,1), opacity 0.35s ease;
+}
+
+/* Brief pulse on the whole price section whenever the value changes. */
+@keyframes sbphPulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+.sbph-pulse { animation: sbphPulse 0.4s ease; }
+
 /* Hint bar at bottom */
 .sb-fence-hint {
   display: flex;
@@ -1358,4 +1480,632 @@ FORM SPACING & INPUT FIXES
     background: #fef9c3;
     color: #92400e;
     border: 1px solid #fde047;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Cowboy fence — "กรอกราคา" price cards (post + beam)
+   Sleek card layout: icon + name + measurement on top, big price input
+   with unit + reset button below. Subtle entrance animation on load,
+   lift-on-hover, and a colored accent bar (amber = post, blue = beam)
+   that thickens on hover to echo the fence-type accent colors already
+   used elsewhere in the sidebar.
+   ══════════════════════════════════════════════════════════════════════ */
+@keyframes sbPriceCardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sb-price-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sb-price-card {
+  position: relative;
+  background: #fff;
+  border: 1.5px solid #e9ecef;
+  border-radius: 12px;
+  padding: 10px 12px 12px 16px;
+  overflow: hidden;
+  animation: sbPriceCardIn 0.4s cubic-bezier(.22,1,.36,1) both;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+}
+.sb-price-card:nth-child(2) { animation-delay: 0.07s; }
+.sb-price-card:hover {
+  transform: translateY(-2px);
+  border-color: #d1d5db;
+  box-shadow: 0 8px 18px rgba(15,23,42,0.08);
+}
+.sb-price-card::before {
+  content: "";
+  position: absolute;
+  left: 6px; top: 10px; bottom: 10px;
+  width: 3.5px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--sbpc-accent, #3b82f6), var(--sbpc-accent-2, #60a5fa));
+  transition: width 0.25s ease, left 0.25s ease;
+}
+.sb-price-card:hover::before { width: 4.5px; left: 5px; }
+.sb-price-card.sb-price-post { --sbpc-accent: #f59e0b; --sbpc-accent-2: #fbbf24; }
+.sb-price-card.sb-price-corner { --sbpc-accent: #7c3aed; --sbpc-accent-2: #a78bfa; }
+.sb-price-card.sb-price-beam { --sbpc-accent: #3b82f6; --sbpc-accent-2: #60a5fa; }
+
+.sbpc-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+.sbpc-icon {
+  width: 28px; height: 28px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.35s cubic-bezier(.34,1.56,.64,1);
+}
+.sbpc-icon svg { display: block; }
+.sb-price-card:hover .sbpc-icon { transform: scale(1.1) rotate(-6deg); }
+.sb-price-post .sbpc-icon { background: #fff7ed; color: #d97706; }
+.sb-price-corner .sbpc-icon { background: #f5f3ff; color: #7c3aed; }
+.sb-price-beam .sbpc-icon { background: #eff6ff; color: #2563eb; }
+.sbpc-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sbpc-name { font-size: 13px; font-weight: 700; color: #1f2937; }
+.sbpc-meas {
+  font-size: 10.5px;
+  color: #9ca3af;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s ease;
+}
+
+.sbpc-input-row { display: flex; align-items: center; gap: 6px; }
+.sbpc-input-wrap { position: relative; flex: 1; display: flex; align-items: center; }
+.sbpc-input-wrap input {
+  width: 100%;
+  padding: 9px 46px 9px 11px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+  background: #f9fafb;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.sbpc-input-wrap input::-webkit-inner-spin-button,
+.sbpc-input-wrap input::-webkit-outer-spin-button { display: none; }
+.sb-price-post .sbpc-input-wrap input:focus {
+  outline: none; background: #fff;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.15);
+}
+.sb-price-corner .sbpc-input-wrap input:focus {
+  outline: none; background: #fff;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
+}
+.sb-price-beam .sbpc-input-wrap input:focus {
+  outline: none; background: #fff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+.sbpc-unit {
+  position: absolute; right: 11px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px; color: #9ca3af; font-weight: 600;
+  pointer-events: none;
+}
+.sbpc-reset {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 9px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 15px;
+  transition: transform 0.4s cubic-bezier(.34,1.56,.64,1), border-color 0.2s, color 0.2s, background 0.2s;
+}
+.sb-price-post .sbpc-reset:hover { border-color: #f59e0b; color: #d97706; background: #fff7ed; }
+.sb-price-corner .sbpc-reset:hover { border-color: #7c3aed; color: #6d28d9; background: #f5f3ff; }
+.sb-price-beam .sbpc-reset:hover { border-color: #3b82f6; color: #2563eb; background: #eff6ff; }
+.sbpc-reset:active { transform: rotate(-360deg); }
+
+.sb-price-hint {
+  font-size: 10.5px;
+  color: #9ca3af;
+  line-height: 1.4;
+  margin-top: 8px;
+  padding-left: 2px;
+}
+/* ══════════════════════════════════════════════════════════════════════
+   Extra accent variants for the price-card system — concrete, barbed
+   wire, and brick — plus a dual-field layout for cards with two related
+   inputs (e.g. brick price/piece + pieces/m²). Reuses all of the base
+   .sb-price-card / .sbpc-* mechanics defined above (entrance animation,
+   hover lift, focus glow) so every fence type now shares one consistent,
+   modern "money display" component.
+   ══════════════════════════════════════════════════════════════════════ */
+.sb-price-card.sb-price-concrete { --sbpc-accent: #64748b; --sbpc-accent-2: #94a3b8; }
+.sb-price-card.sb-price-barbed   { --sbpc-accent: #374151; --sbpc-accent-2: #6b7280; }
+.sb-price-card.sb-price-brick    { --sbpc-accent: #d97706; --sbpc-accent-2: #f59e0b; }
+.sb-price-card.sb-price-cowboy   { --sbpc-accent: #d97706; --sbpc-accent-2: #f59e0b; }
+
+.sb-price-concrete .sbpc-icon { background: #f1f5f9; color: #475569; }
+.sb-price-barbed   .sbpc-icon { background: #f3f4f6; color: #374151; }
+.sb-price-brick    .sbpc-icon { background: #fff7ed; color: #c2410c; }
+.sb-price-cowboy   .sbpc-icon { background: #fff7ed; color: #d97706; }
+
+.sb-price-concrete .sbpc-input-wrap input:focus {
+  outline: none; background: #fff;
+  border-color: #64748b;
+  box-shadow: 0 0 0 3px rgba(100,116,139,0.15);
+}
+.sb-price-barbed .sbpc-input-wrap input:focus {
+  outline: none; background: #fff;
+  border-color: #374151;
+  box-shadow: 0 0 0 3px rgba(55,65,81,0.12);
+}
+.sb-price-brick .sbpc-input-wrap input:focus {
+  outline: none; background: #fff;
+  border-color: #d97706;
+  box-shadow: 0 0 0 3px rgba(217,119,6,0.15);
+}
+.sb-price-cowboy .sbpc-input-wrap input:focus {
+  outline: none; background: #fff;
+  border-color: #d97706;
+  box-shadow: 0 0 0 3px rgba(217,119,6,0.15);
+}
+
+.sb-price-concrete .sbpc-reset:hover { border-color: #64748b; color: #475569; background: #f1f5f9; }
+.sb-price-barbed   .sbpc-reset:hover { border-color: #374151; color: #1f2937; background: #f3f4f6; }
+.sb-price-brick    .sbpc-reset:hover { border-color: #d97706; color: #c2410c; background: #fff7ed; }
+.sb-price-cowboy   .sbpc-reset:hover { border-color: #d97706; color: #c2410c; background: #fff7ed; }
+
+/* Dual-field layout — two inputs side by side inside one card, each with
+   its own small caption label, sharing a single reset button up in the
+   card header instead of the input row. */
+.sbpc-head .sbpc-reset {
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+}
+.sbpc-dual-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.sbpc-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sbpc-field label {
+  font-size: 10.5px;
+  color: #9ca3af;
+  font-weight: 600;
+}
+.sbpc-field .sbpc-input-wrap input {
+  padding-right: 34px;
+  font-size: 13px;
+}
+.sbpc-field .sbpc-unit { right: 9px; font-size: 11px; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Picker cards — sleek wrapper for "เลือกเสา-คาน" and "ระยะห่างระหว่างเสา"
+   Same visual language as the price cards below them (rounded card,
+   soft border, subtle hover lift, icon badge) so the whole post/beam
+   selection flow reads as one connected component instead of a bare
+   native <select> floating above a plain gray spec box.
+   ══════════════════════════════════════════════════════════════════════ */
+.sb-picker-card {
+  background: #fff;
+  border: 1.5px solid #e9ecef;
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+  margin-bottom: 10px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+  animation: sbPriceCardIn 0.4s cubic-bezier(.22,1,.36,1) both;
+}
+.sb-picker-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 6px 14px rgba(15,23,42,0.06);
+}
+.sbpk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sbpk-icon {
+  width: 24px; height: 24px;
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+.sb-picker-postbeam .sbpk-icon { background: #eff6ff; color: #2563eb; }
+.sb-picker-spacing  .sbpk-icon { background: #fff7ed; color: #d97706; }
+.sbpk-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sbpk-select.sb-select {
+  background: #f9fafb;
+  border-color: #e9ecef;
+}
+.sb-picker-postbeam .sbpk-select.sb-select:focus,
+.sb-picker-spacing  .sbpk-select.sb-select:focus {
+  background: #fff;
+}
+.sb-picker-postbeam .sbpk-select.sb-select:focus { border-color: #3b82f6; }
+.sb-picker-spacing  .sbpk-select.sb-select:focus { border-color: #d97706; }
+.sb-picker-card .sb-beam-spec { margin-bottom: 0; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Toggle switch rows — "ใช้เสา 2 ต้นที่มุมต่อ", "โหมดมุมไม่ตั้งฉาก (ไม่ใช่ 90°)"
+   Card-styled row with icon badge + label on the left and an actual
+   sliding switch on the right, matching the picker/price card language.
+   Accent color is set per-row via the --sbtg-accent custom property.
+   ══════════════════════════════════════════════════════════════════════ */
+.sb-toggle-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fff;
+  border: 1.5px solid #e9ecef;
+  border-radius: 12px;
+  padding: 11px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.sb-toggle-row:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+}
+.sb-toggle-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.sb-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.sb-toggle-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sb-toggle-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  line-height: 1.35;
+}
+.sb-toggle-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: #d1d5db;
+  transition: background 0.2s ease;
+}
+.sb-toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s cubic-bezier(.34, 1.56, .64, 1);
+}
+.sb-toggle-input:checked ~ .sb-toggle-switch {
+  background: var(--sbtg-accent, #2563eb);
+}
+.sb-toggle-input:checked ~ .sb-toggle-switch::after {
+  transform: translateX(16px);
+}
+.sb-toggle-input:focus-visible ~ .sb-toggle-switch {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+.sb-toggle-row:active {
+  transform: scale(0.997);
+}
+.sb-toggle-input:checked ~ .sb-toggle-left .sb-toggle-text {
+  color: #1f2937;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Radio chip group — Mode 1 / Mode 2 options revealed under
+   "โหมดมุมไม่ตั้งฉาก"
+   ══════════════════════════════════════════════════════════════════════ */
+.sb-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 10px;
+  background: #f5f3ff;
+  border: 1.5px solid #ddd6fe;
+  border-radius: 10px;
+  animation: sbPriceCardIn 0.25s ease both;
+}
+.sb-radio-chip {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1.5px solid #e9ecef;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.sb-radio-chip:hover {
+  border-color: #c4b5fd;
+}
+.sb-radio-chip input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.sb-radio-dot {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 2px solid #c4c9d1;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease;
+}
+.sb-radio-dot::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7c3aed;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.15s ease;
+}
+.sb-radio-chip input:checked ~ .sb-radio-dot {
+  border-color: #7c3aed;
+}
+.sb-radio-chip input:checked ~ .sb-radio-dot::after {
+  transform: translate(-50%, -50%) scale(1);
+}
+.sb-radio-chip input:checked ~ .sb-radio-text {
+  color: #4c1d95;
+  font-weight: 700;
+}
+.sb-radio-chip input:focus-visible ~ .sb-radio-dot {
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}
+.sb-radio-text {
+  font-size: 12px;
+  color: #4b5563;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Generic field card — used for standalone inputs like
+   "ขนาดเสา (กว้าง, เมตร)" so they read as part of the same card system
+   as the picker/price cards instead of a bare label + input.
+   ══════════════════════════════════════════════════════════════════════ */
+.sb-field-card {
+  background: #fff;
+  border: 1.5px solid #e9ecef;
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+  margin-bottom: 10px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  animation: sbPriceCardIn 0.4s cubic-bezier(.22, 1, .36, 1) both;
+}
+.sb-field-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+}
+.sb-field-card .sbpc-input-wrap input:focus {
+  outline: none;
+  background: #fff;
+  border-color: #6b7280;
+  box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.15);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   Custom select (built by enhanceSelect()) — a styled trigger button +
+   floating option menu replaces the native <select>. The native select
+   stays in the DOM (value/onchange logic still reads it) but is fully
+   hidden so it can't paint or intercept clicks under the custom UI.
+   ══════════════════════════════════════════════════════════════════════ */
+.sb-select-wrap.sb-csel .sb-select.sb-csel-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+.sb-csel-trigger {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.sb-picker-card .sb-csel-trigger { background: #f9fafb; }
+.sb-csel-trigger:hover { border-color: #d1d5db; }
+.sb-select-wrap.sb-csel.open .sb-csel-trigger {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+.sb-picker-postbeam.sb-select-wrap.sb-csel.open .sb-csel-trigger,
+.sb-picker-postbeam .sb-select-wrap.sb-csel.open .sb-csel-trigger {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+.sb-picker-spacing.sb-select-wrap.sb-csel.open .sb-csel-trigger,
+.sb-picker-spacing .sb-select-wrap.sb-csel.open .sb-csel-trigger {
+  border-color: #d97706;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.12);
+}
+.sb-csel-value {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sb-csel-chevron {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #9ca3af;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+.sb-select-wrap.sb-csel.open .sb-csel-chevron {
+  transform: rotate(180deg);
+  color: #3b82f6;
+}
+.sb-csel-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: #fff;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
+  padding: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  display: none;
+}
+.sb-select-wrap.sb-csel.open .sb-csel-menu {
+  display: block;
+  animation: sbPriceCardIn 0.15s ease both;
+}
+.sb-csel-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.sb-csel-option:hover { background: #f3f4f6; }
+.sb-csel-option.active { background: #eff6ff; }
+
+/* Structured row shared by both the menu options and the closed trigger's
+   selected-value display: name + measurement on the left, price stacked
+   (number above, unit below) on the right — same visual language as the
+   price cards below. */
+.sb-csel-opt-main {
+  flex: 1;
+  min-width: 0;
+}
+.sb-csel-opt-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-csel-option.active .sb-csel-opt-name {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+.sb-csel-opt-meas {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-csel-opt-price {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+  min-width: 42px;
+}
+.sb-csel-opt-price-num {
+  font-size: 13px;
+  font-weight: 800;
+  color: #d97706;
+}
+.sb-csel-option.active .sb-csel-opt-price-num { color: #1d4ed8; }
+.sb-csel-opt-price-unit {
+  font-size: 10px;
+  color: #9ca3af;
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+/* Closed-trigger variant: same left/right layout, but a calmer neutral
+   color for the price since this is a "currently selected" readout, not
+   a list of choices to compare. */
+.sb-csel-value .sb-csel-opt-name { color: #1f2937; font-weight: 700; }
+.sb-csel-value .sb-csel-opt-price-num { color: #1f2937; }
+
+/* Promote the open dropdown's host card above sibling cards. .sb-picker-card
+   creates its own stacking context (it animates in on load), which would
+   otherwise trap the menu's z-index and let a later sibling card render on
+   top of it. */
+.sb-picker-card.sb-csel-host-open {
+  position: relative;
+  z-index: 60;
 }

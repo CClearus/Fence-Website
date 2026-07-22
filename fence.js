@@ -13,6 +13,55 @@ const FENCE_PRICE_DEFAULTS = {
     concrete: 850
 };
 
+// ── Cowboy fence: granular per-post / per-beam pricing ──────────────────────
+// Post price depends on which layer count (2/3/4 ชั้น) is selected. Beam
+// price only has a known reference value at the 2.5 m spacing; any other
+// spacing (2.0 m or a custom value) has no default and is left for the user
+// to fill in manually.
+const COWBOY_POST_PRICE_DEFAULTS = { '2': 414, '3': 495, '4': 576 };
+const COWBOY_BEAM_PRICE_BY_SPACING = { '2.5': 303 };
+
+// Syncs the "ราคาเสาต้นละ" input to the default price for whichever post
+// layer (2/3/4 ชั้น) is currently selected. Called whenever beamSelect
+// changes, and once on page load. Overwrites any manual edit — same
+// behavior as updateBrickDefaults() does for brick price on brick-type
+// change — so the ↺ reset button and simply re-picking the same layer both
+// land on the same known-good default.
+window.syncCowboyPostPrice = function () {
+    const sel = _activeCornerCheckbox('beamSelect', 'imBeamSelect');
+    const priceEl = _activeCornerCheckbox('cowboyPostPrice', 'imCowboyPostPrice');
+    if (!sel || !priceEl) return;
+    const def = COWBOY_POST_PRICE_DEFAULTS[sel.value];
+    if (def !== undefined) priceEl.value = def;
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
+// Corner posts (a post sitting at a corner — see cowboy.js's cornerPosts
+// tally) have no independent reference price of their own, so the ↺ reset
+// just re-syncs to the same per-layer default as a plain post — a safe
+// starting point the user can bump up manually for a beefier corner post.
+window.syncCowboyCornerPostPrice = function () {
+    const sel = _activeCornerCheckbox('beamSelect', 'imBeamSelect');
+    const priceEl = _activeCornerCheckbox('cowboyCornerPostPrice', 'imCowboyCornerPostPrice');
+    if (!sel || !priceEl) return;
+    const def = COWBOY_POST_PRICE_DEFAULTS[sel.value];
+    if (def !== undefined) priceEl.value = def;
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
+// Syncs the "ราคาคานละ" input to the reference price for the currently
+// selected spacing. Only 2.5 m has a known reference price — switching to
+// 2.0 m or "กำหนดเอง…" (custom) clears the field so the user must enter a
+// price themselves (there's no made-up default to fall back on for those).
+window.syncCowboyBeamPrice = function () {
+    const sel = _activeCornerCheckbox('spacingSelect', 'imSpacingSelect');
+    const priceEl = _activeCornerCheckbox('cowboyBeamPrice', 'imCowboyBeamPrice');
+    if (!sel || !priceEl) return;
+    const def = COWBOY_BEAM_PRICE_BY_SPACING[sel.value];
+    priceEl.value = (def !== undefined) ? def : '';
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
 // ── Spacing lockout state ────────────────────────────────────────────────────
 // Tracks whether the user has clicked "ยืนยัน / ดำเนินการต่อ" to ignore the
 // tier-2 (m > 3) soft warning.  Reset to false whenever the spacing changes.
@@ -54,12 +103,45 @@ function _applyDrawLock(locked) {
 // Returns the checkbox that actually reflects the user's current choice:
 // Page 2's (imId) when Input Mode is active, Page 1's (pageId) otherwise.
 // Falls back to whichever one exists if the tab state can't be read.
+//
+// This is the general-purpose fix for a whole class of bugs: Page 1's
+// fields always exist in the DOM (just hidden, never removed, when Input
+// Mode is shown), so a naive `document.getElementById(pageId) ||
+// document.getElementById(imId)` ALWAYS resolves to Page 1's element and
+// silently ignores whatever the user typed/toggled in Input Mode. Use this
+// helper (not raw `||`) for every page1/im id pair, not just corner
+// checkboxes — the name is legacy but the logic is generic.
 function _activeCornerCheckbox(pageId, imId) {
+    if (isInputModeActive()) {
+        return document.getElementById(imId) || document.getElementById(pageId);
+    }
+    return document.getElementById(pageId) || document.getElementById(imId);
+}
+
+// Is the Input Mode tab (Page 2 — "ระบบกรอกข้อมูล") currently the visible
+// one? Shared by _activeCornerCheckbox and _isNonSquareActive.
+function isInputModeActive() {
     const page2El = document.getElementById('sbPage2');
-    const page2Active = page2El ? page2El.style.display !== 'none' : false;
-    const primaryId = page2Active ? imId : pageId;
-    const fallbackId = page2Active ? pageId : imId;
-    return document.getElementById(primaryId) || document.getElementById(fallbackId);
+    return page2El ? page2El.style.display !== 'none' : false;
+}
+
+// Whether non-square (non-90°) corner mode is active for a given fence type
+// ('cowboy' or 'concrete'). Page 1 gates its Mode 1/Mode 2 corner-mode
+// radios behind an explicit "โหมดมุมไม่ตั้งฉาก" toggle; Input Mode has no
+// such toggle of its own — its corner-mode radios (imCornerModeDouble/
+// imCornerModeSingle, or the concrete equivalents) are always shown and
+// always meaningful — so being on the Input Mode tab with this type
+// currently selected there counts as non-square being active. Otherwise
+// falls back to Page 1's real toggle checkbox.
+function _isNonSquareActive(type) {
+    if (isInputModeActive()) {
+        const activeCard = document.querySelector('#imFenceCards .sb-fence-card.active');
+        const imType = activeCard ? activeCard.getAttribute('data-type') : null;
+        if (imType === type) return true;
+    }
+    const id = type === 'concrete' ? 'nonSquareModeConcrete' : 'nonSquareMode';
+    const cb = document.getElementById(id);
+    return cb ? cb.checked : false;
 }
 
 // ── Post-spacing validation (3 tiers from design spec) ──────────────────────
@@ -86,9 +168,16 @@ window.resetFencePrice = function (type) {
         if (el) el.value = val;
     };
 
-    if (type === 'cowboy') {
-        setVal('cowboyPricePerM', FENCE_PRICE_DEFAULTS.cowboy);
-        setVal('imCowboyPricePerM', FENCE_PRICE_DEFAULTS.cowboy);
+    if (type === 'cowboyPost') {
+        // Reset "ราคาเสาต้นละ" back to the default for whichever post layer
+        // (2/3/4 ชั้น) is currently selected.
+        if (typeof syncCowboyPostPrice === 'function') syncCowboyPostPrice();
+    } else if (type === 'cowboyCornerPost') {
+        if (typeof syncCowboyCornerPostPrice === 'function') syncCowboyCornerPostPrice();
+    } else if (type === 'cowboyBeam') {
+        // Reset "ราคาคานละ" back to the reference price for the currently
+        // selected spacing (only defined at 2.5 m — otherwise clears it).
+        if (typeof syncCowboyBeamPrice === 'function') syncCowboyBeamPrice();
     } else if (type === 'barbed') {
         setVal('barbedPricePerM', FENCE_PRICE_DEFAULTS.barbed);
         setVal('imBarbedPricePerM', FENCE_PRICE_DEFAULTS.barbed);
@@ -342,8 +431,7 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     const theta = cornerAngle(armRed, armBlue);
     const k = ptKey(cornerPt);
 
-    const nonSquareCb = document.getElementById('nonSquareMode') || document.getElementById('imNonSquareMode');
-    const nonSquareActive = nonSquareCb ? nonSquareCb.checked : false;
+    const nonSquareActive = _isNonSquareActive('cowboy');
 
     // This is the COWBOY-specific double-corner-post function, so it always
     // reads/writes the 'cowboy' side of the type-scoped corner mode store
@@ -352,15 +440,23 @@ function drawDoubleCornerPost(cornerPt, n, addHoverMarkers) {
     if (nonSquareActive) {
         const mode = getCornerMode(cornerPt, theta, 'cowboy');
 if (mode === 'single') {
-    drawPost(cornerPt, armRed, 'corner');
+    // Mode 1 only: rotate the single bisector post to face the middle of
+    // the angle between the two arms, rather than sitting flush with
+    // armRed. Mode 2 (dual offset posts) and the plain 90° "duel" branch
+    // below are untouched — they still use armRed / their own arm bearing.
+    const singleBearing = bisectorBearing(armRed, armBlue);
+    drawPost(cornerPt, singleBearing, 'corner');
     if (addHoverMarkers) _addCornerModeToggle(cornerPt, 'single', theta, undefined, undefined, 'cowboy');
     return { count: 1 };
 }
-        // Mode 2 — posts offset along their own arm away from the vertex
-const offset = getDualCornerOffset(n, theta);
-        const bisect = bisectorBearing(armRed, armBlue);
-        drawPost(offPt(cornerPt, armRed,  offset), bisect, 'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
-        drawPost(offPt(cornerPt, armBlue, offset), bisect, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+        // Mode 2 — posts offset along their own arm away from the vertex,
+        // each rotated to face ITS OWN line direction (armRed/armBlue) so
+        // the post edges stay flush with the actual fence line the user
+        // drew, instead of both sharing one fixed bisector angle that only
+        // looks right for the specific corner angle it was computed from.
+        const offset = getDualCornerOffset(n, theta);
+        drawPost(offPt(cornerPt, armRed,  offset), armRed,  'corner', '#dc2626', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
+        drawPost(offPt(cornerPt, armBlue, offset), armBlue, 'corner', '#2563eb', '#ffffff', DUAL_POST_VISUAL_MULTIPLIER);
         if (addHoverMarkers) {
             _addCornerModeToggle(cornerPt, 'double', theta, armRed, armBlue, 'cowboy');
             L.marker(cornerPt, {
@@ -497,10 +593,10 @@ document.addEventListener('click', function(e) {
 function runFenceCalc() {
     if (typeof allLines === 'undefined' || allLines.length === 0) return;
 
-    const layersInput = document.getElementById('beamSelect');
+    const layersInput = _activeCornerCheckbox('beamSelect', 'imBeamSelect');
     const layers = layersInput ? parseInt(layersInput.value) || 2 : 2;
 
-    const concreteLayersInput = document.getElementById('concreteLayerSelect') || document.getElementById('imConcreteLayerSelect');
+    const concreteLayersInput = _activeCornerCheckbox('concreteLayerSelect', 'imConcreteLayerSelect');
     const concreteLayers = concreteLayersInput ? parseInt(concreteLayersInput.value) || 2 : layers;
 
     const activeCard = document.querySelector('.sb-fence-card.active');
@@ -516,24 +612,21 @@ function runFenceCalc() {
     });
 
     // Cowboy/concrete double-corner: read the checkbox belonging to whichever
-    // tab is actually active. Previously this used `document.getElementById(a) ||
-    // document.getElementById(b)` — since Page 1's checkboxes (doubleCornerPost,
-    // concreteDoubleCornerPost) always exist in the DOM (just hidden, not
-    // removed, when Page 2/Input Mode is shown), that `||` fallback to the
-    // "im..." id never fired, so Input Mode's corner-mode radios had zero
-    // effect on the actual calculation.
+    // tab is actually active — see _activeCornerCheckbox/_isNonSquareActive.
+    // Input Mode's Mode2 radio id differs from Page 1's (imCornerModeDouble
+    // vs cornerMode2, imConcreteCornerModeDouble vs cornerMode2Concrete) —
+    // pairing the wrong ids here meant Input Mode's radio choice was never
+    // actually read even once the tab-awareness itself was fixed.
 const cowboyDcEl = _activeCornerCheckbox('doubleCornerPost', 'imDoubleCornerPost');
-const cowboyMode2 = document.getElementById('cornerMode2') || document.getElementById('imCornerMode2');
-const cowboyNonSquare = document.getElementById('nonSquareMode') || document.getElementById('imNonSquareMode');
-const cowboyDoubleCorner = (cowboyNonSquare && cowboyNonSquare.checked)
+const cowboyMode2 = _activeCornerCheckbox('cornerMode2', 'imCornerModeDouble');
+const cowboyDoubleCorner = _isNonSquareActive('cowboy')
     ? (cowboyMode2 ? cowboyMode2.checked : false)
     : (cowboyDcEl ? cowboyDcEl.checked : false);
 
     // Concrete double-corner: read its own separate checkbox
 const concreteDcEl = _activeCornerCheckbox('concreteDoubleCornerPost', 'imConcreteDoubleCorner');
-const concreteDcMode2 = document.getElementById('cornerMode2Concrete') || document.getElementById('imCornerMode2Concrete');
-const concreteNonSquare = document.getElementById('nonSquareModeConcrete') || document.getElementById('imNonSquareModeConcrete');
-const concreteDoubleCorner = (concreteNonSquare && concreteNonSquare.checked)
+const concreteDcMode2 = _activeCornerCheckbox('cornerMode2Concrete', 'imConcreteCornerModeDouble');
+const concreteDoubleCorner = _isNonSquareActive('concrete')
     ? (concreteDcMode2 ? concreteDcMode2.checked : false)
     : (concreteDcEl ? concreteDcEl.checked : false);
 
@@ -541,9 +634,10 @@ const concreteDoubleCorner = (concreteNonSquare && concreteNonSquare.checked)
     // spacingValidations: [{ type:'hard'|'soft'|'ok', message }]
     const spacingValidations = [];
 
-    // Helper: read raw spacing value for a fence type
+    // Helper: read raw spacing value for a fence type — tab-aware (id1 =
+    // Page 1's id, id2 = Input Mode's), see _activeCornerCheckbox.
     function rawSpacing(id1, id2) {
-        const el = document.getElementById(id1) || document.getElementById(id2);
+        const el = _activeCornerCheckbox(id1, id2);
         return el ? parseFloat(el.value) : NaN;
     }
 
@@ -562,9 +656,19 @@ const concreteDoubleCorner = (concreteNonSquare && concreteNonSquare.checked)
         const m_cowboy = Math.min(3, Math.max(1, isNaN(m_raw) ? 2.5 : m_raw));
         const res = calcCowboy(cowboyLines, m_cowboy, 0.15, cowboyDoubleCorner, layers);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
-        const priceEl = document.getElementById('cowboyPricePerM') || document.getElementById('imCowboyPricePerM');
-        const cowboyPrice = parseFloat(priceEl?.value) || FENCE_PRICE_DEFAULTS.cowboy;
-        grandPrice += res.grandTotal * cowboyPrice;
+        // Granular pricing per the cowboy price spec: normal post price +
+        // corner post price (a post sitting at a corner — single Mode-1
+        // bisector post or the Mode-2/plain-duel pair — costs differently
+        // from a plain mid-line post) + beam price (depends on spacing).
+        // Missing/blank fields just contribute 0 — the user may fill in
+        // only the ones relevant to their fence.
+        const postPriceEl = _activeCornerCheckbox('cowboyPostPrice', 'imCowboyPostPrice');
+        const cornerPostPriceEl = _activeCornerCheckbox('cowboyCornerPostPrice', 'imCowboyCornerPostPrice');
+        const beamPriceEl = _activeCornerCheckbox('cowboyBeamPrice', 'imCowboyBeamPrice');
+        const cowboyPostPrice = parseFloat(postPriceEl?.value) || 0;
+        const cowboyCornerPostPrice = parseFloat(cornerPostPriceEl?.value) || 0;
+        const cowboyBeamPrice = parseFloat(beamPriceEl?.value) || 0;
+        grandPrice += res.normalPosts * cowboyPostPrice + res.cornerPosts * cowboyCornerPostPrice + res.grandBeams * cowboyBeamPrice;
         // Separate tier-3 (segment too short) from other warnings
         res.warnings.forEach(w => segmentWarnings.push(w));
     }
@@ -576,7 +680,7 @@ const concreteDoubleCorner = (concreteNonSquare && concreteNonSquare.checked)
         const m_concrete = Math.min(3, Math.max(1, isNaN(m_raw) ? 2.5 : m_raw));
         const res = calcConcrete(concreteLines, m_concrete, 0.15, concreteDoubleCorner, concreteLayers);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
-        const priceEl = document.getElementById('concretePricePerM') || document.getElementById('imConcretePricePerM');
+        const priceEl = _activeCornerCheckbox('concretePricePerM', 'imConcretePricePerM');
         const concretePrice = parseFloat(priceEl?.value) || FENCE_PRICE_DEFAULTS.concrete;
         grandPrice += res.grandTotal * concretePrice;
         res.warnings.forEach(w => segmentWarnings.push(w));
@@ -594,16 +698,17 @@ const concreteDoubleCorner = (concreteNonSquare && concreteNonSquare.checked)
         const vResult = validatePostSpacing(isNaN(m_raw) ? 0 : m_raw);
         if (vResult.type !== 'ok') spacingValidations.push(vResult);
         const m_barbed = Math.min(3, Math.max(1, isNaN(m_raw) ? 2.5 : m_raw));
-        const nBraceSolo  = (document.getElementById('nBraceSolo')  || document.getElementById('imNBraceSolo'))?.checked  ?? false;
-        const nBraceDual  = (document.getElementById('nBraceDual')  || document.getElementById('imNBraceDual'))?.checked  ?? false;
-        const nBraceAngle = (document.getElementById('nBraceAngle') || document.getElementById('imNBraceAngle'))?.checked ?? false;
+        const nBraceSolo  = _activeCornerCheckbox('nBraceSolo',  'imNBraceSolo')?.checked  ?? false;
+        const nBraceDual  = _activeCornerCheckbox('nBraceDual',  'imNBraceDual')?.checked  ?? false;
+        const nBraceAngle = _activeCornerCheckbox('nBraceAngle', 'imNBraceAngle')?.checked ?? false;
         const res = calcBarbed(barbedLines, m_barbed, 0, nBraceSolo, nBraceDual, nBraceAngle);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
-        const priceEl = document.getElementById('barbedPricePerM') || document.getElementById('imBarbedPricePerM');
+        const priceEl = _activeCornerCheckbox('barbedPricePerM', 'imBarbedPricePerM');
         const barbedPrice = parseFloat(priceEl?.value) || FENCE_PRICE_DEFAULTS.barbed;
         grandPrice += res.grandTotal * barbedPrice;
         res.warnings.forEach(w => segmentWarnings.push(w));
     }
+    updateBarbedPostBreakdown(barbedLines.length > 0);
 
     // ── Determine overall lock state ─────────────────────────────────────────
     // Hard lock: any tier-1 (m<1) or tier-3 (panelSpace<0.5) violation
@@ -645,11 +750,19 @@ const concreteDoubleCorner = (concreteNonSquare && concreteNonSquare.checked)
             let totalPrice = grandPrice;
             if (hasBrick && window._brickCalcResult) {
                 const br = window._brickCalcResult;
-                const brickPrice = parseFloat((document.getElementById('brickPricePerPiece') || document.getElementById('imBrickPrice'))?.value) || 1.05;
+                const brickPrice = parseFloat(_activeCornerCheckbox('brickPricePerPiece', 'imBrickPrice')?.value) || 1.05;
                 const brickCount = Math.ceil(br.brickCount * 1.05);
                 totalPrice += brickCount * brickPrice;
             }
             priceInput.value = totalPrice.toLocaleString('th-TH', { maximumFractionDigits: 0 });
+            // Page 1's big green "hero" price readout is a separate animated
+            // mirror of this hidden input — only drive it from the page-1
+            // call (ids.price === 'resPriceDisplay'), not Input Mode's, since
+            // both would otherwise fight over the same shared hero element.
+            if (ids.price === 'resPriceDisplay') {
+                setPriceHeroValue(priceInput.value);
+                updatePriceHeroSub();
+            }
         }
 
         const warnEl = document.getElementById(ids.warnings);
@@ -673,6 +786,129 @@ const concreteDoubleCorner = (concreteNonSquare && concreteNonSquare.checked)
 
     writeResults({ total: 'resTotal', posts: 'resPosts', beams: 'resBeams', price: 'resPriceDisplay', warnings: 'fenceWarnings' });
     writeResults({ total: 'imResTotal', posts: 'imResPosts', beams: 'imResBeams', price: 'imResPriceDisplay', warnings: 'imFenceWarnings' });
+}
+
+// ── Animated price "hero" display ────────────────────────────────────────
+// Renders the big green price number (see .sb-price-hero-card in index.html)
+// with a per-digit roll animation whenever it changes — each character
+// position that actually changed slides out the old digit and slides in the
+// new one (odometer-style), sliding upward when the price increases and
+// downward when it decreases. Purely a rendered mirror of resPriceDisplay
+// (the plain hidden input writeResults() writes to); never itself read by
+// any calculation.
+let _priceHeroPrev = null;
+function setPriceHeroValue(text) {
+    const el = document.getElementById('priceHeroValue');
+    if (!el) return;
+    const prev = _priceHeroPrev;
+    _priceHeroPrev = text;
+    if (prev === text) return;
+    if (prev === null) { el.textContent = text; return; } // first render — no animation to play
+
+    const prevNum = parseFloat(String(prev).replace(/[^0-9.-]/g, '')) || 0;
+    const nextNum = parseFloat(String(text).replace(/[^0-9.-]/g, '')) || 0;
+    const goingUp = nextNum >= prevNum;
+
+    const len = Math.max(prev.length, text.length);
+    const prevPadded = String(prev).padStart(len, ' ');
+    const nextPadded = String(text).padStart(len, ' ');
+
+    el.innerHTML = '';
+    for (let i = 0; i < len; i++) {
+        const oldCh = prevPadded[i];
+        const newCh = nextPadded[i];
+        const slot = document.createElement('span');
+        slot.className = 'phv-slot';
+
+        const faceNew = document.createElement('span');
+        faceNew.className = 'phv-face';
+        faceNew.textContent = newCh === ' ' ? ' ' : newCh;
+
+        if (oldCh !== newCh && oldCh !== ' ') {
+            const faceOld = document.createElement('span');
+            faceOld.className = 'phv-face';
+            faceOld.textContent = oldCh === ' ' ? ' ' : oldCh;
+            faceNew.style.transform = goingUp ? 'translateY(100%)' : 'translateY(-100%)';
+            faceNew.style.opacity = '0';
+            slot.appendChild(faceOld);
+            slot.appendChild(faceNew);
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    faceOld.style.transform = goingUp ? 'translateY(-100%)' : 'translateY(100%)';
+                    faceOld.style.opacity = '0';
+                    faceNew.style.transform = 'translateY(0)';
+                    faceNew.style.opacity = '1';
+                });
+            });
+            setTimeout(() => { if (faceOld.parentNode) faceOld.remove(); }, 500);
+        } else {
+            slot.appendChild(faceNew);
+        }
+        el.appendChild(slot);
+    }
+
+    // Brief pulse on the whole price section to reinforce the change.
+    const section = document.getElementById('sbphPriceSection');
+    if (section) {
+        section.classList.remove('sbph-pulse');
+        void section.offsetWidth; // restart the animation
+        section.classList.add('sbph-pulse');
+    }
+}
+
+// Small "X บาท/หน่วย" line under the big price, reflecting whichever fence
+// type is currently active in the sidebar (more than one type of line can
+// be drawn at once — grandPrice already sums all of them; this is just a
+// readable per-unit reminder, not a separate calculation).
+function updatePriceHeroSub() {
+    const el = document.getElementById('priceHeroSub');
+    if (!el) return;
+    const activeCard = document.querySelector('.sb-fence-card.active');
+    const type = activeCard ? activeCard.getAttribute('data-type') : 'cowboy';
+    const val = (id) => { const e = document.getElementById(id); return e ? parseFloat(e.value) : NaN; };
+    const fmt = (n) => isNaN(n) ? null : n.toLocaleString('th-TH', { maximumFractionDigits: 2 });
+
+    const parts = [];
+    if (type === 'cowboy') {
+        const post = fmt(val('cowboyPostPrice'));
+        const beam = fmt(val('cowboyBeamPrice'));
+        if (post) parts.push(`${post} บาท/ต้น`);
+        if (beam) parts.push(`${beam} บาท/คาน`);
+    } else if (type === 'concrete') {
+        const perM = fmt(val('concretePricePerM'));
+        if (perM) parts.push(`${perM} บาท/ม.`);
+    } else if (type === 'barbed') {
+        const perM = fmt(val('barbedPricePerM'));
+        if (perM) parts.push(`${perM} บาท/ม.`);
+    } else if (type === 'brick') {
+        const piece = fmt(val('brickPricePerPiece'));
+        if (piece) parts.push(`${piece} บาท/ก้อน`);
+    }
+    el.textContent = parts.length ? parts.join(' · ') : '—';
+}
+
+// Barbed-wire-only colored post-count breakdown, shown under "จำนวนเสาที่
+// ต้องใช้": normal segment posts (black) + N-Brace solo (red) + dual (blue)
+// + angle (red) = total. Reads window._barbedCalcResult, set by calcBarbed
+// (barb.js) on every recalculation — purely a UI readout, not used by any
+// calculation itself.
+function updateBarbedPostBreakdown(hasBarbed) {
+    const el = document.getElementById('resPostsBreakdown');
+    if (!el) return;
+    const r = window._barbedCalcResult;
+    if (!hasBarbed || !r) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        return;
+    }
+    el.innerHTML =
+        `<span style="color:#1f2937;">${r.normalPosts}</span>` +
+        ` + <span style="color:#dc2626;">${r.soloPosts}</span>` +
+        ` + <span style="color:#1d4ed8;">${r.dualPosts}</span>` +
+        ` + <span style="color:#dc2626;">${r.anglePosts}</span>` +
+        ` = <strong style="color:#1f2937;">${r.totalPosts}</strong>`;
+    el.style.display = 'block';
 }
 
 // Shared UI Helpers
@@ -766,12 +1002,15 @@ const FENCE_TYPE_LABELS = {
 // Snapshot the option inputs relevant to a fence type, so each line
 // remembers the settings that were active when it was drawn.
 function captureFenceOptions(fenceType) {
+    // Tab-aware — see _activeCornerCheckbox. This runs at the moment a line
+    // is drawn/finalized, so it must read whichever tab (Page 1 or Input
+    // Mode) the user is actually drawing from, not always Page 1's fields.
     const val = (id1, id2) => {
-        const el = document.getElementById(id1) || document.getElementById(id2);
+        const el = _activeCornerCheckbox(id1, id2);
         return el ? el.value : undefined;
     };
     const checked = (id1, id2) => {
-        const el = document.getElementById(id1) || document.getElementById(id2);
+        const el = _activeCornerCheckbox(id1, id2);
         return el ? el.checked : false;
     };
 
@@ -784,19 +1023,19 @@ function captureFenceOptions(fenceType) {
         };
     }
     if (fenceType === 'concrete') {
-        const spacingSel    = document.getElementById('spacingSelectConcrete') || document.getElementById('imSpacingSelectConcrete');
-        const spacingCustom = document.getElementById('postSpacingConcrete')   || document.getElementById('imPostSpacingConcrete');
+        const spacingSel    = _activeCornerCheckbox('spacingSelectConcrete', 'imSpacingSelectConcrete');
+        const spacingCustom = _activeCornerCheckbox('postSpacingConcrete', 'imPostSpacingConcrete');
         const spacing = (spacingSel?.value === 'custom')
             ? parseFloat(spacingCustom?.value) || 2.5
             : parseFloat(spacingSel?.value)    || 2.5;
-        const layers      = parseInt(document.getElementById('concreteLayerSelect')?.value  || document.getElementById('imConcreteLayerSelect')?.value)  || 2;
+        const layers = parseInt(_activeCornerCheckbox('concreteLayerSelect', 'imConcreteLayerSelect')?.value) || 2;
         // Fixed id typo: the actual Input Mode element is "imConcreteDoubleCorner"
         // (no "Post" suffix) — the old lookup for "imConcreteDoubleCornerPost"
         // never matched anything, and even then was shadowed by the always-
         // present Page 1 checkbox. Use the tab-aware helper instead.
         const doubleCorner = _activeCornerCheckbox('concreteDoubleCornerPost', 'imConcreteDoubleCorner')?.checked || false;
         return { postSpacing: spacing, layers, doubleCorner };
-    }   
+    }
 
     if (fenceType === 'brick') {
         return {

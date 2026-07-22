@@ -134,19 +134,23 @@ function calcBrick(brickLines) {
     let totalTooShort = 0, totalTooShortLen = 0;
     let totalSharpAngles = 0, totalExtraSections = 0, totalExtraLength = 0;
 
-    const readVal = (id1, id2, fallback) => {
-        const el = document.getElementById(id1) || document.getElementById(id2);
+    // Tab-aware — pageId first, imId second, regardless of which one a
+    // naive || chain used to list first (see _activeCornerCheckbox in
+    // fence.js). Reading whichever tab isn't actually active meant changing
+    // height/spacing/price/post-size in Input Mode had no effect at all.
+    const readVal = (pageId, imId, fallback) => {
+        const el = _activeCornerCheckbox(pageId, imId);
         return parseFloat(el ? el.value : fallback) || parseFloat(fallback);
     };
 
-    const d = readVal('imPostSpacingBrick', 'postSpacingBrick', '2.5');
+    const d = readVal('postSpacingBrick', 'imPostSpacingBrick', '2.5');
     const h = readVal('brickFenceHeight', 'imBrickFenceHeight', '1.8');
     const brickPrice = readVal('brickPricePerPiece', 'imBrickPrice', '1.05');
     const ppm2 = readVal('brickPpm2', 'imBrickPpm2', '135');
     // Pillar footprint — used to shorten a segment where it meets a corner
     // pillar, so brick coursing stops at the pillar face instead of
     // overlapping it. Falls back to a sane default if no UI field exists.
-    const n_post = Math.max(0.1, Math.min(0.4, readVal('imBrickPostSize', 'brickPostSize', '0.2')));
+    const n_post = Math.max(0.1, Math.min(0.4, readVal('brickPostSize', 'imBrickPostSize', '0.2')));
     const MIN_PANEL = Math.max(0.5, d * 0.2);
 
     let n_beam, beamMode;
@@ -209,6 +213,17 @@ function calcBrick(brickLines) {
                 sharpCorners.push({ idx: i, angle: ang, dist: distToCorner });
             }
         }
+
+        // Highlight sharp corners — same visual language as barbed wire's
+        // map-mode highlight. The extra reinforcement pillar itself stays
+        // cost/material-only (see below) and is never drawn on the map —
+        // only this circle + the toast surface the <60° corner.
+        sharpCorners.forEach(({ idx }) => {
+            L.circleMarker(pts[idx], {
+                radius: 10, color: '#f97316', weight: 3,
+                fillColor: '#fed7aa', fillOpacity: 0.55, opacity: 1
+            }).addTo(fenceLayerGroup);
+        });
 
         for (let si = 0; si < numSegs; si++) {
             const p0 = pts[si], p1 = pts[si + 1];
@@ -385,9 +400,9 @@ function drawPlanBrickLine(lineData, idx) {
     const pts = lineData.points;
     if (!pts || pts.length < 2) return;
 
-    const d = Math.min(5, Math.max(0.5, parseFloat((document.getElementById('imPostSpacingBrick') || document.getElementById('postSpacingBrick'))?.value) || 2.5));
-    const h = parseFloat((document.getElementById('brickFenceHeight') || document.getElementById('imBrickFenceHeight'))?.value) || 1.8;
-    const n_post = Math.max(0.1, Math.min(0.4, parseFloat((document.getElementById('imBrickPostSize') || document.getElementById('brickPostSize'))?.value) || 0.2));
+    const d = Math.min(5, Math.max(0.5, parseFloat(_activeCornerCheckbox('postSpacingBrick', 'imPostSpacingBrick')?.value) || 2.5));
+    const h = parseFloat(_activeCornerCheckbox('brickFenceHeight', 'imBrickFenceHeight')?.value) || 1.8;
+    const n_post = Math.max(0.1, Math.min(0.4, parseFloat(_activeCornerCheckbox('brickPostSize', 'imBrickPostSize')?.value) || 0.2));
     const beamSel = document.getElementById('imBrickBeamMode');
     const beamOverride = beamSel ? beamSel.value : 'auto';
 
@@ -401,6 +416,28 @@ function drawPlanBrickLine(lineData, idx) {
         else if (h < 1.8) beamMode = 'top';
         else if (h < 2.2) beamMode = 'center';
         else beamMode = 'center+top';
+    }
+
+    // Sharp (<60°) intermediate corners — same rule and highlight style as
+    // calcBrick's map-mode pass and barbed wire's own Plan Mode. Recomputed
+    // locally here (not read from a stored map-mode value) purely to find
+    // which vertices to highlight — the actual extra-pillar cost/material
+    // count stays owned by calcBrick()/window._brickCalcResult, and is
+    // never drawn as a length on the map or in Plan Mode.
+    function interiorAngleAt(i) {
+        if (i <= 0 || i >= pts.length - 1) return 180;
+        const bIn = bearing(pts[i - 1], pts[i]);
+        const bOut = bearing(pts[i], pts[i + 1]);
+        let diff = ((bOut - bIn + 540) % 360) - 180;
+        return 180 - Math.abs(diff);
+    }
+    for (let i = 1; i < pts.length - 1; i++) {
+        if (interiorAngleAt(i) < 60) {
+            L.circleMarker(pts[i], {
+                radius: 10, color: '#f97316', weight: 3,
+                fillColor: '#fed7aa', fillOpacity: 0.55, opacity: 1
+            }).addTo(planLayerGroup);
+        }
     }
 
     L.marker(pts[0], {
@@ -505,12 +542,15 @@ function drawPlanBrickLine(lineData, idx) {
 
 drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 1.4), A_i.toFixed(2) + 'm', '#92400e');
 
-        // First 2 post footprint-length labels for this side (bounds[0] is
-        // the start, bounds[1] the first bay boundary), mirrored to the
-        // inner side (opposite the outward full-length label above).
-        [bounds[0], bounds[1]].filter(v => v !== undefined).slice(0, 2).forEach(dist => {
-            drawPostLengthLabel(pts, cumulDist + dist, n_post, '#92400e');
-        });
+        // First 2 post footprint-length labels for the WHOLE line only
+        // (bounds[0] is the start, bounds[1] the first bay boundary) — every
+        // post on the line is the same size, so repeating this once per
+        // side was still noise once a shape had more than one side.
+        if (si === 0) {
+            [bounds[0], bounds[1]].filter(v => v !== undefined).slice(0, 2).forEach(dist => {
+                drawPostLengthLabel(pts, cumulDist + dist, n_post, '#92400e');
+            });
+        }
 
         cumulDist += A_i;
     }

@@ -255,40 +255,27 @@ function renderSideList() {
             const s = imSides[i];
             const absB = s.bearingAbs !== undefined ? ((s.bearingAbs % 360) + 360) % 360 : 0;
             const row = document.createElement('div');
-            row.className = 'im-side-row';
+            row.className = 'im-side-card';
             row.innerHTML = `
-                <div class="im-side-num" style="min-width:52px;font-size:12px;color:#374151;">ด้านที่ ${i + 1} :</div>
-                <input type="number" class="im-inline-len sb-number-input"
-                    data-idx="${i}" value="${(s.length||10).toFixed(1)}"
-                    min="0.1" step="0.1" style="flex:1;min-width:0;">
-                <span style="font-size:12px;color:#374151;margin-left:4px;">ม.</span>
-<span style="font-size:11px;color:#6b7280;margin-left:2px;">มุม:</span>
-<input type="number" class="im-angle-display-input sb-number-input" data-idx="${i}"
-    value="${absB}" min="0" max="359" step="${angleStepFor(imFenceType)}"
-    style="width:52px;flex:none;font-size:13px;text-align:center;" readonly
-    title="ทิศทาง (°)">
-<span style="font-size:10px;color:#9ca3af;margin:0 1px;">°</span>
-<button class="im-angle-dial-btn" data-idx="${i}" title="ตั้งมุม"
-    style="margin-left:2px;width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;
-    background:#f9fafb;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;
-    justify-content:center;" data-bearing="${absB}">⊙</button>
+                <div class="im-side-badge">${i + 1}</div>
+                <div class="im-side-len-wrap">
+                    <input type="number" class="im-inline-len im-side-len-input"
+                        data-idx="${i}" value="${(s.length||10).toFixed(1)}"
+                        min="0.1" step="0.1" title="ความยาวด้าน">
+                    <span class="im-side-len-unit">ม.</span>
+                </div>
+                <button type="button" class="im-side-angle-btn" data-idx="${i}"
+                    data-bearing="${absB}" title="ตั้งทิศทาง (มุม)">
+                    <span class="im-side-angle-ring">⊙</span><span>${absB}°</span>
+                </button>
+                <button type="button" class="im-side-del-btn" data-idx="${i}" title="ลบด้านนี้">✕</button>
             `;
-            // Delete button for ALL rows
-            const delBtn = document.createElement('button');
-            delBtn.className = 'im-del-btn';
-            delBtn.setAttribute('data-idx', i);
-            delBtn.title = 'ลบด้านนี้';
-            delBtn.textContent = '✕';
-            delBtn.style.marginLeft = '4px';
-            row.appendChild(delBtn);
             list.appendChild(row);
         }
         // "Add segment" button after last row
         const addRow = document.createElement('div');
-        addRow.style.cssText = 'padding:6px 10px;';
-        addRow.innerHTML = `<button id="imAddSegBtn" style="width:100%;padding:6px 0;font-size:12px;font-weight:600;
-            border:1.5px dashed #d1d5db;border-radius:7px;background:#f9fafb;color:#6b7280;cursor:pointer;">
-            + เพิ่มด้าน</button>`;
+        addRow.innerHTML = `<button id="imAddSegBtn" type="button" class="im-add-side-btn">
+            <span class="im-add-side-plus">+</span> เพิ่มด้าน</button>`;
         list.appendChild(addRow);
         if (typeof _syncAddButtonLockState === 'function') _syncAddButtonLockState();
 
@@ -304,7 +291,7 @@ function renderSideList() {
         });
 
         // Delete handlers for extra rows
-        list.querySelectorAll('.im-del-btn').forEach(btn => {
+        list.querySelectorAll('.im-side-del-btn').forEach(btn => {
             btn.addEventListener('click', function () {
                 const idx = parseInt(this.getAttribute('data-idx'));
                 imSides.splice(idx, 1);
@@ -337,35 +324,27 @@ imSides.forEach((s, i) => {
             const isSharp = interiorAngle < 60;
 
             const row = document.createElement('div');
-            row.className = 'im-side-row';
+            row.className = 'im-side-card' + (isSharp ? ' im-side-card--warn' : '');
+            const angleTitle = isSharp
+                ? `⚠️ มุมแหลม ${interiorAngle.toFixed(0)}° < 60° — ต้องการเสาเพิ่ม`
+                : 'ตั้งทิศทาง (มุม)';
             row.innerHTML = `
-                <div class="im-side-num" style="min-width:52px;font-size:12px;color:#374151;">ด้านที่ ${i + 1} :</div>
-                <input type="number" class="im-inline-len sb-number-input"
-                    data-idx="${i}" value="${s.length.toFixed(1)}"
-                    min="0.1" step="0.1" style="flex:1;min-width:0;">
-                <span style="font-size:12px;color:#374151;margin-left:4px;">ม.</span>
-                <span style="font-size:11px;color:${isSharp ? '#f97316' : '#6b7280'};margin-left:2px;">มุม:</span>
-                <input type="number" class="im-angle-display-input sb-number-input" data-idx="${i}"
-                    value="${absB}" min="0" max="359" step="${angleStepFor(imFenceType)}"
-                    style="width:52px;flex:none;font-size:13px;text-align:center;
-                           background:${isSharp ? '#fff7ed' : ''};
-                           border-color:${isSharp ? '#f97316' : ''};
-                           color:${isSharp ? '#ea580c' : ''};" readonly
-                    title="${isSharp ? `⚠️ มุมแหลม ${interiorAngle.toFixed(0)}° < 60° — ต้องการเสาเพิ่ม` : 'ทิศทาง (°)'}">
-                <span style="font-size:10px;color:${isSharp ? '#f97316' : '#9ca3af'};margin:0 1px;">°
-                    ${isSharp ? `<span title="มุมแหลม < 60°" style="color:#f97316;font-weight:700;">⚠️</span>` : ''}
-                </span>
-                <button class="im-angle-dial-btn" data-idx="${i}" title="ตั้งมุม"
-                    style="margin-left:2px;width:26px;height:26px;border-radius:50%;
-                    border:1.5px solid ${isSharp ? '#f97316' : '#d1d5db'};
-                    background:${isSharp ? '#fff7ed' : '#f9fafb'};
-                    cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;
-                    justify-content:center;" data-bearing="${absB}">⊙</button>
-                <button class="im-del-btn" data-idx="${i}" title="ลบด้านนี้" style="margin-left:4px;">✕</button>
+                <div class="im-side-badge">${i + 1}</div>
+                <div class="im-side-len-wrap">
+                    <input type="number" class="im-inline-len im-side-len-input"
+                        data-idx="${i}" value="${s.length.toFixed(1)}"
+                        min="0.1" step="0.1" title="ความยาวด้าน">
+                    <span class="im-side-len-unit">ม.</span>
+                </div>
+                <button type="button" class="im-side-angle-btn" data-idx="${i}"
+                    data-bearing="${absB}" title="${angleTitle}">
+                    <span class="im-side-angle-ring">${isSharp ? '⚠️' : '⊙'}</span><span>${absB}°</span>
+                </button>
+                <button type="button" class="im-side-del-btn" data-idx="${i}" title="ลบด้านนี้">✕</button>
             `;
             list.appendChild(row);
         });
-list.querySelectorAll('.im-del-btn').forEach(btn => {
+list.querySelectorAll('.im-side-del-btn').forEach(btn => {
             btn.addEventListener('click', function () {
                 const idx = parseInt(this.getAttribute('data-idx'));
                 imSides.splice(idx, 1);
@@ -396,22 +375,14 @@ list.querySelectorAll('.im-del-btn').forEach(btn => {
         });
     });
 
-    // Angle dial button opens the unit-circle picker
-    list.querySelectorAll('.im-angle-dial-btn').forEach(btn => {
+    // Angle chip opens the unit-circle picker (display + trigger combined)
+    list.querySelectorAll('.im-side-angle-btn').forEach(btn => {
         btn.addEventListener('click', function (e) {
             e.stopPropagation();
             const idx = parseInt(this.getAttribute('data-idx'));
             openAngleDial(idx, this);
         });
     });
-    list.querySelectorAll('.im-angle-display-input').forEach(inp => {
-    inp.addEventListener('click', function (e) {
-        e.stopPropagation();
-        const idx = parseInt(this.getAttribute('data-idx'));
-        const dialBtn = this.closest('.im-side-row').querySelector('.im-angle-dial-btn');
-        openAngleDial(idx, dialBtn || this);
-    });
-});
 }
 
 // ============================================
@@ -616,7 +587,7 @@ popup.innerHTML = `
     document.body.appendChild(popup);
 
 const rect = anchorEl.getBoundingClientRect();
-    const POPUP_W = SIZE + 28;   // 292px (matches #imAngleDialPopup width)
+    const POPUP_W = SIZE + 28;   // 288px (matches #imAngleDialPopup width)
     const POPUP_H = SIZE + 210;  // SVG + header + readout + hint + buttons + padding
 
     let top  = rect.bottom + 8;
@@ -746,8 +717,27 @@ function updateFromXY(clientX, clientY) {
 function updateStatusBar() {
     const el = document.getElementById('imStatus');
     if (!el) return;
-    el.textContent = '';
-    el.className = 'im-status';
+
+    if (window._spacingLocked) return; // an error message already owns the bar
+
+    if (imSides.length === 0) {
+        el.innerHTML = `<span class="im-status-icon">✏️</span><span>เริ่มเพิ่มด้านแรกของรั้ว</span>`;
+        el.className = 'im-status';
+        return;
+    }
+
+    const totalLen = imSides.reduce((sum, s) => sum + (s.length || 0), 0);
+    const closed = isClosedShape();
+    const lenTxt = totalLen.toFixed(1);
+    const sideTxt = imSides.length === 1 ? '1 ด้าน' : `${imSides.length} ด้าน`;
+
+    if (closed) {
+        el.innerHTML = `<span class="im-status-icon">✓</span><span>${sideTxt} · รวม ${lenTxt} ม. · รูปทรงปิดแล้ว</span>`;
+        el.className = 'im-status im-status-ok';
+    } else {
+        el.innerHTML = `<span class="im-status-icon">📏</span><span>${sideTxt} · รวม ${lenTxt} ม.</span>`;
+        el.className = 'im-status';
+    }
 }
 
     // ============================================
@@ -1029,15 +1019,16 @@ function setIMFenceType(type) {
 
     <div class="sb-divider"></div>
 
-    <!-- ── Four side inputs (independent, no wrapper label) ── -->
+    <!-- ── Side-by-side length + angle entry ── -->
+    <div class="sb-section-label" style="margin-bottom:6px;">ด้านของรั้ว</div>
     <div class="im-sides-block" id="imSidesBlock">
         <!-- rendered by renderSideList() -->
     </div>
 
-        <!-- ── Barbed-only: angle input + add button ── -->
-<!-- ── Barbed-only: add segment button ── -->
+    <!-- ── Barbed-only: add segment button ── -->
     <div id="imAngleWrap" style="display:none; margin-top:8px;">
-        <button id="imAddBtn" class="sb-calc-btn-sm" style="width:100%;">+ เพิ่มด้าน</button>
+        <button id="imAddBtn" type="button" class="im-add-side-btn">
+            <span class="im-add-side-plus">+</span> เพิ่มด้าน</button>
     </div>
 
     <div class="sb-divider"></div>
@@ -1063,65 +1054,203 @@ function setIMFenceType(type) {
 
     <!-- COWBOY opts -->
     <div id="imCowboyOpts">
-        <div class="sb-section-label">เลือกเสา - คาน</div>
-        <div class="sb-select-wrap" style="position:relative;">
-            <select class="sb-select" id="imBeamSelect">
-                <option value="2">2 ชั้น</option>
-                <option value="3">3 ชั้น</option>
-                <option value="4">4 ชั้น</option>
-            </select>
-            <div class="sb-select-icon">▼</div>
+        <div class="sb-picker-card sb-picker-postbeam">
+            <div class="sbpk-head">
+                <div class="sbpk-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <rect x="3" y="4" width="3.4" height="16" rx="1" fill="currentColor"/>
+                        <rect x="17.6" y="4" width="3.4" height="16" rx="1" fill="currentColor"/>
+                        <rect x="3" y="7.2" width="18" height="2.6" rx="1" fill="currentColor" opacity="0.55"/>
+                        <rect x="3" y="14.2" width="18" height="2.6" rx="1" fill="currentColor" opacity="0.55"/>
+                    </svg>
+                </div>
+                <div class="sbpk-label">เลือกเสา - คาน</div>
+            </div>
+            <div class="sb-select-wrap" style="position:relative;">
+                <select class="sb-select sbpk-select" id="imBeamSelect"
+                    onchange="if(typeof syncCowboyPostPrice==='function')syncCowboyPostPrice();if(typeof updateCowboyPriceMeas==='function')updateCowboyPriceMeas();">
+                    <option value="2">2 ชั้น</option>
+                    <option value="3">3 ชั้น</option>
+                    <option value="4">4 ชั้น</option>
+                </select>
+                <div class="sb-select-icon">▼</div>
+            </div>
+            <!-- Beam spec display — updates based on selection -->
+            <div class="sb-beam-spec" id="imSbBeamSpec">
+                <div class="sbbs-row" id="imSbbs2">
+                    <span class="sbbs-floor">2 ชั้น</span>
+                    <span class="sbbs-dim">0.15 × 0.15 × 1.50 ม.</span>
+                </div>
+                <div class="sbbs-row" id="imSbbs3" style="display:none;">
+                    <span class="sbbs-floor">3 ชั้น</span>
+                    <span class="sbbs-dim">0.15 × 0.15 × 2.00 ม.</span>
+                </div>
+                <div class="sbbs-row" id="imSbbs4" style="display:none;">
+                    <span class="sbbs-floor">4 ชั้น</span>
+                    <span class="sbbs-dim">0.15 × 0.15 × 2.50 ม.</span>
+                </div>
+            </div>
         </div>
-<div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
-        <select class="sb-number-input" id="imSpacingSelect"
-            style="width:100%;padding:6px 8px;font-size:12px;"
-            onchange="imSetSpacing(this.value)">
-            <option value="2.0">2.0 ม.</option>
-            <option value="2.5" selected>2.5 ม.</option>
-            <option value="custom">กำหนดเอง…</option>
-        </select>
-<input type="number" class="sb-number-input" id="imPostSpacing"
-    value="2.5" min="1" max="3" step="0.1"
-    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
-    oninput="if(typeof showSpacingHint==='function') showSpacingHint('imPostSpacingHint', parseFloat(this.value))">
-<div id="imPostSpacingHint" class="spacing-hint" style="display:none;"></div>
-<div style="margin-top:12px;">
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;">
-        <input type="checkbox" id="imFreeAngleToggle"
-            style="width:15px;height:15px;accent-color:#f59e0b;cursor:pointer;"
-            onchange="imOnFreeAngleToggle()">
-        <span style="font-size:12px;color:#374151;">ปลดล็อมุม</span>
-    </label>
-    <div class="sb-section-label">โหมดเสามุม</div>
-    <div id="imCornerModeWrap" style="display:flex;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;flex-direction:column;gap:6px;">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="radio" name="imCornerMode" id="imCornerModeDouble" value="double" checked
-                style="width:15px;height:15px;accent-color:#f59e0b;cursor:pointer;"
-                onchange="imOnCornerModeChange()">
-            <span style="font-size:12px;color:#374151;">เสามุมคู่</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="radio" name="imCornerMode" id="imCornerModeSingle" value="single"
-                style="width:15px;height:15px;accent-color:#f59e0b;cursor:pointer;"
-                onchange="imOnCornerModeChange()">
-            <span style="font-size:12px;color:#374151;">แต่งร่องเสา </span>
-        </label>
-    </div>
-    <!-- Legacy hidden checkbox kept for fence.js compatibility -->
-    <input type="checkbox" id="imDoubleCornerPost" style="display:none;" checked>
-    <input type="hidden" id="globalCornerMode" value="double">
-</div>
 
-        <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (กว้าง, เมตร)</div>
-        <input type="number" class="sb-number-input" id="imPostSizeCowboy" value="0.15"
-            min="0.05" max="0.50" step="0.01" style="width:100%;" placeholder="ความกว้างเสา (ม.)">
+        <div class="sb-picker-card sb-picker-spacing">
+            <div class="sbpk-head">
+                <div class="sbpk-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <rect x="2.5" y="4" width="3" height="16" rx="1" fill="currentColor"/>
+                        <rect x="18.5" y="4" width="3" height="16" rx="1" fill="currentColor"/>
+                        <path d="M7 12 H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                        <path d="M7 12 L9.4 9.8 M7 12 L9.4 14.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M17 12 L14.6 9.8 M17 12 L14.6 14.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="sbpk-label">ระยะห่างระหว่างเสา</div>
+            </div>
+            <div class="sb-select-wrap" style="position:relative;">
+                <select class="sb-select sbpk-select" id="imSpacingSelect"
+                    onchange="imSetSpacing(this.value); if(typeof syncCowboyBeamPrice==='function')syncCowboyBeamPrice(); if(typeof updateCowboyPriceMeas==='function')updateCowboyPriceMeas();">
+                    <option value="2.0">2.0 ม.</option>
+                    <option value="2.5" selected>2.5 ม.</option>
+                    <option value="custom">กำหนดเอง…</option>
+                </select>
+                <div class="sb-select-icon">▼</div>
+            </div>
+            <input type="number" class="sb-number-input" id="imPostSpacing"
+                value="2.5" min="1" max="3" step="0.1"
+                style="width:100%;margin-top:8px;display:none;" placeholder="ระบุ (ม.)"
+                oninput="if(typeof showSpacingHint==='function') showSpacingHint('imPostSpacingHint', parseFloat(this.value))">
+            <div id="imPostSpacingHint" class="spacing-hint" style="display:none;"></div>
+        </div>
 
-        <div class="sb-section-label" style="margin-top:10px;">ราคาโดยประมาณ (บาท/เมตร)</div>
-        <div style="display:flex;align-items:center;gap:6px;">
-            <input type="number" class="sb-number-input-sm" id="imCowboyPricePerM" value="850"
-                min="0" step="10" style="flex:1;" placeholder="บาท/เมตร">
-            <button type="button" class="price-reset-btn" onclick="resetFencePrice('cowboy')"
-                title="รีเซ็ตราคาเริ่มต้น">↺</button>
+        <label class="sb-toggle-row" style="--sbtg-accent:#f59e0b;">
+            <input type="checkbox" id="imFreeAngleToggle" class="sb-toggle-input"
+                onchange="imOnFreeAngleToggle()">
+            <span class="sb-toggle-left">
+                <span class="sb-toggle-icon" style="background:#fff7ed;color:#d97706;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                        <path d="M4 20 L4 6 L18 20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                        <path d="M6.5 20 A5 5 0 0 1 4 15.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+                    </svg>
+                </span>
+                <span class="sb-toggle-text">ปลดล็อคมุม</span>
+            </span>
+            <span class="sb-toggle-switch"></span>
+        </label>
+
+        <div style="margin-top:10px;">
+            <div class="sb-section-label">โหมดเสามุม</div>
+            <div id="imCornerModeWrap" class="sb-radio-group">
+                <label class="sb-radio-chip">
+                    <input type="radio" name="imCornerMode" id="imCornerModeDouble" value="double" checked
+                        onchange="imOnCornerModeChange()">
+                    <span class="sb-radio-dot"></span>
+                    <span class="sb-radio-text">เสามุมคู่</span>
+                </label>
+                <label class="sb-radio-chip">
+                    <input type="radio" name="imCornerMode" id="imCornerModeSingle" value="single"
+                        onchange="imOnCornerModeChange()">
+                    <span class="sb-radio-dot"></span>
+                    <span class="sb-radio-text">แต่งร่องเสา</span>
+                </label>
+            </div>
+            <!-- Legacy hidden checkbox kept for fence.js compatibility -->
+            <input type="checkbox" id="imDoubleCornerPost" style="display:none;" checked>
+            <input type="hidden" id="globalCornerMode" value="double">
+        </div>
+
+        <div class="sb-field-card" style="margin-top:10px;">
+            <div class="sbpk-head">
+                <div class="sbpk-icon" style="background:#f3f4f6;color:#6b7280;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                        <rect x="8" y="8" width="8" height="8" rx="1.3" stroke="currentColor" stroke-width="1.6"/>
+                        <path d="M2 12 H7 M17 12 H22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                        <path d="M2 12 L4.6 9.6 M2 12 L4.6 14.4 M22 12 L19.4 9.6 M22 12 L19.4 14.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="sbpk-label">ขนาดเสา (กว้าง, เมตร)</div>
+            </div>
+            <div class="sbpc-input-wrap">
+                <input type="number" id="imPostSizeCowboy" value="0.15"
+                    min="0.05" max="0.50" step="0.01" placeholder="ความกว้างเสา (ม.)">
+                <span class="sbpc-unit">ม.</span>
+            </div>
+        </div>
+
+        <div class="sb-section-label" style="margin-top:14px;">กรอกราคา</div>
+        <div class="sb-price-cards">
+            <div class="sb-price-card sb-price-post">
+                <div class="sbpc-head">
+                    <div class="sbpc-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <rect x="9" y="2" width="6" height="20" rx="1.4" fill="currentColor"/>
+                            <rect x="6.5" y="2" width="11" height="3.2" rx="1.2" fill="currentColor" opacity="0.55"/>
+                        </svg>
+                    </div>
+                    <div class="sbpc-titles">
+                        <div class="sbpc-name">ราคาเสาต้นละ</div>
+                        <div class="sbpc-meas" id="imCowboyPostMeas">เสาคาน 2 ชั้น</div>
+                    </div>
+                </div>
+                <div class="sbpc-input-row">
+                    <div class="sbpc-input-wrap">
+                        <input type="number" id="imCowboyPostPrice" value="414"
+                            min="0" step="1" placeholder="ราคาเสาต้นละ"
+                            onchange="if(typeof runFenceCalc==='function')runFenceCalc();">
+                        <span class="sbpc-unit">บาท</span>
+                    </div>
+                    <button type="button" class="sbpc-reset" onclick="resetFencePrice('cowboyPost')"
+                        title="รีเซ็ตราคาเริ่มต้นตามชนิดเสาที่เลือก">↺</button>
+                </div>
+            </div>
+            <div class="sb-price-card sb-price-corner">
+                <div class="sbpc-head">
+                    <div class="sbpc-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="3" width="5" height="18" rx="1.2" fill="currentColor"/>
+                            <rect x="3" y="3" width="18" height="5" rx="1.2" fill="currentColor"/>
+                            <path d="M18 10 L21 13 L18 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                        </svg>
+                    </div>
+                    <div class="sbpc-titles">
+                        <div class="sbpc-name">ราคาเสาเข้ามุมต้นละ</div>
+                        <div class="sbpc-meas">เสาที่มุม — โหมด 1 หรือ 2</div>
+                    </div>
+                </div>
+                <div class="sbpc-input-row">
+                    <div class="sbpc-input-wrap">
+                        <input type="number" id="imCowboyCornerPostPrice" value="414"
+                            min="0" step="1" placeholder="ราคาเสาเข้ามุมต้นละ"
+                            onchange="if(typeof runFenceCalc==='function')runFenceCalc();">
+                        <span class="sbpc-unit">บาท</span>
+                    </div>
+                    <button type="button" class="sbpc-reset" onclick="resetFencePrice('cowboyCornerPost')"
+                        title="รีเซ็ตราคาเริ่มต้นตามชนิดเสาที่เลือก">↺</button>
+                </div>
+            </div>
+            <div class="sb-price-card sb-price-beam">
+                <div class="sbpc-head">
+                    <div class="sbpc-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <rect x="2" y="9" width="20" height="6" rx="1.4" fill="currentColor"/>
+                            <circle cx="6" cy="12" r="1.3" fill="#fff"/>
+                            <circle cx="18" cy="12" r="1.3" fill="#fff"/>
+                        </svg>
+                    </div>
+                    <div class="sbpc-titles">
+                        <div class="sbpc-name">ราคาคานละ</div>
+                        <div class="sbpc-meas" id="imCowboyBeamMeas">ระยะห่างเสา 2.5 ม.</div>
+                    </div>
+                </div>
+                <div class="sbpc-input-row">
+                    <div class="sbpc-input-wrap">
+                        <input type="number" id="imCowboyBeamPrice" value="303"
+                            min="0" step="1" placeholder="ราคาคานละ"
+                            onchange="if(typeof runFenceCalc==='function')runFenceCalc();">
+                        <span class="sbpc-unit">บาท</span>
+                    </div>
+                    <button type="button" class="sbpc-reset" onclick="resetFencePrice('cowboyBeam')"
+                        title="รีเซ็ตราคาเริ่มต้นตามระยะที่เลือก">↺</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1446,102 +1575,303 @@ function setIMFenceType(type) {
 }
 .fw-override-btn:hover { background: #d97706; }
 
-/* ── Input Mode Styles ───────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   INPUT MODE — visual language matches Page 1 (sb-picker-card / sb-fence-
+   card / sb-calc-btn-sm): white rounded cards, soft borders, amber accent
+   for the primary "build a shape" actions, subtle hover lift + shadow.
+   ══════════════════════════════════════════════════════════════════════ */
 .im-root { padding: 0 2px 24px; }
 
-.im-input-area { padding: 0 2px; }
+/* ── Side list wrapper ─────────────────────────────────────────────── */
+.im-sides-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 2px;
+}
 
-.im-angle-hint {
+/* ── Side card — one per fence segment ─────────────────────────────── */
+.im-side-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    border: 1.5px solid #e9ecef;
+    border-radius: 10px;
+    padding: 7px 8px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    animation: imSideCardIn 0.25s cubic-bezier(.22,1,.36,1) both;
+}
+.im-side-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 4px 10px rgba(15,23,42,0.06);
+}
+@keyframes imSideCardIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Sharp-angle warning state (barbed, interior angle < 60°) */
+.im-side-card--warn {
+    border-color: #fdba74;
+    background: #fffaf3;
+}
+.im-side-card--warn:hover { border-color: #f97316; }
+
+/* Numbered badge */
+.im-side-badge {
+    flex: 0 0 auto;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #f3f4f6;
+    color: #6b7280;
     font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+}
+.im-side-card--warn .im-side-badge { background: #ffedd5; color: #c2410c; }
+
+/* Length field */
+.im-side-len-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #f9fafb;
+    border: 1.5px solid #e9ecef;
+    border-radius: 7px;
+    padding: 0 8px;
+    transition: border-color 0.2s;
+}
+.im-side-len-wrap:focus-within { border-color: #3b82f6; background: #fff; }
+.im-side-len-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    padding: 6px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+    outline: none;
+}
+.im-side-len-unit { font-size: 11px; color: #9ca3af; flex: 0 0 auto; }
+
+/* Angle chip — click to open the angle dial */
+.im-side-angle-btn {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px 9px;
+    border-radius: 7px;
+    border: 1.5px solid #e9ecef;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.im-side-angle-btn:hover { border-color: #3b82f6; color: #1d4ed8; background: #eff6ff; }
+.im-side-angle-btn:active { transform: scale(0.96); }
+.im-side-angle-ring { font-size: 12px; line-height: 1; opacity: 0.8; }
+.im-side-card--warn .im-side-angle-btn {
+    border-color: #f97316; background: #fff7ed; color: #ea580c;
+}
+.im-side-card--warn .im-side-angle-btn:hover { background: #ffedd5; }
+
+/* Delete button */
+.im-side-del-btn {
+    flex: 0 0 auto;
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #cbd5e1;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.im-side-del-btn:hover { background: #fee2e2; color: #dc2626; }
+
+/* Empty state */
+.im-empty {
+    padding: 18px 10px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1.5px dashed #e5e7eb;
+    border-radius: 10px;
+    background: #fafafa;
+}
+
+/* Add-side button */
+.im-add-side-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: 1.5px dashed #d1d5db;
+    border-radius: 10px;
+    background: #f9fafb;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.im-add-side-btn:hover {
+    border-color: #f59e0b;
+    border-style: solid;
+    background: #fffbeb;
     color: #b45309;
-    background: #fef9c3;
+}
+.im-add-side-btn:active { transform: scale(0.99); }
+.im-add-side-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    border-style: dashed;
+    background: #f9fafb;
+    color: #9ca3af;
+}
+.im-add-side-plus { font-size: 15px; line-height: 1; }
+
+/* ── Status bar — live summary of the shape being built ────────────── */
+.im-status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    background: #f9fafb;
+    border: 1.5px solid #e9ecef;
+    border-radius: 8px;
+    padding: 7px 10px;
+    transition: all 0.2s ease;
+}
+.im-status:empty { display: none; }
+.im-status-icon { flex: 0 0 auto; font-size: 13px; line-height: 1; }
+.im-status-ok {
+    color: #15803d;
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+.im-status-error {
+    color: #b91c1c;
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+/* Action buttons (Clear / Plan) */
+.im-action-btn { transition: opacity 0.15s, transform 0.15s; }
+.im-action-btn:hover { transform: translateY(-1px); }
+.im-action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   ANGLE DIAL POPUP — floating card for picking a side's bearing.
+   Previously completely unstyled (bare div); now a proper elevated card
+   matching the picker-card language used throughout the sidebar.
+   ══════════════════════════════════════════════════════════════════════ */
+#imAngleDialPopup {
+    width: 288px;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.08);
+    padding: 14px 14px 12px;
+    animation: imDialPopIn 0.16s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes imDialPopIn {
+    from { opacity: 0; transform: scale(0.94) translateY(4px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.im-dial-header {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #374151;
+    text-align: center;
+    margin-bottom: 8px;
+}
+.im-dial-svg-wrap {
+    margin: 0 auto 8px;
+    display: flex;
+    justify-content: center;
+}
+.im-dial-readout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: #f9fafb;
+    border: 1.5px solid #e9ecef;
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+}
+.im-dial-prev-label {
+    font-size: 11px;
+    color: #6b7280;
+    font-weight: 500;
+}
+.im-dial-deg-badge {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1d4ed8;
+    background: #eff6ff;
+    border: 1.5px solid #bfdbfe;
+    border-radius: 20px;
+    padding: 3px 11px;
+    transition: all 0.15s ease;
+}
+.im-dial-deg-badge.im-dial-forbidden {
+    color: #b91c1c;
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+@keyframes imDialShake {
+    0%, 100% { transform: translateX(0); }
+    20%      { transform: translateX(-4px); }
+    40%      { transform: translateX(4px); }
+    60%      { transform: translateX(-3px); }
+    80%      { transform: translateX(3px); }
+}
+.im-dial-forbidden-hint {
+    display: none;
+    font-size: 11px;
+    font-weight: 600;
+    color: #b91c1c;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
     border-radius: 6px;
     padding: 5px 8px;
     margin-bottom: 8px;
-    display: none;
-    font-weight: 600;
+    text-align: center;
 }
-.im-angle-hint:not(:empty) { display: block; }
-
-.im-field-group { display: flex; flex-direction: column; gap: 4px; }
-.im-field-label { font-size: 12px; font-weight: 600; color: #374151; }
-.im-field-sub   { font-size: 10px; font-weight: 400; color: #9ca3af; margin-left: 4px; }
-
-.im-turn-pills {
-    display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap;
-}
-.im-turn-pill {
-    flex: 1;
-    min-width: 52px;
-    padding: 5px 4px;
-    font-size: 11px;
-    font-weight: 600;
-    background: #f3f4f6;
-    border: 1.5px solid #d1d5db;
-    border-radius: 6px;
-    cursor: pointer;
-    color: #374151;
-    transition: background 0.15s;
-}
-.im-turn-pill:hover { background: #e5e7eb; }
-.im-turn-pill.im-turn-active { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
-
-/* Side list */
-.im-side-list {
-    max-height: 180px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    border: 1.5px solid #e5e7eb;
-    border-radius: 8px;
-    background: #f9fafb;
-    scrollbar-width: thin;
-    scrollbar-color: #d1d5db transparent;
-}
-.im-side-list::-webkit-scrollbar { width: 4px; }
-.im-side-list::-webkit-scrollbar-track { background: transparent; border-radius: 99px; margin: 4px 0; }
-.im-side-list::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
-.im-side-list::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
-.im-side-row {
+.im-dial-forbidden-hint.visible { display: block; }
+.im-dial-actions {
     display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border-bottom: 1px solid #f3f4f6;
-    font-size: 12px;
+    gap: 8px;
 }
-.im-side-row:last-child { border-bottom: none; }
-.im-side-num  { font-weight: 700; color: #6b7280; min-width: 36px; }
-.im-side-info { flex: 1; display: flex; flex-direction: column; gap: 1px; }
-.im-side-len  { font-weight: 600; color: #1f2937; }
-.im-side-ang  { font-size: 10px; color: #6b7280; }
-.im-del-btn {
-    background: none; border: none; color: #9ca3af; cursor: pointer;
-    font-size: 13px; padding: 2px 4px; border-radius: 4px; line-height: 1;
+.im-dial-btn {
+    flex: 1;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 0;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
 }
-.im-del-btn:hover { background: #fee2e2; color: #dc2626; }
-.im-empty { padding: 12px; text-align: center; color: #9ca3af; font-size: 12px; }
-
-/* Status */
-.im-status    { font-size: 12px; color: #6b7280; padding: 2px 0; }
-.im-status-ok { color: #16a34a; font-weight: 600; }
-
-/* Action buttons */
-.im-action-btn {
-    padding: 10px 12px;
-    border: none; border-radius: 8px;
-    font-size: 13px; font-weight: 600;
-    cursor: pointer; transition: opacity 0.15s;
-}
-.im-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.im-btn-primary { background: #f59e0b; color: #1f2937; }
-.im-btn-primary:hover:not(:disabled) { background: #d97706; }
-.im-btn-danger  { background: #f3f4f6; color: #dc2626; border: 1.5px solid #fca5a5; }
-.im-btn-danger:hover { background: #fee2e2; }
-.im-btn-flash   { animation: imFlash 0.4s ease; }
-@keyframes imFlash {
-    0%   { background: #d1fae5; }
-    100% { background: #f59e0b; }
-}
+.im-dial-btn:active { transform: translateY(1px); }
+.im-dial-btn-confirm { background: #3b82f6; color: #fff; }
+.im-dial-btn-confirm:hover { background: #2563eb; }
+.im-dial-btn-cancel { background: #f3f4f6; color: #6b7280; }
+.im-dial-btn-cancel:hover { background: #e5e7eb; color: #374151; }
 </style>
         `;
 
@@ -1582,6 +1912,12 @@ function setIMFenceType(type) {
         if (imBeamEl) imBeamEl.addEventListener('change', function () {
             const p1 = document.getElementById('beamSelect');
             if (p1) p1.value = this.value;
+            ['imSbbs2', 'imSbbs3', 'imSbbs4'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+            const spec = document.getElementById('imSbbs' + this.value);
+            if (spec) spec.style.display = '';
         });
 
         // Init
@@ -1983,8 +2319,13 @@ function imOnCornerModeChange() {
             const doubleRadio = document.getElementById(doubleRadioId);
             if (doubleRadio) { doubleRadio.checked = true; doubleRadio.disabled = false; }
             if (globalEl) globalEl.value = 'double';
+            if (!window._globalCornerModeByType) window._globalCornerModeByType = { cowboy: 'double', concrete: 'double' };
+            window._globalCornerModeByType[isConcrete ? 'concrete' : 'cowboy'] = 'double';
             const statusEl = document.getElementById('imStatus');
-            if (statusEl) statusEl.textContent = '⚠️ ไม่สามารถใช้เสาเดียวที่มุมได้ เนื่องจากมีมุม < 120° อยู่ในรูปร่างนี้';
+            if (statusEl) {
+                statusEl.innerHTML = '<span class="im-status-icon">⚠️</span><span>ไม่สามารถใช้เสาเดียวที่มุมได้ เนื่องจากมีมุม &lt; 120° อยู่ในรูปร่างนี้</span>';
+                statusEl.className = 'im-status im-status-error';
+            }
             const legacyCb = document.getElementById(legacyCbId);
             if (legacyCb) legacyCb.checked = true;
             if (window._cornerModes) window._cornerModes.clear();
@@ -1993,8 +2334,16 @@ function imOnCornerModeChange() {
         }
     }
 
-    // Sync the hidden globalCornerMode input that fence.js reads
+    // Sync the hidden globalCornerMode input (legacy/unused display only)
     if (r && globalEl) globalEl.value = r.value;
+    // Persist into the SAME type-scoped global default getCornerMode()
+    // (fence.js) actually reads — mirrors setCornerModeSelection() in
+    // index.html. Previously this only wrote to the unused #globalCornerMode
+    // hidden input, so switching Mode 1/Mode 2 here had zero effect on the
+    // actual corner-post math; the calculation always fell back to whatever
+    // Page 1's radios (or the 'double' default) last left it at.
+    if (!window._globalCornerModeByType) window._globalCornerModeByType = { cowboy: 'double', concrete: 'double' };
+    window._globalCornerModeByType[isConcrete ? 'concrete' : 'cowboy'] = (r?.value === 'single') ? 'single' : 'double';
     // Keep legacy checkbox in sync (imDoubleCornerPost for cowboy,
     // imConcreteDoubleCorner for concrete)
     const legacyCb = document.getElementById(legacyCbId);

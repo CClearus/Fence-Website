@@ -29,32 +29,39 @@ function isNonSquareModeOn() {
 
 // Returns true when Mode 1 (single bisector post) is the active corner
 // mode for whichever fence type is currently selected, and false for
-// Mode 2 (dual red/blue post). Same source of truth as the map/plan/PDF
-// corner drawing: the "double corner post" checkbox — checked = Mode 2,
-// unchecked = Mode 1 — scoped per fence type and, when available, via
-// _activeCornerCheckbox() so Input Mode (page 2) reads its own checkbox
-// instead of page 1's.
+// Mode 2 (dual red/blue post — free-angle, no snap window).
+//
+// Reads window._globalCornerModeByType — the SAME type-scoped global
+// default getCornerMode() (fence.js) reads for the actual fence
+// calculation — instead of the "double corner post" checkbox. The
+// checkbox used to be the source of truth here, but setCornerModeSelection
+// (index.html) deliberately stopped force-ticking it when a Mode 1/Mode 2
+// radio is picked (it's only greyed out now — see that function's own
+// comment), so it goes stale and no longer reflects which radio is
+// selected. Reading the stale checkbox made Mode 2 silently fall back to
+// Mode 1's 120° snap window instead of drawing free-angle.
 function isMode1Active() {
     if (!isNonSquareModeOn()) return false;
-    let dcEl;
-    if (selectedFenceType === 'cowboy') {
-        dcEl = typeof _activeCornerCheckbox === 'function'
-            ? _activeCornerCheckbox('doubleCornerPost', 'imDoubleCornerPost')
-            : (document.getElementById('doubleCornerPost') || document.getElementById('imDoubleCornerPost'));
-    } else if (selectedFenceType === 'concrete') {
-        dcEl = typeof _activeCornerCheckbox === 'function'
-            ? _activeCornerCheckbox('concreteDoubleCornerPost', 'imConcreteDoubleCorner')
-            : (document.getElementById('concreteDoubleCornerPost') || document.getElementById('imConcreteDoubleCorner'));
-    } else {
-        return false;
-    }
-    return dcEl ? !dcEl.checked : true;
+    if (selectedFenceType !== 'cowboy' && selectedFenceType !== 'concrete') return false;
+    if (!window._globalCornerModeByType) return false; // fence.js also defaults to 'double' (Mode 2)
+    const type = selectedFenceType === 'concrete' ? 'concrete' : 'cowboy';
+    return (window._globalCornerModeByType[type] || 'double') === 'single';
+}
+
+// Barbed wire has no non-square/Mode 1-2 system of its own — forcing 90°
+// there is a simple, independent opt-in toggle ("บังคับมุม 90° ขณะวาด") that
+// the user turns on only when they want it, unlike cowboy/concrete where
+// 90° is the default and non-square mode is the opt-out.
+function isBarbedForce90On() {
+    const cb = document.getElementById('barbedForce90') || document.getElementById('imBarbedForce90');
+    return !!(cb && cb.checked);
 }
 
 // Fence types that must snap to 90° increments while drawing on the map.
 // When Mode 1 is active the user is explicitly working with non-90° angles,
 // so we lift the 90° restriction and allow 120° snapping instead.
 function forces90deg() {
+    if (selectedFenceType === 'barbed') return isBarbedForce90On();
     if (isNonSquareModeOn()) return false;
     return selectedFenceType === 'cowboy' || selectedFenceType === 'concrete';
 }

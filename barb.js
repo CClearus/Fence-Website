@@ -48,8 +48,11 @@ function calcBarbed(barbedLines, m_barbed, n_barbed, nBraceSolo, nBraceDual, nBr
 let grandTotal = 0, grandPosts = 0;
 const allWarnings = [];
 let totalSharpAngles = 0, totalExtraSections = 0, totalExtraLength = 0;
-
-
+// N-Brace post breakdown (cost/material only, per fitting — see comments
+// below): solo = 1 post per fitting (2 fittings/line: start+end), dual and
+// angle = 2 posts per fitting. Kept separate from the regular per-segment
+// post count so the UI can show "normal + solo + dual + angle = total".
+let totalNormalPosts = 0, totalSoloPosts = 0, totalDualPosts = 0, totalAnglePosts = 0;
 
 barbedLines.forEach(ld => {
      const linePoints = ld.points;
@@ -101,6 +104,11 @@ barbedLines.forEach(ld => {
      let postCount = 0;
      let cumulDist = 0;
      const numSegs = linePoints.length - 1;
+     // Every regular post's distance-along-line — lets N-Brace Dual snap to
+     // whichever real post sits closest to its 50m mark instead of an
+     // independent interpolated point that can land immediately beside one,
+     // cramming two symbols together.
+     const postDists = [];
      for (let si = 0; si < numSegs; si++) {
          const p0 = linePoints[si];
          const p1 = linePoints[si + 1];
@@ -115,6 +123,7 @@ barbedLines.forEach(ld => {
              const isTrueStart = (si === 0 && pi === 0);
              drawPost(pt, b, isTrueStart ? 'endpoint' : 'normal');
              postCount++;
+             postDists.push(dist);
          }
          cumulDist += segLen;
      }
@@ -123,12 +132,16 @@ barbedLines.forEach(ld => {
      const lastB = bearing(linePoints[linePoints.length - 2], lastPt);
      drawPost(lastPt, lastB, 'endpoint');
      postCount++;
+     postDists.push(total);
 
+     // Sharp-corner reinforcement is cost/material only — same as brick
+     // fence's equivalent — so it's never drawn on the map, just counted
+     // into postCount/extraLength and surfaced via the toast + the orange
+     // highlight circle above.
      let extraPosts = 0, extraLength = 0;
      sharpCorners.forEach(({ idx, dist }) => {
          const extraDist = Math.max(0, dist - m);
          if (extraDist > 1e-3) {
-             drawPost(interp(linePoints, extraDist), bearingAt(linePoints, extraDist), 'normal');
              extraPosts++; extraLength += m;
          }
      });
@@ -178,17 +191,32 @@ barbedLines.forEach(ld => {
          }).addTo(fenceLayerGroup);
      }
      // Draw order: angle → dual → solo (solo always renders on top)
+     // N-Brace fittings each need their own extra posts (cost/material
+     // only, same "counted but not drawn" treatment as the sharp-corner
+     // reinforcement above): a single anchor brace (solo) needs 1 post per
+     // fitting; a two-post H-brace (dual, angle) needs 2 per fitting.
+     let anglePostCount = 0, dualPostCount = 0, soloPostCount = 0;
      if (nBraceAngle) {
          // intermediate vertex corners only — never endpoints
          allCorners.forEach(({ dist }) => {
              drawNBraceAngleMap(interp(linePoints, dist), bearingAt(linePoints, dist));
          });
+         anglePostCount = allCorners.length * 2;
      }
      if (nBraceDual) {
-         // every 50 m intervals only — never endpoints
+         // every 50 m intervals only — never endpoints. Snapped to the
+         // nearest real post (postDists, built above) instead of the raw
+         // 50m mark so the brace sits ON that post rather than immediately
+         // beside it.
          let crossD = 50;
          while (crossD < total - 1) {
-             drawNBraceDualMap(interp(linePoints, crossD), bearingAt(linePoints, crossD));
+             let nearestDist = crossD, bestDiff = Infinity;
+             for (const d of postDists) {
+                 const diff = Math.abs(d - crossD);
+                 if (diff < bestDiff) { bestDiff = diff; nearestDist = d; }
+             }
+             drawNBraceDualMap(interp(linePoints, nearestDist), bearingAt(linePoints, nearestDist));
+             dualPostCount += 2;
              crossD += 50;
          }
      }
@@ -198,12 +226,17 @@ barbedLines.forEach(ld => {
          const last = linePoints[linePoints.length - 1];
          const prev = linePoints[linePoints.length - 2];
          drawNBraceSoloMap(last, bearing(prev, last), 'end');
+         soloPostCount = 2; // 1 post each at start + end
      }
      grandTotal += total + extraLength;
-     grandPosts += postCount;
+     grandPosts += postCount + soloPostCount + dualPostCount + anglePostCount;
      totalSharpAngles += sharpCorners.length;
      totalExtraSections += extraPosts;
      totalExtraLength += extraLength;
+     totalNormalPosts += postCount;
+     totalSoloPosts += soloPostCount;
+     totalDualPosts += dualPostCount;
+     totalAnglePosts += anglePostCount;
  });
 
  // Draw corner posts at all vertices / shared corners (like cowboy fence)
@@ -212,6 +245,18 @@ barbedLines.forEach(ld => {
  if (totalSharpAngles > 0) {
      _showSharpAngleToast(totalSharpAngles, totalExtraSections, m_barbed);
  }
+
+ // Exposed for the sidebar's post-count breakdown display (black/red/blue/red
+ // formula) — see runFenceCalc/writeResults (fence.js). Not read by any
+ // calculation, purely a UI readout.
+ window._barbedCalcResult = {
+     normalPosts: totalNormalPosts,
+     soloPosts: totalSoloPosts,
+     dualPosts: totalDualPosts,
+     anglePosts: totalAnglePosts,
+     totalPosts: grandPosts
+ };
+
  return { grandTotal, grandPosts, grandBeams: 0, warnings: allWarnings };
 }
 
@@ -221,9 +266,9 @@ barbedLines.forEach(ld => {
 function drawPlanBarbedLine(lineData, idx) {
 const pts = lineData.points;
 if (!pts || pts.length < 2) return;
-const m = Math.min(3, Math.max(1, parseFloat(document.getElementById('postSpacingBarbed')?.value) || 2.5));
+const m = Math.min(3, Math.max(1, parseFloat(_activeCornerCheckbox('postSpacingBarbed', 'imPostSpacingBarbed')?.value) || 2.5));
 const total = totalLen(pts);
-const n = parseFloat((document.getElementById('postSizeBarbed') || document.getElementById('imPostSizeBarbed'))?.value) || 0.10;
+const n = parseFloat(_activeCornerCheckbox('postSizeBarbed', 'imPostSizeBarbed')?.value) || 0.10;
 function interiorAngleAt(i) {
      if (i <= 0 || i >= pts.length - 1) return 180;
      const bIn = bearing(pts[i - 1], pts[i]);
@@ -385,15 +430,21 @@ L.marker(pts[0], {
         const segLen = hav(p0, p1);
         const g = segGeomList[i];
         const dPrime = g ? g.dPrime : segLen;
-        const offsets = [0, dPrime].filter(o => o <= segLen + 1e-6).slice(0, 2);
-        offsets.forEach(o => drawPostLengthLabel(pts, sideCumul + o, n, '#374151'));
+        // Only the very first side of the WHOLE line gets footprint-length
+        // labels — every post on the line is the same size, so repeating
+        // this once per side was still noise once a shape had more than
+        // one side.
+        if (i === 0) {
+            const offsets = [0, dPrime].filter(o => o <= segLen + 1e-6).slice(0, 2);
+            offsets.forEach(o => drawPostLengthLabel(pts, sideCumul + o, n, '#374151'));
+        }
         sideCumul += segLen;
     }
 }
 }
- const nbSolo  = (document.getElementById('nBraceSolo')  || document.getElementById('imNBraceSolo'))?.checked  ?? false;
- const nbDual  = (document.getElementById('nBraceDual')  || document.getElementById('imNBraceDual'))?.checked  ?? false;
- const nbAngle = (document.getElementById('nBraceAngle') || document.getElementById('imNBraceAngle'))?.checked ?? false;
+ const nbSolo  = _activeCornerCheckbox('nBraceSolo',  'imNBraceSolo')?.checked  ?? false;
+ const nbDual  = _activeCornerCheckbox('nBraceDual',  'imNBraceDual')?.checked  ?? false;
+ const nbAngle = _activeCornerCheckbox('nBraceAngle', 'imNBraceAngle')?.checked ?? false;
  // ── N-Brace symbol helpers (plan mode) ──
  // ANGLE: purple diamond ◇ — intermediate corners only
  function drawNBraceAnglePlan(pt, b) {
@@ -507,9 +558,16 @@ drawNBraceAnglePlan(interp(pts, dist), bearingAt(pts, dist));
      }).addTo(planLayerGroup);
  }
  if (nbDual) {
-     // every 50 m intervals only — never endpoints
+     // every 50 m intervals only — never endpoints. Snapped to the nearest
+     // real post in postPositions (same fix as calcBarbed's map-mode pass)
+     // so the brace sits ON that post instead of immediately beside it.
      for (let dist = 50; dist < total - 1; dist += 50) {
-         drawNBraceDualPlan(interp(pts, dist), bearingAt(pts, dist));
+         let nearest = postPositions[0], bestDiff = Infinity;
+         for (const p of postPositions) {
+             const diff = Math.abs(p.dist - dist);
+             if (diff < bestDiff) { bestDiff = diff; nearest = p; }
+         }
+         drawNBraceDualPlan(nearest.pt, nearest.b);
      }
  }
  if (nbSolo) {
