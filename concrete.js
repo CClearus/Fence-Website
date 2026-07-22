@@ -668,9 +668,19 @@ function drawPlanConcreteCorners() {
             // (armRed/armBlue) so the post edges stay flush with the
             // actual fence line the user drew. Mirrors drawPlanCowboyCorners
             // and the map-mode fix in drawConcreteDoubleCornerPost exactly.
-            const offset = getDualCornerOffset(n, theta);
-            const redPt  = offPt(entry.pt, armRed,  offset);
-            const bluePt = offPt(entry.pt, armBlue, offset);
+            const offset = getDualCornerOffset(n, theta); // true physical offset — used for the label only
+            // drawPlanConcreteColorPost renders posts at visualN = n·scale·3
+            // (oversized for visibility), not the real n — so positioning them
+            // using the real `offset` made the oversized squares overlap
+            // instead of mitring flush at the corner. Run the same formula on
+            // the inflated visual size (offset scales linearly with n) to get
+            // a render offset the oversized squares actually meet at — mirrors
+            // the identical fix in drawPlanCowboyCorners (cowboy.js).
+            const scale = window._poleScale || 1.0;
+            const visualN = Math.max(n, 0.15) * scale * 3;
+            const renderOffset = getDualCornerOffset(visualN, theta);
+            const redPt  = offPt(entry.pt, armRed,  renderOffset);
+            const bluePt = offPt(entry.pt, armBlue, renderOffset);
             drawPlanConcreteColorPost(redPt,  armRed,  '#dc2626');
             drawPlanConcreteColorPost(bluePt, armBlue, '#2563eb');
             if (typeof drawDimLine === 'function' && typeof cornerDimOutwardSign === 'function') {

@@ -1127,11 +1127,9 @@ function drawPlanAngle(prevPt, vertexPt, nextPt) {
     const b1 = bearing(prevPt, vertexPt);
     const b2 = bearing(vertexPt, nextPt);
 
-    // Interior angle at the vertex (always 0–180)
-    let interiorAngle = ((b2 - b1) + 360) % 360;
-    if (interiorAngle > 180) interiorAngle = 360 - interiorAngle;
-
-    // Arc drawn from reverse-of-incoming to outgoing direction
+    // Arc drawn from reverse-of-incoming to outgoing direction — i.e. from
+    // the vertex outward along each arm (bearing(vertex,prev) and
+    // bearing(vertex,next)), same convention as cornerAngle() in fence.js.
     const arcFrom = (b1 + 180) % 360;  // direction back toward prevPt
     const arcStart = arcFrom;
     const arcEnd   = b2;                 // direction toward nextPt
@@ -1139,6 +1137,17 @@ function drawPlanAngle(prevPt, vertexPt, nextPt) {
     // pre-adjustment is needed here — doing it twice was corrupting arcEnd
     // to equal arcStart for turns swept one particular rotational way,
     // collapsing the arc to a single point.)
+
+    // Interior angle at the vertex (always 0–180) — MUST be measured between
+    // the same two rays the arc is drawn between (arcFrom/arcEnd, i.e. the
+    // two arms pointing outward from the vertex), not between the raw
+    // travel bearings b1/b2. b1 is the incoming TRAVEL direction, which is
+    // the reverse of the arm — using it directly here silently labeled the
+    // arc with its supplementary (180° − true angle) turn angle instead of
+    // the actual vertex opening angle, so the number shown didn't match
+    // the angle getDualCornerOffset (fence.js) uses for the same corner.
+    let interiorAngle = ((arcEnd - arcFrom) + 360) % 360;
+    if (interiorAngle > 180) interiorAngle = 360 - interiorAngle;
 
     const radius = 0.5;
     const steps = 32;

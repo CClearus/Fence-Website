@@ -466,9 +466,20 @@ if (mode === 'single') {
                 // instead of a shared bisector angle, so the post edges stay
                 // flush with the actual fence line the user drew — matches
                 // the map-mode fix in fence.js's drawDoubleCornerPost.
-                const offset = getDualCornerOffset(n, theta);
-                const redPt  = offPt(entry.pt, armRed,  offset);
-                const bluePt = offPt(entry.pt, armBlue, offset);
+                const offset = getDualCornerOffset(n, theta); // true physical offset — used for the label only
+                // drawPlanColorPost renders posts at visualN = n·scale·3 (oversized
+                // for visibility), not the real n — so positioning them using the
+                // real `offset` made the oversized squares overlap instead of
+                // mitring flush at the corner like the real hardware would. Run
+                // the SAME formula on the inflated visual size (offset scales
+                // linearly with n) to get a render offset the oversized squares
+                // actually meet at, mirroring how the plain "duel" branch below
+                // already separates render position from the labeled true value.
+                const scale = window._poleScale || 1.0;
+                const visualN = Math.max(n, 0.15) * scale * 3;
+                const renderOffset = getDualCornerOffset(visualN, theta);
+                const redPt  = offPt(entry.pt, armRed,  renderOffset);
+                const bluePt = offPt(entry.pt, armBlue, renderOffset);
                 drawPlanColorPost(redPt,  armRed,  '#dc2626', n);
                 drawPlanColorPost(bluePt, armBlue, '#2563eb', n);
                 if (typeof drawDimLine === 'function') {
@@ -486,7 +497,7 @@ if (mode === 'single') {
             // line. Independent of the non-square Mode 1/Mode 2 branch
             // above — never runs at the same time as it.
             //
-            // drawPlanColorPost renders posts oversized for visibility
+            // drawPlanColorPost rendefs posts oversized for visibility
             // (visualN = n·scale·3, not the true n), so positioning blue
             // using the raw physical n makes the two squares overlap on
             // screen. renderOffset matches that same oversized footprint

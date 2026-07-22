@@ -6,8 +6,8 @@
 //
 // Fence-type angle restrictions:
 //   cowboy  → multiples of 90° only
-//   barbed  → multiples of 45°
-//   brick   → multiples of 45°
+//   barbed  → free (1° steps)
+//   brick   → free (1° steps), matches map mode where brick isn't locked to 90°
 //
 // Shape closes automatically when the accumulated
 // path returns within CLOSE_THRESHOLD metres of the
@@ -24,7 +24,7 @@
 const ANGLE_RULES = {
     cowboy:   { step: 90,  label: '90°' },
     barbed:   { step: 1,   label: '1°'  },
-    brick:    { step: 90,  label: '90°' },
+    brick:    { step: 1,   label: '1°'  },
     concrete: { step: 90,  label: '90°' },
 };
     const DEFAULT_ANGLE_STEP = 1; // degrees (no restriction)

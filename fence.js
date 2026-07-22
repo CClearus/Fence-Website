@@ -311,17 +311,13 @@ function cornerAngle(armBearing1, armBearing2) {
 
 // Returns the exact double-corner offset x for post size n and corner angle θ (degrees)
 // x = n / (2·tan(θ/2)) + n/2
-// Shared "how much bigger than a normal pillar" size for dual-corner posts.
 // Used both when drawing the post AND when computing its clearance/offset,
 // so the two never drift out of sync.
-const DUAL_POST_SIZE_MULTIPLIER = 1.8;
 
 // Purely visual — how big the red/blue dual-corner posts are actually DRAWN.
-// Kept separate from DUAL_POST_SIZE_MULTIPLIER (which drives the clearance
-// offset / panel-shortening math) so bumping the on-screen size doesn't also
-// push the posts further apart. Normal in-line posts use baseScale 5.4 and
-// corner-type posts use baseScale 1.6 (see drawPost), so 5.4/1.6 makes a
-// dual-corner post render the same on-screen size as a normal white pillar.
+// Normal in-line posts use baseScale 5.4 and corner-type posts use baseScale
+// 1.6 (see drawPost), so 5.4/1.6 makes a dual-corner post render the same
+// on-screen size as a normal white pillar.
 const DUAL_POST_VISUAL_MULTIPLIER = 5.4 / 1.6;
 
 function cornerOffsetX(n, thetaDeg) {
@@ -349,9 +345,7 @@ function cornerDimOutwardSign(ownArmBearing, otherArmBearing) {
 }
 
 function getDualCornerOffset(n, thetaDeg) {
-    const userScale = window._poleScale || 1.0;
-    const minVisualClearance = 0.35 * DUAL_POST_SIZE_MULTIPLIER * userScale; // scaled to match the pillar size
-    return Math.max(cornerOffsetX(n, thetaDeg), minVisualClearance);
+    return cornerOffsetX(n, thetaDeg);
 }
 
 // Duel mode (square corner) always assumes a right angle, but the two arms
