@@ -428,15 +428,12 @@ L.marker(pts[0], {
     for (let i = 0; i < pts.length - 1; i++) {
         const p0 = pts[i], p1 = pts[i + 1];
         const segLen = hav(p0, p1);
-        const g = segGeomList[i];
-        const dPrime = g ? g.dPrime : segLen;
         // Only the very first side of the WHOLE line gets footprint-length
         // labels — every post on the line is the same size, so repeating
         // this once per side was still noise once a shape had more than
         // one side.
         if (i === 0) {
-            const offsets = [0, dPrime].filter(o => o <= segLen + 1e-6).slice(0, 2);
-            offsets.forEach(o => drawPostLengthLabel(pts, sideCumul + o, n, '#374151'));
+            drawPostLengthLabel(pts, sideCumul, n, '#374151');
         }
         sideCumul += segLen;
     }

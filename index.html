@@ -314,84 +314,190 @@
                 </div>
             </div>
 
-            <!-- ── CONCRETE OPTIONS (same layout as cowboy, spacing limited to 2/3/custom) ── -->
+            <!-- ── CONCRETE OPTIONS (same picker-card/toggle/radio-chip layout as cowboy) ── -->
             <div id="p1ConcreteOpts" style="display:none;">
-                <div class="sb-section-label">เลือกเสา - คาน</div>
-                <div class="sb-select-wrap" style="position:relative;">
-                    <select class="sb-select" id="concreteLayerSelect">
-                        <option value="2">2 ชั้น</option>
-                        <option value="3">3 ชั้น</option>
-                        <option value="4">4 ชั้น</option>
-                    </select>
-                    <div class="sb-select-icon">▼</div>
-                </div>
-                <!-- Beam spec display — updates based on selection -->
-                <div class="sb-beam-spec" id="concreteBeamSpec">
-                    <div class="sbbs-row" id="concbs2">
-                        <span class="sbbs-floor">2 ชั้น</span>
-                        <span class="sbbs-dim">0.15 × 0.15 × 1.50 ม.</span>
+                <div class="sb-picker-card sb-picker-postbeam">
+                    <div class="sbpk-head">
+                        <div class="sbpk-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <rect x="3" y="4" width="3.4" height="16" rx="1" fill="currentColor"/>
+                                <rect x="17.6" y="4" width="3.4" height="16" rx="1" fill="currentColor"/>
+                                <rect x="3" y="7.2" width="18" height="2.6" rx="1" fill="currentColor" opacity="0.55"/>
+                                <rect x="3" y="14.2" width="18" height="2.6" rx="1" fill="currentColor" opacity="0.55"/>
+                            </svg>
+                        </div>
+                        <div class="sbpk-label">เลือกเสา (H)</div>
                     </div>
-                    <div class="sbbs-row" id="concbs3" style="display:none;">
-                        <span class="sbbs-floor">3 ชั้น</span>
-                        <span class="sbbs-dim">0.15 × 0.15 × 2.00 ม.</span>
+                    <div class="sb-select-wrap" style="position:relative;">
+                        <select class="sb-select sbpk-select" id="concreteLayerSelect"
+                            onchange="syncConcretePostPrice(); updateConcretePriceMeas();">
+                            <option value="5" data-name="เสาเข้าตัว H สูง 1.50 ม." data-meas="สูง 1.50 ม." data-price="357 บาท">เสาเข้าตัว H สูง 1.50 ม. — 357 บาท</option>
+                            <option value="7" data-name="เสาเข้าตัว H สูง 2.00 ม." data-meas="สูง 2.00 ม." data-price="427 บาท">เสาเข้าตัว H สูง 2.00 ม. — 427 บาท</option>
+                            <option value="9" data-name="เสาเข้าตัว H สูง 2.50 ม." data-meas="สูง 2.50 ม." data-price="526 บาท">เสาเข้าตัว H สูง 2.50 ม. — 526 บาท</option>
+                        </select>
+                        <div class="sb-select-icon">▼</div>
                     </div>
-                    <div class="sbbs-row" id="concbs4" style="display:none;">
-                        <span class="sbbs-floor">4 ชั้น</span>
-                        <span class="sbbs-dim">0.15 × 0.15 × 2.50 ม.</span>
+                    <!-- Beam spec display — updates based on selection -->
+                    <div class="sb-beam-spec" id="concreteBeamSpec">
+                        <div class="sbbs-row" id="concbs5">
+                            <span class="sbbs-floor">สูง 1.50 ม.</span>
+                            <span class="sbbs-dim">ใช้คาน 5 แผ่น</span>
+                        </div>
+                        <div class="sbbs-row" id="concbs7" style="display:none;">
+                            <span class="sbbs-floor">สูง 2.00 ม.</span>
+                            <span class="sbbs-dim">ใช้คาน 7 แผ่น</span>
+                        </div>
+                        <div class="sbbs-row" id="concbs9" style="display:none;">
+                            <span class="sbbs-floor">สูง 2.50 ม.</span>
+                            <span class="sbbs-dim">ใช้คาน 9 แผ่น</span>
+                        </div>
                     </div>
-                </div>
-
-                <div class="sb-section-label" style="margin-top:10px;">ระยะห่างระหว่างเสา (เมตร)</div>
-                <select class="sb-number-input" id="spacingSelectConcrete"
-                    style="width:100%;padding:6px 8px;font-size:12px;"
-                    onchange="setSpacingConcrete(this.value)">
-                    <option value="2.0" selected>2.0 ม.</option>
-                    <option value="3.0">3.0 ม.</option>
-                    <option value="custom">กำหนดเอง…</option>
-                </select>
-<input type="number" class="sb-number-input" id="postSpacingConcrete" value="2.0" min="1" max="3" step="0.1"
-    style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
-    oninput="showSpacingHint('postSpacingConcreteHint', parseFloat(this.value))">
-<div id="postSpacingConcreteHint" class="spacing-hint" style="display:none;"></div>
-
-                <div style="margin-top:12px;">
-                    <label id="concreteDoubleCornerPostLabel" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                        <input type="checkbox" id="concreteDoubleCornerPost"
-                            style="width:16px;height:16px;cursor:pointer;accent-color:#f59e0b;"
-                            onchange="onDoubleCornerCheckboxChange('concrete')">
-                        <span style="font-size:13px;color:#374151;">ใช้เสา 2 ต้นที่มุมต่อ</span>
-                    </label>
                 </div>
 
-                <div style="margin-top:12px;">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                        <input type="checkbox" id="nonSquareModeConcrete"
-                            style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed;"
+                <div class="sb-picker-card sb-picker-spacing">
+                    <div class="sbpk-head">
+                        <div class="sbpk-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <rect x="2.5" y="4" width="3" height="16" rx="1" fill="currentColor"/>
+                                <rect x="18.5" y="4" width="3" height="16" rx="1" fill="currentColor"/>
+                                <path d="M7 12 H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                <path d="M7 12 L9.4 9.8 M7 12 L9.4 14.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M17 12 L14.6 9.8 M17 12 L14.6 14.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="sbpk-label">ระยะห่างระหว่างเสา</div>
+                    </div>
+                    <div class="sb-select-wrap" style="position:relative;">
+                        <select class="sb-select sbpk-select" id="spacingSelectConcrete"
+                            onchange="setSpacingConcrete(this.value); syncConcretePanelPrice(); updateConcretePriceMeas();">
+                            <option value="2.0" data-name="ระยะห่าง 2.0 ม.">2.0 ม.</option>
+                            <option value="3.0" selected data-name="ระยะห่าง 3.0 ม." data-price="334 บาท">3.0 ม. — 334 บาท</option>
+                            <option value="custom" data-name="กำหนดเอง…">กำหนดเอง…</option>
+                        </select>
+                        <div class="sb-select-icon">▼</div>
+                    </div>
+                    <input type="number" class="sb-number-input" id="postSpacingConcrete" value="2.0" min="1" max="3" step="0.1"
+                        style="width:100%;margin-top:8px;display:none;" placeholder="ระบุ (ม.)"
+                        oninput="showSpacingHint('postSpacingConcreteHint', parseFloat(this.value))">
+                    <div id="postSpacingConcreteHint" class="spacing-hint" style="display:none;"></div>
+                </div>
+
+                <label class="sb-toggle-row" id="concreteDoubleCornerPostLabel" style="--sbtg-accent:#f59e0b;">
+                    <input type="checkbox" id="concreteDoubleCornerPost" class="sb-toggle-input"
+                        onchange="onDoubleCornerCheckboxChange('concrete')">
+                    <span class="sb-toggle-left">
+                        <span class="sb-toggle-icon" style="background:#fff7ed;color:#d97706;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                <rect x="3" y="3" width="5" height="18" rx="1.2" fill="currentColor"/>
+                                <rect x="10" y="3" width="5" height="18" rx="1.2" fill="currentColor"/>
+                                <path d="M18 7 L21 12 L18 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                            </svg>
+                        </span>
+                        <span class="sb-toggle-text">ใช้เสา 2 ต้นที่มุมต่อ</span>
+                    </span>
+                    <span class="sb-toggle-switch"></span>
+                </label>
+
+                <div style="margin-top:10px;">
+                    <label class="sb-toggle-row" style="--sbtg-accent:#7c3aed;">
+                        <input type="checkbox" id="nonSquareModeConcrete" class="sb-toggle-input"
                             onchange="onNonSquareModeChange('concrete')">
-                        <span style="font-size:13px;color:#374151;">โหมดมุมไม่ตั้งฉาก (ไม่ใช่ 90°)</span>
+                        <span class="sb-toggle-left">
+                            <span class="sb-toggle-icon" style="background:#f5f3ff;color:#7c3aed;">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                    <path d="M4 20 L4 6 L18 20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                    <path d="M6.5 20 A5 5 0 0 1 4 15.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+                                </svg>
+                            </span>
+                            <span class="sb-toggle-text">โหมดมุมไม่ตั้งฉาก (ไม่ใช่ 90°)</span>
+                        </span>
+                        <span class="sb-toggle-switch"></span>
                     </label>
-                    <div id="nonSquareModeWrapConcrete" style="display:none;margin-top:8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;flex-direction:column;gap:6px;">
-                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                    <div id="nonSquareModeWrapConcrete" class="sb-radio-group" style="display:none;">
+                        <label class="sb-radio-chip">
                             <input type="radio" name="cornerModeRadio_concrete" id="cornerMode1Concrete"
-                                onchange="onCornerModeRadioChange('concrete')"
-                                style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;">
-                            <span style="font-size:12px;color:#374151;">Mode 1 — แต่งร่องเสา/ตัดปลายคาน (ใช้ได้เมื่อ θ ≥ 120°)</span>
+                                onchange="onCornerModeRadioChange('concrete')">
+                            <span class="sb-radio-dot"></span>
+                            <span class="sb-radio-text">Mode 1 — แต่งร่องเสา/ตัดปลายคาน (ใช้ได้เมื่อ θ ≥ 120°)</span>
                         </label>
-                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <label class="sb-radio-chip">
                             <input type="radio" name="cornerModeRadio_concrete" id="cornerMode2Concrete"
-                                onchange="onCornerModeRadioChange('concrete')"
-                                style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;">
-                            <span style="font-size:12px;color:#374151;">Mode 2 — ใช้เสาคู่ที่มุมต่อ</span>
+                                onchange="onCornerModeRadioChange('concrete')">
+                            <span class="sb-radio-dot"></span>
+                            <span class="sb-radio-text">Mode 2 — ใช้เสาคู่ที่มุมต่อ</span>
                         </label>
                     </div>
                 </div>
 
-                <div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (กว้าง, เมตร)</div>
-                <input type="number" class="sb-number-input" id="postSizeConcrete" value="0.15"
-                    min="0.05" max="0.50" step="0.01" style="width:100%;" placeholder="ความกว้างเสา (ม.)">
+                <div class="sb-field-card" style="margin-top:10px;">
+                    <div class="sbpk-head">
+                        <div class="sbpk-icon" style="background:#f3f4f6;color:#6b7280;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                <rect x="8" y="8" width="8" height="8" rx="1.3" stroke="currentColor" stroke-width="1.6"/>
+                                <path d="M2 12 H7 M17 12 H22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                <path d="M2 12 L4.6 9.6 M2 12 L4.6 14.4 M22 12 L19.4 9.6 M22 12 L19.4 14.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="sbpk-label">ขนาดเสา (กว้าง, เมตร)</div>
+                    </div>
+                    <div class="sbpc-input-wrap">
+                        <input type="number" id="postSizeConcrete" value="0.15"
+                            min="0.05" max="0.50" step="0.01" placeholder="ความกว้างเสา (ม.)">
+                        <span class="sbpc-unit">ม.</span>
+                    </div>
+                </div>
 
-                <div class="sb-section-label" style="margin-top:10px;">กรอกราคา</div>
+                <div class="sb-section-label" style="margin-top:14px;">กรอกราคา</div>
                 <div class="sb-price-cards">
+                    <div class="sb-price-card sb-price-post">
+                        <div class="sbpc-head">
+                            <div class="sbpc-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <rect x="9" y="2" width="6" height="20" rx="1.4" fill="currentColor"/>
+                                    <rect x="6.5" y="2" width="11" height="3.2" rx="1.2" fill="currentColor" opacity="0.55"/>
+                                </svg>
+                            </div>
+                            <div class="sbpc-titles">
+                                <div class="sbpc-name">ราคาเสาต้นละ</div>
+                                <div class="sbpc-meas" id="concretePostMeas">เสาเข้าตัว H — สูง 1.50 ม.</div>
+                            </div>
+                        </div>
+                        <div class="sbpc-input-row">
+                            <div class="sbpc-input-wrap">
+                                <input type="number" id="concretePostPrice" value="357"
+                                    min="0" step="1" placeholder="ราคาเสาต้นละ"
+                                    onchange="if(typeof runFenceCalc==='function')runFenceCalc();">
+                                <span class="sbpc-unit">บาท</span>
+                            </div>
+                            <button type="button" class="sbpc-reset" onclick="resetFencePrice('concretePost')"
+                                title="รีเซ็ตราคาเริ่มต้นตามความสูงเสาที่เลือก">↺</button>
+                        </div>
+                    </div>
+                    <div class="sb-price-card sb-price-corner">
+                        <div class="sbpc-head">
+                            <div class="sbpc-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <rect x="3" y="3" width="5" height="18" rx="1.2" fill="currentColor"/>
+                                    <rect x="3" y="3" width="18" height="5" rx="1.2" fill="currentColor"/>
+                                    <path d="M18 10 L21 13 L18 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                </svg>
+                            </div>
+                            <div class="sbpc-titles">
+                                <div class="sbpc-name">ราคาเสาเข้ามุมต้นละ</div>
+                                <div class="sbpc-meas">เสาที่มุม</div>
+                            </div>
+                        </div>
+                        <div class="sbpc-input-row">
+                            <div class="sbpc-input-wrap">
+                                <input type="number" id="concreteCornerPostPrice" value="357"
+                                    min="0" step="1" placeholder="ราคาเสาเข้ามุมต้นละ"
+                                    onchange="if(typeof runFenceCalc==='function')runFenceCalc();">
+                                <span class="sbpc-unit">บาท</span>
+                            </div>
+                            <button type="button" class="sbpc-reset" onclick="resetFencePrice('concreteCornerPost')"
+                                title="รีเซ็ตราคาเริ่มต้น">↺</button>
+                        </div>
+                    </div>
                     <div class="sb-price-card sb-price-concrete">
                         <div class="sbpc-head">
                             <div class="sbpc-icon">
@@ -402,17 +508,61 @@
                                 </svg>
                             </div>
                             <div class="sbpc-titles">
-                                <div class="sbpc-name">ราคาคอนกรีตสำเร็จรูป</div>
-                                <div class="sbpc-meas">โดยประมาณต่อความยาว 1 เมตร</div>
+                                <div class="sbpc-name">ราคาคานละ</div>
+                                <div class="sbpc-meas" id="concretePanelMeas">ใช้คาน 5 แผ่น</div>
                             </div>
                         </div>
                         <div class="sbpc-input-row">
                             <div class="sbpc-input-wrap">
-                                <input type="number" id="concretePricePerM" value="850"
-                                    min="0" step="10" placeholder="บาท/เมตร">
-                                <span class="sbpc-unit">บาท/ม.</span>
+                                <input type="number" id="concretePanelPrice" value="334"
+                                    min="0" step="1" placeholder="ราคาคานละ"
+                                    onchange="if(typeof runFenceCalc==='function')runFenceCalc();">
+                                <span class="sbpc-unit">บาท</span>
                             </div>
-                            <button type="button" class="sbpc-reset" onclick="resetFencePrice('concrete')"
+                            <button type="button" class="sbpc-reset" onclick="resetFencePrice('concretePanel')"
+                                title="รีเซ็ตราคาเริ่มต้นตามระยะที่เลือก">↺</button>
+                        </div>
+                    </div>
+                </div>
+
+                <label class="sb-toggle-row" id="concreteLintelLabel" style="margin-top:10px;--sbtg-accent:#0891b2;">
+                    <input type="checkbox" id="concreteLintel" class="sb-toggle-input"
+                        onchange="onConcreteLintelToggle('page1')">
+                    <span class="sb-toggle-left">
+                        <span class="sb-toggle-icon" style="background:#ecfeff;color:#0891b2;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                <rect x="3" y="5" width="18" height="4" rx="1.2" fill="currentColor"/>
+                                <rect x="5" y="11" width="3" height="9" rx="1" fill="currentColor" opacity="0.5"/>
+                                <rect x="16" y="11" width="3" height="9" rx="1" fill="currentColor" opacity="0.5"/>
+                            </svg>
+                        </span>
+                        <span class="sb-toggle-text">ทับหลัง</span>
+                    </span>
+                    <span class="sb-toggle-switch"></span>
+                </label>
+                <div class="sb-price-cards" id="concreteLintelPriceWrap" style="display:none;margin-top:8px;">
+                    <div class="sb-price-card sb-price-corner">
+                        <div class="sbpc-head">
+                            <div class="sbpc-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <rect x="3" y="5" width="18" height="4" rx="1.2" fill="currentColor"/>
+                                    <rect x="5" y="11" width="3" height="9" rx="1" fill="currentColor" opacity="0.5"/>
+                                    <rect x="16" y="11" width="3" height="9" rx="1" fill="currentColor" opacity="0.5"/>
+                                </svg>
+                            </div>
+                            <div class="sbpc-titles">
+                                <div class="sbpc-name">ราคาทับหลัง</div>
+                            
+                            </div>
+                        </div>
+                        <div class="sbpc-input-row">
+                            <div class="sbpc-input-wrap">
+                                <input type="number" id="concreteLintelPrice" value="437"
+                                    min="0" step="1" placeholder="ราคาทับหลัง"
+                                    onchange="if(typeof runFenceCalc==='function')runFenceCalc();">
+                                <span class="sbpc-unit">บาท</span>
+                            </div>
+                            <button type="button" class="sbpc-reset" onclick="resetFencePrice('concreteLintel')"
                                 title="รีเซ็ตราคาเริ่มต้น">↺</button>
                         </div>
                     </div>
@@ -553,59 +703,113 @@
             <div id="p1BrickOpts" style="display:none;">
 
                 <!-- Fence Height -->
-                <div class="sb-section-label" style="margin-top:10px;">ความสูงรั้ว</div>
-                <select class="sb-number-input" id="brickHeightSelect"
-                    style="width:100%;padding:6px 8px;font-size:12px;"
-                    onchange="setBrickHeight(this.value)">
-                    <option value="1.5">1.5 ม.</option>
-                    <option value="1.8" selected>1.8 ม.</option>
-                    <option value="2.0">2.0 ม.</option>
-                    <option value="2.5">2.5 ม.</option>
-                    <option value="custom">กำหนดเอง…</option>
-                </select>
-<input type="number" class="sb-number-input" id="brickFenceHeight" value="1.8" min="0.5" max="5"
-    step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุความสูง (ม.)"
-    oninput="syncBeamCheckboxesToHeight(parseFloat(this.value)||1.8); if(typeof runFenceCalc==='function') runFenceCalc();">
+                <div class="sb-picker-card sb-picker-height">
+                    <div class="sbpk-head">
+                        <div class="sbpk-icon" style="background:#ecfeff;color:#0891b2;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 3 V21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                <path d="M12 3 L9.4 5.6 M12 3 L14.6 5.6 M12 21 L9.4 18.4 M12 21 L14.6 18.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                                <rect x="4" y="9" width="4.5" height="12" rx="0.8" fill="currentColor" opacity="0.55"/>
+                                <rect x="15.5" y="6" width="4.5" height="15" rx="0.8" fill="currentColor" opacity="0.55"/>
+                            </svg>
+                        </div>
+                        <div class="sbpk-label">ความสูงรั้ว</div>
+                    </div>
+                    <div class="sb-select-wrap" style="position:relative;">
+                        <select class="sb-select sbpk-select" id="brickHeightSelect"
+                            onchange="setBrickHeight(this.value)">
+                            <option value="1.5" data-name="ความสูง 1.5 ม.">1.5 ม.</option>
+                            <option value="1.8" selected data-name="ความสูง 1.8 ม.">1.8 ม.</option>
+                            <option value="2.0" data-name="ความสูง 2.0 ม.">2.0 ม.</option>
+                            <option value="2.5" data-name="ความสูง 2.5 ม.">2.5 ม.</option>
+                            <option value="custom" data-name="กำหนดเอง…">กำหนดเอง…</option>
+                        </select>
+                        <div class="sb-select-icon">▼</div>
+                    </div>
+                    <input type="number" class="sb-number-input" id="brickFenceHeight" value="1.8" min="0.5" max="5"
+                        step="0.1" style="width:100%;margin-top:8px;display:none;" placeholder="ระบุความสูง (ม.)"
+                        oninput="syncBeamCheckboxesToHeight(parseFloat(this.value)||1.8); if(typeof runFenceCalc==='function') runFenceCalc();">
+                </div>
 
                 <!-- Pillar Spacing -->
-                <div class="sb-section-label" style="margin-top:10px;">ระยะห่างเสา</div>
-                <select class="sb-number-input" id="brickSpacingSelect"
-                    style="width:100%;padding:6px 8px;font-size:12px;"
-                    onchange="setSpacingBrick(this.value)">
-                    <option value="2.0">2.0 ม.</option>
-                    <option value="2.5" selected>2.5 ม.</option>
-                    <option value="3.0">3.0 ม.</option>
-                    <option value="custom">กำหนดเอง…</option>
-                </select>
-<input type="number" class="sb-number-input" id="postSpacingBrick" value="2.5" min="1" max="5"
-    step="0.1" style="width:100%;margin-top:6px;display:none;" placeholder="ระบุ (ม.)"
-    oninput="showSpacingHint('postSpacingBrickHint', parseFloat(this.value))">
-<div id="postSpacingBrickHint" class="spacing-hint" style="display:none;"></div>
+                <div class="sb-picker-card sb-picker-spacing">
+                    <div class="sbpk-head">
+                        <div class="sbpk-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <rect x="2.5" y="4" width="3" height="16" rx="1" fill="currentColor"/>
+                                <rect x="18.5" y="4" width="3" height="16" rx="1" fill="currentColor"/>
+                                <path d="M7 12 H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                <path d="M7 12 L9.4 9.8 M7 12 L9.4 14.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M17 12 L14.6 9.8 M17 12 L14.6 14.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="sbpk-label">ระยะห่างเสา</div>
+                    </div>
+                    <div class="sb-select-wrap" style="position:relative;">
+                        <select class="sb-select sbpk-select" id="brickSpacingSelect"
+                            onchange="setSpacingBrick(this.value)">
+                            <option value="2.0" data-name="ระยะห่าง 2.0 ม.">2.0 ม.</option>
+                            <option value="2.5" selected data-name="ระยะห่าง 2.5 ม.">2.5 ม.</option>
+                            <option value="3.0" data-name="ระยะห่าง 3.0 ม.">3.0 ม.</option>
+                            <option value="custom" data-name="กำหนดเอง…">กำหนดเอง…</option>
+                        </select>
+                        <div class="sb-select-icon">▼</div>
+                    </div>
+                    <input type="number" class="sb-number-input" id="postSpacingBrick" value="2.5" min="1" max="5"
+                        step="0.1" style="width:100%;margin-top:8px;display:none;" placeholder="ระบุ (ม.)"
+                        oninput="showSpacingHint('postSpacingBrickHint', parseFloat(this.value))">
+                    <div id="postSpacingBrickHint" class="spacing-hint" style="display:none;"></div>
+                </div>
 
+                <!-- Pillar Size (cm preset) -->
+                <div class="sb-picker-card sb-picker-pillar">
+                    <div class="sbpk-head">
+                        <div class="sbpk-icon" style="background:#f3f4f6;color:#6b7280;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <rect x="8" y="8" width="8" height="8" rx="1.3" stroke="currentColor" stroke-width="1.6"/>
+                                <path d="M2 12 H7 M17 12 H22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                <path d="M2 12 L4.6 9.6 M2 12 L4.6 14.4 M22 12 L19.4 9.6 M22 12 L19.4 14.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="sbpk-label">ขนาดเสา</div>
+                    </div>
+                    <div class="sb-select-wrap" style="position:relative;">
+                        <select class="sb-select sbpk-select" id="brickPillarSize"
+                            onchange="onPillarSizeChange(this.value)">
+                            <option value="10x10" data-name="10×10 ซม. (default)">10×10 ซม. (default)</option>
+                            <option value="15x15" data-name="15×15 ซม.">15×15 ซม.</option>
+                            <option value="custom" data-name="กำหนดเอง…">กำหนดเอง…</option>
+                        </select>
+                        <div class="sb-select-icon">▼</div>
+                    </div>
+                    <input type="number" class="sb-number-input" id="brickPillarCustom"
+                        value="" min="5" max="50" step="1"
+                        style="width:100%;margin-top:8px;display:none;" placeholder="ขนาดเสา (ซม.) เช่น 20 = 20×20">
+                    <div id="brickPillarCustomLabel" style="display:none;font-size:10px;color:#9ca3af;margin-top:6px;">
+                        กรอก ซม. เช่น 20 = 20×20 ซม.
+                    </div>
+                </div>
 
-                <!-- Pillar Size -->
-<!-- Pillar Size -->
-<div class="sb-section-label" style="margin-top:10px;">ขนาดเสา</div>
-<select class="sb-number-input" id="brickPillarSize"
-    style="width:100%;padding:6px 8px;font-size:12px;"
-    onchange="onPillarSizeChange(this.value)">
-    <option value="10x10">10×10 ซม. (default)</option>
-    <option value="15x15">15×15 ซม.</option>
-    <option value="custom">กำหนดเอง…</option>
-</select>
-<input type="number" class="sb-number-input" id="brickPillarCustom"
-    value="" min="5" max="50" step="1"
-    style="width:100%;margin-top:6px;display:none;" placeholder="ขนาดเสา (ซม.) เช่น 20 = 20×20">
-<div id="brickPillarCustomLabel" style="display:none;font-size:10px;color:#9ca3af;margin-top:3px;">
-    กรอก ซม. เช่น 20 = 20×20 ซม.
-</div>
-
-<!-- Pillar Size (meters) — this is the value actually used for corner
-     footprint math and the plan-mode post-length label; the cm picker
-     above is kept for its preset display but doesn't feed the calc. -->
-<div class="sb-section-label" style="margin-top:10px;">ขนาดเสา (กว้าง, เมตร)</div>
-<input type="number" class="sb-number-input" id="brickPostSize" value="0.20"
-    min="0.05" max="0.50" step="0.01" style="width:100%;" placeholder="ความกว้างเสา (ม.)">
+                <!-- Pillar Size (meters) — this is the value actually used for corner
+                     footprint math and the plan-mode post-length label; the cm picker
+                     above is kept for its preset display but doesn't feed the calc. -->
+                <div class="sb-field-card" style="margin-top:10px;">
+                    <div class="sbpk-head">
+                        <div class="sbpk-icon" style="background:#f3f4f6;color:#6b7280;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                <rect x="8" y="8" width="8" height="8" rx="1.3" stroke="currentColor" stroke-width="1.6"/>
+                                <path d="M2 12 H7 M17 12 H22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                <path d="M2 12 L4.6 9.6 M2 12 L4.6 14.4 M22 12 L19.4 9.6 M22 12 L19.4 14.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="sbpk-label">ขนาดเสา (กว้าง, เมตร)</div>
+                    </div>
+                    <div class="sbpc-input-wrap">
+                        <input type="number" id="brickPostSize" value="0.20"
+                            min="0.05" max="0.50" step="0.01" placeholder="ความกว้างเสา (ม.)">
+                        <span class="sbpc-unit">ม.</span>
+                    </div>
+                </div>
 
                 <!-- Brick Type Picker (Page 1) -->
                 <div class="sb-section-label" style="margin-top:10px;">ประเภทอิฐ</div>
@@ -674,22 +878,36 @@
                     </div>
                 </div>
 
-<div class="sb-section-label" style="margin-top:10px;">คานทับหลัง (n)</div>
-<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;">
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-        <input type="checkbox" id="beamCbTop"
-            style="width:15px;height:15px;accent-color:#ea580c;cursor:pointer;"
-            onchange="onBeamCbChange()">
-        <span style="font-size:12px;font-weight:600;color:#ea580c;">● คานบน (Top beam)</span>
-    </label>
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-        <input type="checkbox" id="beamCbCenter"
-            style="width:15px;height:15px;accent-color:#d97706;cursor:pointer;"
-            onchange="onBeamCbChange()">
-        <span style="font-size:12px;font-weight:600;color:#d97706;">● คานกลาง (Center beam)</span>
-    </label>
-</div>
-<div id="beamAutoLabel" style="font-size:10px;color:#9ca3af;margin-top:4px;"></div>
+<div class="sb-section-label" style="margin-top:14px;">คานทับหลัง (n)</div>
+<label class="sb-toggle-row" style="--sbtg-accent:#ea580c;">
+    <input type="checkbox" id="beamCbTop" class="sb-toggle-input" onchange="onBeamCbChange()">
+    <span class="sb-toggle-left">
+        <span class="sb-toggle-icon" style="background:#fff7ed;color:#ea580c;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <rect x="2" y="4" width="20" height="5" rx="1.4" fill="currentColor"/>
+                <rect x="4" y="11" width="3" height="9" rx="1" fill="currentColor" opacity="0.4"/>
+                <rect x="17" y="11" width="3" height="9" rx="1" fill="currentColor" opacity="0.4"/>
+            </svg>
+        </span>
+        <span class="sb-toggle-text">คานบน (Top beam)</span>
+    </span>
+    <span class="sb-toggle-switch"></span>
+</label>
+<label class="sb-toggle-row" style="margin-top:8px;--sbtg-accent:#d97706;">
+    <input type="checkbox" id="beamCbCenter" class="sb-toggle-input" onchange="onBeamCbChange()">
+    <span class="sb-toggle-left">
+        <span class="sb-toggle-icon" style="background:#fffbeb;color:#d97706;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <rect x="2" y="9.5" width="20" height="5" rx="1.4" fill="currentColor"/>
+                <rect x="4" y="2" width="3" height="20" rx="1" fill="currentColor" opacity="0.4"/>
+                <rect x="17" y="2" width="3" height="20" rx="1" fill="currentColor" opacity="0.4"/>
+            </svg>
+        </span>
+        <span class="sb-toggle-text">คานกลาง (Center beam)</span>
+    </span>
+    <span class="sb-toggle-switch"></span>
+</label>
+<div id="beamAutoLabel" style="font-size:10px;color:#9ca3af;margin-top:6px;"></div>
 <!-- Hidden input that fence.js reads -->
 <input type="hidden" id="imBrickBeamMode" value="auto">
 
@@ -766,19 +984,33 @@
         </div><!-- /#sbPage1 -->
 
         <!-- Plan Mode Panel — lives outside sbPage1 so CSS can show it independently -->
-        <div id="planModePanel" style="display:none; padding:14px 16px 20px;">
-            <div style="font-family:'Courier New',monospace;font-size:14px;font-weight:bold;color:#1f2937;border-bottom:2px solid #1f2937;padding-bottom:8px;margin-bottom:14px;">PLAN VIEW</div>
-            <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">รายการเส้น</div>
-            <div id="planLineList" style="max-height:260px;overflow-y:auto;"></div>
+        <div id="planModePanel" class="pm-panel" style="display:none;">
+            <div class="pm-header">
+                <div class="pm-header-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg>
+                </div>
+                <div class="pm-header-text">
+                    <div class="pm-header-title">แบบแปลนรั้ว</div>
+                    <div class="pm-header-sub">Plan View</div>
+                </div>
+            </div>
 
-            <!-- Materials & price summary table (per note #3: must show quantities used + total price) -->
+            <div class="sb-section-label pm-list-label">รายการเส้น (<span id="planLineCount">0</span>)</div>
+            <div id="planLineList" class="pm-line-list"></div>
+
+            <!-- Materials & price summary — mirrors the sb-price-hero-card look on Page 1 -->
             <div id="planSummaryBox" style="margin-top:14px;"></div>
 
-            <button onclick="togglePlanMode()" style="margin-top:16px;width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">✕ ออกจากโหมดแผน</button>
-            <button id="btnDownloadPDF" style="width:100%; margin-top:10px; padding:10px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; font-size:14px;">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-    ดาวน์โหลดแบบแปลน (PDF)
-</button>
+            <div class="pm-actions">
+                <button id="btnDownloadPDF" class="pm-btn pm-btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    ดาวน์โหลดแบบแปลน (PDF)
+                </button>
+                <button onclick="togglePlanMode()" class="pm-btn pm-btn-exit">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+                    ออกจากโหมดแผน
+                </button>
+            </div>
         </div>
 
         <!-- ── PAGE 2: Draw mode / data entry (old sidebar content) ── -->
@@ -923,7 +1155,7 @@
 <script src="brickfence.js"></script>
 <script src="barb.js"></script>
 <script src="input_mode.js"></script>
-<script src="plan_mode.js?v=222"></script>
+<script src="plan_mode.js?v=223"></script>
 
     <!-- Hidden inputs -->
     <input type="hidden" id="resPrice">
@@ -1065,6 +1297,21 @@ function setCornerModeSelection(type, mode) {
             if (typeof runFenceCalc === 'function') runFenceCalc();
         }
 
+        // ทับหลัง (lintel/capping) toggle — concrete only. Shows/hides its
+        // price card and re-runs the calc; the price itself only counts
+        // toward the total while the checkbox is ticked (see runFenceCalc).
+        // scope is 'page1' or 'input' since the two tabs each have their own
+        // checkbox/wrap ids, same pattern as the rest of the sidebar.
+        function onConcreteLintelToggle(scope) {
+            const cbId = scope === 'input' ? 'imConcreteLintel' : 'concreteLintel';
+            const wrapId = scope === 'input' ? 'imConcreteLintelPriceWrap' : 'concreteLintelPriceWrap';
+            const cb = document.getElementById(cbId);
+            const wrap = document.getElementById(wrapId);
+            if (wrap) wrap.style.display = (cb && cb.checked) ? '' : 'none';
+            if (typeof runFenceCalc === 'function') runFenceCalc();
+        }
+        window.onConcreteLintelToggle = onConcreteLintelToggle;
+
         // Ticking "โหมดมุมไม่ตั้งฉาก" reveals the Mode 1 / Mode 2 radios and
         // hands control of "ใช้เสา 2 ต้นที่มุมต่อ" over to whichever radio is
         // selected. The starting radio is chosen from whatever the double-
@@ -1129,7 +1376,7 @@ function setCornerModeSelection(type, mode) {
         });
 
         document.getElementById('concreteLayerSelect')?.addEventListener('change', function () {
-            ['concbs2', 'concbs3', 'concbs4'].forEach(id => document.getElementById(id).style.display = 'none');
+            ['concbs5', 'concbs7', 'concbs9'].forEach(id => document.getElementById(id).style.display = 'none');
             var el = document.getElementById('concbs' + this.value);
             if (el) el.style.display = '';
             if (typeof runFenceCalc === 'function') runFenceCalc();
@@ -1321,6 +1568,24 @@ function setBrickHeight(val) {
         }
         window.updateCowboyPriceMeas = updateCowboyPriceMeas;
 
+        // ── Same idea as updateCowboyPriceMeas(), for concrete's H-post
+        //    height / panel-count selector ──
+        function updateConcretePriceMeas() {
+            const heights = { '5': '1.50', '7': '2.00', '9': '2.50' };
+            const layersVal = document.getElementById('concreteLayerSelect')?.value || '5';
+            const postMeas = document.getElementById('concretePostMeas');
+            if (postMeas) postMeas.textContent = 'เสาเข้าตัว H — สูง ' + (heights[layersVal] || '') + ' ม.';
+            const panelMeas = document.getElementById('concretePanelMeas');
+            if (panelMeas) panelMeas.textContent = 'ใช้คาน ' + layersVal + ' แผ่น';
+
+            const imLayersVal = document.getElementById('imConcreteLayerSelect')?.value || '5';
+            const imPostMeas = document.getElementById('imConcretePostMeas');
+            if (imPostMeas) imPostMeas.textContent = 'เสาเข้าตัว H — สูง ' + (heights[imLayersVal] || '') + ' ม.';
+            const imPanelMeas = document.getElementById('imConcretePanelMeas');
+            if (imPanelMeas) imPanelMeas.textContent = 'ใช้คาน ' + imLayersVal + ' แผ่น';
+        }
+        window.updateConcretePriceMeas = updateConcretePriceMeas;
+
         // ── Custom dropdown skin over native <select> elements ──
         // The native <select> is kept in the DOM (hidden, but still the
         // real source of truth) so every existing onchange/.value call
@@ -1452,13 +1717,16 @@ function setBrickHeight(val) {
         }
         window.enhanceSelect = enhanceSelect;
 
-        // ── Mirrors the brick-picker's name/spec text onto the new brick
-        //    price card, whichever script updates the original elements ──
-        function initBrickCardMirror() {
-            const nameEl = document.getElementById('p1BptName');
-            const metaEl = document.getElementById('p1BptMeta');
-            const cardName = document.getElementById('p1BptNameCard');
-            const cardMeas = document.getElementById('p1BptMeasCard');
+        // ── Mirrors the brick-picker's name/spec text onto the brick price
+        //    card, whichever script updates the original elements. Runs once
+        //    for Page 1's picker (p1BptName/p1BptMeta) and once for Input
+        //    Mode's picker (bptName/bptMeta), which stays in sync with page 1
+        //    via the shared PAGE_MAP in selectBrick() (input_mode.js).
+        function _mirrorBrickCard(nameId, metaId, cardNameId, cardMeasId) {
+            const nameEl = document.getElementById(nameId);
+            const metaEl = document.getElementById(metaId);
+            const cardName = document.getElementById(cardNameId);
+            const cardMeas = document.getElementById(cardMeasId);
             if (!nameEl || !metaEl || !cardName || !cardMeas) return;
             function mirror() {
                 cardName.textContent = nameEl.textContent;
@@ -1469,6 +1737,10 @@ function setBrickHeight(val) {
             new MutationObserver(mirror).observe(nameEl, { childList: true, characterData: true, subtree: true });
             new MutationObserver(mirror).observe(metaEl, { childList: true, characterData: true, subtree: true });
         }
+        function initBrickCardMirror() {
+            _mirrorBrickCard('p1BptName', 'p1BptMeta', 'p1BptNameCard', 'p1BptMeasCard');
+            _mirrorBrickCard('bptName', 'bptMeta', 'bptNameCard', 'bptMeasCard');
+        }
 
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(updateBrickDefaults, 200);
@@ -1476,6 +1748,10 @@ function setBrickHeight(val) {
                 if (typeof syncCowboyPostPrice === 'function') syncCowboyPostPrice();
                 if (typeof syncCowboyBeamPrice === 'function') syncCowboyBeamPrice();
                 updateCowboyPriceMeas();
+                if (typeof syncConcretePostPrice === 'function') syncConcretePostPrice();
+                if (typeof syncConcreteCornerPostPrice === 'function') syncConcreteCornerPostPrice();
+                if (typeof syncConcretePanelPrice === 'function') syncConcretePanelPrice();
+                updateConcretePriceMeas();
                 initBrickCardMirror();
             }, 200);
             document.querySelectorAll('.sb-picker-card .sb-select-wrap').forEach(enhanceSelect);

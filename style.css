@@ -1337,10 +1337,152 @@ FORM SPACING & INPUT FIXES
   margin: 0 4px 4px;
 }
 
-/* Plan Mode UI */
-.plan-line-item { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #eee; font-size:12px; }
-.plan-line-item input[type="checkbox"] { margin:0; width:16px; height:16px; accent-color:#1f2937; cursor:pointer; }
-.plan-line-item label { flex:1; cursor:pointer; color:#333; }
+/* ══════════════════════════════════════════════════════════════════════
+   PLAN MODE PANEL — visual language matches Page 1 / Input Mode: white
+   rounded cards, soft #e9ecef borders, subtle hover lift, section labels,
+   and the same sb-price-hero-card treatment for the materials/price recap.
+   ══════════════════════════════════════════════════════════════════════ */
+.pm-panel { padding: 14px 16px 20px; }
+
+.pm-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #1f2937, #111827);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 14px rgba(17,24,39,0.18);
+}
+.pm-header-icon {
+  flex: 0 0 auto;
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  border-radius: 9px;
+}
+.pm-header-text { min-width: 0; }
+.pm-header-title { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.3; }
+.pm-header-sub { font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.pm-list-label { margin: 4px 0 8px; }
+
+/* ── Line list ──────────────────────────────────────────────────────── */
+.pm-line-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+  padding-right: 2px;
+}
+.pm-line-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1.5px solid #e9ecef;
+  border-radius: 10px;
+  padding: 7px 9px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  animation: pmLineCardIn 0.25s cubic-bezier(.22,1,.36,1) both;
+}
+.pm-line-card:hover { border-color: #d1d5db; box-shadow: 0 4px 10px rgba(15,23,42,0.06); }
+.pm-line-card.pm-line-off { opacity: 0.5; }
+@keyframes pmLineCardIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pm-line-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+
+.pm-line-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pm-line-name { font-size: 12.5px; font-weight: 600; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm-line-meta { font-size: 10.5px; color: #9ca3af; font-weight: 500; }
+
+.pm-line-len { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: #374151; font-variant-numeric: tabular-nums; }
+.pm-line-len-unit { font-size: 10px; color: #9ca3af; font-weight: 500; margin-left: 2px; }
+
+/* Toggle switch reused from Page 1's sb-toggle-switch, sized down */
+.pm-line-toggle { flex: 0 0 auto; position: relative; display: inline-block; width: 30px; height: 17px; cursor: pointer; }
+.pm-line-toggle input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.pm-line-toggle-track {
+  position: absolute; inset: 0;
+  background: #d1d5db;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+.pm-line-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 13px; height: 13px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  transition: transform 0.2s cubic-bezier(.22,1,.36,1);
+}
+.pm-line-toggle input:checked ~ .pm-line-toggle-track { background: #3b82f6; }
+.pm-line-toggle input:checked ~ .pm-line-toggle-track::after { transform: translateX(13px); }
+
+.pm-empty {
+  padding: 18px 10px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1.5px dashed #e5e7eb;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+/* ── Materials & price summary — same card + hero-price treatment as
+   .sb-price-hero-card on Page 1, so Plan Mode reads as the same product. ── */
+.pm-summary-card {
+  background: #fff;
+  border: 1.5px solid #e9ecef;
+  border-radius: 14px;
+  overflow: hidden;
+  animation: sbPriceCardIn 0.35s cubic-bezier(.22,1,.36,1) both;
+}
+.pm-summary-title {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 14px 8px;
+  font-size: 11px; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  border-bottom: 1px solid #f1f3f5;
+}
+.pm-summary-details { padding: 10px 14px 8px; display: flex; flex-direction: column; gap: 2px; }
+.pm-summary-price {
+  position: relative;
+  padding: 16px 14px 14px;
+  text-align: center;
+  background: linear-gradient(180deg, #f0fdf9, #ecfdf5);
+  border-top: 1.5px solid #d1fae5;
+}
+
+/* ── Action buttons ─────────────────────────────────────────────────── */
+.pm-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.pm-btn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s ease, transform 0.15s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.pm-btn:hover { transform: translateY(-1px); }
+.pm-btn:active { transform: translateY(0); }
+.pm-btn-primary { background: #2563eb; color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,0.22); }
+.pm-btn-primary:hover { background: #1d4ed8; }
+.pm-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.pm-btn-exit { background: #fff; color: #b91c1c; border: 1.5px solid #fecaca; }
+.pm-btn-exit:hover { background: #fef2f2; border-color: #fca5a5; }
 
 /* Custom Scale Bar */
 #customScaleBar {

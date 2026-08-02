@@ -123,7 +123,11 @@ function drawConcreteFence(linePoints, m, n, splitAtStart, doubleCorner, lineCol
     lineColor = lineColor || '#9ca3af';
     const numSegs = linePoints.length - 1;
     const closed = numSegs >= 3 && hav(linePoints[0], linePoints[linePoints.length - 1]) < 0.5;
-    let grandTotal = 0, totalPosts = 0, totalBeams = 0;
+    // Posts are priced in two tiers, mirroring cowboy.js exactly: normal
+    // mid-line/panel-spacing posts vs. posts sitting at a corner (single
+    // bisector post or the Mode-2/plain-duel dual pair — both count as
+    // "เสาเข้ามุม"). totalPosts stays the combined total for display.
+    let grandTotal = 0, totalPosts = 0, normalPosts = 0, cornerPosts = 0, totalBeams = 0;
     const warnings = [];
     let cumulDist = 0;
     let postIndex = 0; // used to alternate bracket direction
@@ -241,14 +245,17 @@ if (panelSpace < 0.5) {
                 : concreteCornerPostBearing(linePoints[si], bearingAt(linePoints, cumulDist + 0.01));
             if (isTrueLineStart) {
                 drawConcretePost(startPt, startBearing, 'start');
+                normalPosts++;
             } else {
                 // Mid-line bend (or closed-loop wrap point) — a distinct
                 // corner post, same as cowboy's solo-mode corner square,
                 // not just another alternating in-line panel post.
                 drawConcretePost(startPt, startBearing, 'corner');
+                cornerPosts++;
             }
         }
 
+        normalPosts += calc.ticks.length;
         totalPosts += calc.ticks.length + 1;
         totalBeams += calc.standardCount + calc.splitCount;
         cumulDist += A_i;
@@ -258,19 +265,21 @@ if (panelSpace < 0.5) {
         const last = linePoints[linePoints.length - 1];
         const prev = linePoints[linePoints.length - 2];
         if (!(doubleCorner && isCornerPoint(last))) {
-            const lastBearing = isCornerPoint(last)
+            const isLastCorner = isCornerPoint(last);
+            const lastBearing = isLastCorner
                 ? concreteCornerPostBearing(last, bearing(prev, last))
                 : bearing(prev, last);
             drawConcretePost(last, lastBearing, 'end');
+            if (isLastCorner) cornerPosts++; else normalPosts++;
             totalPosts++;
         }
     }
 
-    return { grandTotal, totalPosts, totalBeams, warnings, segGeom };
+    return { grandTotal, totalPosts, normalPosts, cornerPosts, totalBeams, warnings, segGeom };
 }
 
 function calcConcrete(concreteLines, m_concrete, n, useDoubleCorner, layers) {
-    let grandTotal = 0, grandPosts = 0, grandBeams = 0;
+    let grandTotal = 0, grandPosts = 0, normalPosts = 0, cornerPosts = 0, grandBeams = 0;
     const allWarnings = [];
 
     // REMOVED: if (concreteLines.length > 1) useDoubleCorner = true;
@@ -282,6 +291,8 @@ function calcConcrete(concreteLines, m_concrete, n, useDoubleCorner, layers) {
         const res = drawConcreteFence(ld.points, m_concrete, n, true, useDoubleCorner, ld.color || '#9ca3af');
         grandTotal += res.grandTotal;
         grandPosts += res.totalPosts;
+        normalPosts += res.normalPosts;
+        cornerPosts += res.cornerPosts;
         grandBeams += res.totalBeams * layers;
         if (res.warnings) allWarnings.push(...res.warnings);
         // Plan Mode reuses this verbatim — no separate recalculation there.
@@ -292,10 +303,11 @@ function calcConcrete(concreteLines, m_concrete, n, useDoubleCorner, layers) {
         for (const [k, entry] of cornerMap.entries()) {
             const result = drawConcreteDoubleCornerPost(entry.pt, n, true);
             grandPosts += result.count;
+            cornerPosts += result.count; // dual (or single-fallback) corner posts always price as "เสาเข้ามุม"
         }
     }
 
-    return { grandTotal, grandPosts, grandBeams, warnings: allWarnings };
+    return { grandTotal, grandPosts, normalPosts, cornerPosts, grandBeams, warnings: allWarnings };
 }
 
 

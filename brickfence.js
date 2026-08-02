@@ -542,14 +542,11 @@ function drawPlanBrickLine(lineData, idx) {
 
 drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 1.4), A_i.toFixed(2) + 'm', '#92400e');
 
-        // First 2 post footprint-length labels for the WHOLE line only
-        // (bounds[0] is the start, bounds[1] the first bay boundary) — every
-        // post on the line is the same size, so repeating this once per
-        // side was still noise once a shape had more than one side.
-        if (si === 0) {
-            [bounds[0], bounds[1]].filter(v => v !== undefined).slice(0, 2).forEach(dist => {
-                drawPostLengthLabel(pts, cumulDist + dist, n_post, '#92400e');
-            });
+        // Only the very first post of the WHOLE line gets a footprint-length
+        // label — every post on the line is the same size, so repeating it
+        // once per side was still noise once a shape had more than one side.
+        if (si === 0 && bounds[0] !== undefined) {
+            drawPostLengthLabel(pts, cumulDist + bounds[0], n_post, '#92400e');
         }
 
         cumulDist += A_i;

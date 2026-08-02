@@ -951,20 +951,46 @@ function renderPlanView() {
     const listEl = document.getElementById('planLineList');
     if (!listEl) return;
     listEl.innerHTML = '';
-    
+
+    const countEl = document.getElementById('planLineCount');
+    if (countEl) countEl.textContent = allLines.length;
+
+    if (allLines.length === 0) {
+        listEl.innerHTML = '<div class="pm-empty">ยังไม่มีเส้นรั้ว</div>';
+    }
+
+    const PM_TYPE_META = {
+        cowboy:   { label: 'คาวบอย',   color: '#2563eb' },
+        concrete: { label: 'คอนกรีต',  color: '#64748b' },
+        barbed:   { label: 'ลวดหนาม',  color: '#d97706' },
+        brick:    { label: 'อิฐ',       color: '#92400e' },
+    };
+
     allLines.forEach((ld, idx) => {
+        const meta = PM_TYPE_META[ld.fenceType] || { label: (ld.fenceType || 'ทั่วไป').toUpperCase(), color: '#6b7280' };
+        const lenM = (typeof calculateTotalDistance === 'function' && ld.points) ? calculateTotalDistance(ld.points) : 0;
+
         const item = document.createElement('div');
-        item.className = 'plan-line-item';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.id = `plan_cb_${idx}`;
-        cb.checked = true;
-        cb.addEventListener('change', renderPlanView);
-        const lbl = document.createElement('label');
-        lbl.htmlFor = cb.id;
-        lbl.textContent = `Line ${idx + 1} — ${(ld.fenceType || 'ทั่วไป').toUpperCase()}`;
-        item.appendChild(cb);
-        item.appendChild(lbl);
+        item.className = 'pm-line-card';
+
+        item.innerHTML = `
+            <span class="pm-line-dot" style="background:${meta.color};"></span>
+            <span class="pm-line-info">
+                <span class="pm-line-name">เส้น ${idx + 1}</span>
+                <span class="pm-line-meta">${meta.label}</span>
+            </span>
+            <span class="pm-line-len">${lenM.toFixed(1)}<span class="pm-line-len-unit">ม.</span></span>
+            <label class="pm-line-toggle">
+                <input type="checkbox" id="plan_cb_${idx}" checked>
+                <span class="pm-line-toggle-track"></span>
+            </label>
+        `;
+
+        const cb = item.querySelector(`#plan_cb_${idx}`);
+        cb.addEventListener('change', () => {
+            item.classList.toggle('pm-line-off', !cb.checked);
+            renderPlanView();
+        });
         listEl.appendChild(item);
     });
 
@@ -1045,35 +1071,53 @@ function renderPlanSummaryTable() {
     const total = document.getElementById('resTotal')?.value || '—';
     const posts = document.getElementById('resPosts')?.value || '—';
     const beamsInput = document.getElementById('resBeams');
-    const beamsLabel = beamsInput?.closest('.sbr-row-item')?.querySelector('.sbr-label')?.textContent
+    const beamsLabel = beamsInput?.closest('.sbph-detail-row')?.querySelector('.sbph-detail-label')?.textContent
         || 'จำนวนคานที่ต้องใช้';
-    const beamsUnit = beamsInput?.closest('.sbr-row-item')?.querySelector('.sbr-unit')?.textContent
+    const beamsUnit = beamsInput?.closest('.sbph-detail-row')?.querySelector('.sbph-detail-unit')?.textContent
         || 'อัน';
     const beams = beamsInput?.value || '—';
     const price = document.getElementById('resPriceDisplay')?.value || '—';
+    const priceSub = document.getElementById('priceHeroSub')?.textContent || '';
+
+    const postsBreakdownEl = document.getElementById('resPostsBreakdown');
+    const postsBreakdown = (postsBreakdownEl && postsBreakdownEl.style.display !== 'none')
+        ? postsBreakdownEl.innerHTML : '';
+
+    const brickRowVisible = document.getElementById('resBrickRow')?.style.display !== 'none';
+    const brickCount = document.getElementById('resBrickCount')?.value || '—';
+    const brickBayRowVisible = document.getElementById('resBrickBayRow')?.style.display !== 'none';
+    const brickBays = document.getElementById('resBrickBays')?.value || '—';
+
+    const row = (color, label, val, unit) => `
+        <div class="sbph-detail-row">
+            <span class="sbph-dot" style="background:${color};"></span>
+            <span class="sbph-detail-label">${label}</span>
+            <span class="sbph-detail-val">${val}<span class="sbph-detail-unit">${unit}</span></span>
+        </div>`;
 
     box.innerHTML = `
-        <div style="font-family:'Courier New',monospace;font-size:11px;font-weight:bold;color:#1a1a1a;letter-spacing:0.05em;border-bottom:1.5px solid #1a1a1a;padding-bottom:5px;margin-bottom:6px;">
-            สรุปวัสดุ &amp; ราคา (รวมทั้งหมด)
+        <div class="pm-summary-card">
+            <div class="pm-summary-title">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                สรุปวัสดุ &amp; ราคา (รวมทั้งหมด)
+            </div>
+            <div class="pm-summary-details">
+                ${row('#2563eb', 'ความยาวรั้วรวม', total, 'ม.')}
+                ${row('#d97706', 'จำนวนเสาที่ต้องใช้', posts, 'ต้น')}
+                ${postsBreakdown ? `<div class="sbr-breakdown">${postsBreakdown}</div>` : ''}
+                ${row('#2563eb', beamsLabel, beams, beamsUnit)}
+                ${brickRowVisible ? row('#c2410c', 'จำนวนอิฐ (รวม +5%)', brickCount, 'ก้อน') : ''}
+                ${brickBayRowVisible ? row('#6b7280', 'จำนวนช่อง (r)', brickBays, 'ช่อง') : ''}
+            </div>
+            <div class="pm-summary-price">
+                <div class="sbph-price-label">ราคารวมทั้งหมด</div>
+                <div class="sbph-price-big">
+                    <span class="sbph-price-value">${price}</span>
+                    <span class="sbph-price-unit">บาท</span>
+                </div>
+                ${priceSub ? `<div class="sbph-price-sub">${priceSub}</div>` : ''}
+            </div>
         </div>
-        <table style="width:100%;border-collapse:collapse;font-family:'Courier New',monospace;font-size:11px;color:#1a1a1a;">
-            <tr>
-                <td style="padding:4px;border-bottom:1px solid #e5e7eb;">ความยาวรั้วรวม</td>
-                <td style="padding:4px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;white-space:nowrap;">${total} ม.</td>
-            </tr>
-            <tr>
-                <td style="padding:4px;border-bottom:1px solid #e5e7eb;">จำนวนเสา</td>
-                <td style="padding:4px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;white-space:nowrap;">${posts} ต้น</td>
-            </tr>
-            <tr>
-                <td style="padding:4px;border-bottom:1px solid #e5e7eb;">${beamsLabel}</td>
-                <td style="padding:4px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;white-space:nowrap;">${beams} ${beamsUnit}</td>
-            </tr>
-            <tr>
-                <td style="padding:6px 4px 2px;font-weight:bold;">ราคารวมทั้งหมด</td>
-                <td style="padding:6px 4px 2px;text-align:right;font-weight:bold;color:#dc2626;white-space:nowrap;">${price} บาท</td>
-            </tr>
-        </table>
     `;
 }
 
@@ -1244,20 +1288,45 @@ function drawDimLine(startPt, endPt, offsetM, label, color) {
 // SHARED: single post's footprint-length label (plan mode)
 // ============================================
 // Same visual language as drawDimLine — reuses it directly — but sized to
-// just one post's own footprint length along the fence line (posts are
-// square, so this is also the post's width), and mirrored to the INNER
-// side of the fence line by negating outwardOffset()'s sign. This puts it
-// on the opposite side from the full side-length label, which always
-// renders on the OUTER side.
+// just one post's own footprint (posts are square, so width and height are
+// numerically equal) and drawn as two separate brackets — one along the
+// fence-line direction (width) and one across it (height) — each labeled
+// in its own place, rather than a single combined "W × H" string.
+//
+// Each bracket spans the post's actual ON-SCREEN footprint, not the raw
+// physical postSize — posts are drawn oversized for visibility
+// (visualN = max(postSize,0.15)·scale·3, see drawPlanPost/drawPlanColorPost).
+// The endpoints are computed with offPt() from the post's own center point
+// rather than interp() along pts — interp() can't go past the start of the
+// line (distance < 0), so centering a span on the very first post used to
+// get clamped down to just its forward half. offPt() has no such limit, so
+// the full span is covered regardless of where the post sits on the line.
 function drawPostLengthLabel(pts, distAlong, postSize, color) {
     if (!postSize || postSize <= 0) return;
-    const half = postSize / 2;
-    const from = Math.max(0, distAlong - half);
-    const to = distAlong + half;
-    const startPt = interp(pts, from);
-    const endPt = interp(pts, to);
-    const innerOffset = -outwardOffset(pts, startPt, endPt, 0.3);
-    drawDimLine(startPt, endPt, innerOffset, postSize.toFixed(2) + 'm', color);
+    const scale = window._poleScale || 1.0;
+    const visualSize = Math.max(postSize, 0.15) * scale * 3;
+    const half = visualSize / 2;
+    const clearance = 0.15;
+    const reach = half + clearance; // clears the post's own footprint, not just a fixed small gap
+
+    const centerPt = interp(pts, distAlong);
+    const b = bearingAt(pts, distAlong);
+    const sizeLabel = postSize.toFixed(2) + ' ม.';
+
+    // Width — the post's along-line footprint. Offset perpendicular
+    // (inward, same side convention as before) by `reach` so the visible
+    // line clears the post instead of cutting through it.
+    const wStart = offPt(centerPt, b, -half);
+    const wEnd   = offPt(centerPt, b, half);
+    const wOffset = -outwardOffset(pts, wStart, wEnd, reach);
+    drawDimLine(wStart, wEnd, wOffset, sizeLabel, color);
+
+    // Height — the post's across-line footprint. Offset backward along the
+    // line (b+180) by `reach`, so this bracket sits in the clear space just
+    // BEFORE the post instead of overlapping its drawn square.
+    const hStart = offPt(centerPt, b + 90, -half);
+    const hEnd   = offPt(centerPt, b + 90, half);
+    drawDimLine(hStart, hEnd, reach, sizeLabel, color);
 }
 
 function updatePlanScale() {

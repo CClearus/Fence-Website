@@ -9,8 +9,71 @@ const PRICE_PER_M = 850;
 // ── Default prices per fence type (baht/meter, except brick which is baht/piece) ──
 const FENCE_PRICE_DEFAULTS = {
     cowboy: 850,
-    barbed: 850,
-    concrete: 850
+    barbed: 850
+};
+
+// ── Concrete fence: granular per-post / per-corner-post / per-beam pricing
+// (mirrors cowboy's post / corner-post / beam three-tier pricing exactly) ──
+// Post price depends on which H-post height (layers value 5/7/9, i.e. how
+// many concrete panels stack to reach that height) is selected. Corner post
+// price mirrors that same per-height default (same as cowboy's corner post
+// syncing to the normal post's default, not a flat constant). Beam price
+// only has a known reference at the 3.0 m spacing; any other spacing (2.0 m
+// or a custom value) has no default and is left for the user to fill in
+// manually. ทับหลัง (lintel/capping) is a separate optional flat add-on —
+// see CONCRETE_LINTEL_PRICE_DEFAULT below — not part of this per-unit set.
+const CONCRETE_POST_PRICE_DEFAULTS = { '5': 357, '7': 427, '9': 526 };
+const CONCRETE_BEAM_PRICE_BY_SPACING = { '3.0': 334 };
+const CONCRETE_LINTEL_PRICE_DEFAULT = 437;
+
+// Syncs the "ราคาเสาต้นละ" input to the default price for whichever H-post
+// height (layers 5/7/9) is currently selected. Called whenever
+// concreteLayerSelect changes, and once on page load — same pattern as
+// syncCowboyPostPrice().
+window.syncConcretePostPrice = function () {
+    const sel = _activeCornerCheckbox('concreteLayerSelect', 'imConcreteLayerSelect');
+    const priceEl = _activeCornerCheckbox('concretePostPrice', 'imConcretePostPrice');
+    if (!sel || !priceEl) return;
+    const def = CONCRETE_POST_PRICE_DEFAULTS[sel.value];
+    if (def !== undefined) priceEl.value = def;
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
+// Corner posts have no independent reference price of their own — like
+// cowboy's corner post, the ↺ reset just re-syncs to the same per-height
+// default as a plain post, a safe starting point the user can bump up
+// manually for a beefier corner post.
+window.syncConcreteCornerPostPrice = function () {
+    const sel = _activeCornerCheckbox('concreteLayerSelect', 'imConcreteLayerSelect');
+    const priceEl = _activeCornerCheckbox('concreteCornerPostPrice', 'imConcreteCornerPostPrice');
+    if (!sel || !priceEl) return;
+    const def = CONCRETE_POST_PRICE_DEFAULTS[sel.value];
+    if (def !== undefined) priceEl.value = def;
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
+// Syncs the "ราคาคานละ" input to the reference price for the currently
+// selected spacing. Only 3.0 m has a known reference price — switching to
+// 2.0 m or "กำหนดเอง…" (custom) clears the field so the user must enter a
+// price themselves.
+window.syncConcretePanelPrice = function () {
+    const sel = _activeCornerCheckbox('spacingSelectConcrete', 'imSpacingSelectConcrete');
+    const priceEl = _activeCornerCheckbox('concretePanelPrice', 'imConcretePanelPrice');
+    if (!sel || !priceEl) return;
+    const def = CONCRETE_BEAM_PRICE_BY_SPACING[sel.value];
+    priceEl.value = (def !== undefined) ? def : '';
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
+// ทับหลัง (lintel/capping) — an optional flat one-time add-on to the total,
+// per the reference sheet: 437 บาท added once at the end, NOT multiplied by
+// post/panel/length count. Only counts toward the total while its checkbox
+// is ticked.
+window.syncConcreteLintelPrice = function () {
+    const priceEl = _activeCornerCheckbox('concreteLintelPrice', 'imConcreteLintelPrice');
+    if (!priceEl) return;
+    priceEl.value = CONCRETE_LINTEL_PRICE_DEFAULT;
+    if (typeof runFenceCalc === 'function') runFenceCalc();
 };
 
 // ── Cowboy fence: granular per-post / per-beam pricing ──────────────────────
@@ -181,9 +244,18 @@ window.resetFencePrice = function (type) {
     } else if (type === 'barbed') {
         setVal('barbedPricePerM', FENCE_PRICE_DEFAULTS.barbed);
         setVal('imBarbedPricePerM', FENCE_PRICE_DEFAULTS.barbed);
-    } else if (type === 'concrete') {
-        setVal('concretePricePerM', FENCE_PRICE_DEFAULTS.concrete);
-        setVal('imConcretePricePerM', FENCE_PRICE_DEFAULTS.concrete);
+    } else if (type === 'concretePost') {
+        // Reset "ราคาเสาต้นละ" back to the default for whichever H-post
+        // height (layers 5/7/9) is currently selected.
+        if (typeof syncConcretePostPrice === 'function') syncConcretePostPrice();
+    } else if (type === 'concreteCornerPost') {
+        if (typeof syncConcreteCornerPostPrice === 'function') syncConcreteCornerPostPrice();
+    } else if (type === 'concretePanel') {
+        // Reset "ราคาคานละ" back to the reference price for the currently
+        // selected spacing (only defined at 3.0 m — otherwise clears it).
+        if (typeof syncConcretePanelPrice === 'function') syncConcretePanelPrice();
+    } else if (type === 'concreteLintel') {
+        if (typeof syncConcreteLintelPrice === 'function') syncConcreteLintelPrice();
     } else if (type === 'brick') {
         // Brick's default depends on which brick type is selected, so
         // re-sync from the brick catalogue rather than a flat constant.
@@ -591,7 +663,7 @@ function runFenceCalc() {
     const layers = layersInput ? parseInt(layersInput.value) || 2 : 2;
 
     const concreteLayersInput = _activeCornerCheckbox('concreteLayerSelect', 'imConcreteLayerSelect');
-    const concreteLayers = concreteLayersInput ? parseInt(concreteLayersInput.value) || 2 : layers;
+    const concreteLayers = concreteLayersInput ? parseInt(concreteLayersInput.value) || 5 : layers;
 
     const activeCard = document.querySelector('.sb-fence-card.active');
     const activeFenceType = activeCard ? activeCard.getAttribute('data-type') : 'cowboy';
@@ -674,9 +746,27 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         const m_concrete = Math.min(3, Math.max(1, isNaN(m_raw) ? 2.5 : m_raw));
         const res = calcConcrete(concreteLines, m_concrete, 0.15, concreteDoubleCorner, concreteLayers);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
-        const priceEl = _activeCornerCheckbox('concretePricePerM', 'imConcretePricePerM');
-        const concretePrice = parseFloat(priceEl?.value) || FENCE_PRICE_DEFAULTS.concrete;
-        grandPrice += res.grandTotal * concretePrice;
+        // Granular pricing per the concrete price spec (mirrors cowboy's
+        // normal post + corner post + beam three-tier pricing exactly): post
+        // price (depends on the H-post height selected) × normal post count,
+        // plus corner post price × corner post count, plus panel price ×
+        // total panel count (res.grandBeams already counts panels-per-bay ×
+        // layers, i.e. the "ใช้คาน N แผ่น" total).
+        const postPriceEl = _activeCornerCheckbox('concretePostPrice', 'imConcretePostPrice');
+        const cornerPostPriceEl = _activeCornerCheckbox('concreteCornerPostPrice', 'imConcreteCornerPostPrice');
+        const panelPriceEl = _activeCornerCheckbox('concretePanelPrice', 'imConcretePanelPrice');
+        const concretePostPrice = parseFloat(postPriceEl?.value) || 0;
+        const concreteCornerPostPrice = parseFloat(cornerPostPriceEl?.value) || 0;
+        const concretePanelPrice = parseFloat(panelPriceEl?.value) || 0;
+        grandPrice += res.normalPosts * concretePostPrice + res.cornerPosts * concreteCornerPostPrice + res.grandBeams * concretePanelPrice;
+        // ทับหลัง (lintel/capping) — optional flat one-time add-on, only
+        // counted while its checkbox is ticked; NOT multiplied by post,
+        // panel, or length count (per the reference price sheet).
+        const lintelCbEl = _activeCornerCheckbox('concreteLintel', 'imConcreteLintel');
+        if (lintelCbEl?.checked) {
+            const lintelPriceEl = _activeCornerCheckbox('concreteLintelPrice', 'imConcreteLintelPrice');
+            grandPrice += parseFloat(lintelPriceEl?.value) || 0;
+        }
         res.warnings.forEach(w => segmentWarnings.push(w));
     }
 
@@ -724,8 +814,8 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         if (postsInput) postsInput.value = grandPosts;
 
         const beamsInput = document.getElementById(ids.beams);
-        const beamsLabel = beamsInput?.closest('.sbr-row-item')?.querySelector('.sbr-label');
-        const beamsUnit  = beamsInput?.closest('.sbr-field-row')?.querySelector('.sbr-unit');
+        const beamsLabel = beamsInput?.closest('.sbph-detail-row')?.querySelector('.sbph-detail-label');
+        const beamsUnit  = beamsInput?.closest('.sbph-detail-val')?.querySelector('.sbph-detail-unit');
 
         if (hasBrick && window._brickCalcResult) {
             const br = window._brickCalcResult;
@@ -749,13 +839,16 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
                 totalPrice += brickCount * brickPrice;
             }
             priceInput.value = totalPrice.toLocaleString('th-TH', { maximumFractionDigits: 0 });
-            // Page 1's big green "hero" price readout is a separate animated
-            // mirror of this hidden input — only drive it from the page-1
-            // call (ids.price === 'resPriceDisplay'), not Input Mode's, since
-            // both would otherwise fight over the same shared hero element.
+            // Both Page 1 and Input Mode have their own big green "hero"
+            // price readout — each a separate animated mirror of its own
+            // hidden input, using its own element ids so the two animations
+            // never fight over shared state (see setPriceHeroValue).
             if (ids.price === 'resPriceDisplay') {
-                setPriceHeroValue(priceInput.value);
-                updatePriceHeroSub();
+                setPriceHeroValue(priceInput.value, 'priceHeroValue', 'sbphPriceSection');
+                updatePriceHeroSub('priceHeroSub');
+            } else if (ids.price === 'imResPriceDisplay') {
+                setPriceHeroValue(priceInput.value, 'imPriceHeroValue', 'imSbphPriceSection');
+                updatePriceHeroSub('imPriceHeroSub');
             }
         }
 
@@ -787,15 +880,23 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
 // with a per-digit roll animation whenever it changes — each character
 // position that actually changed slides out the old digit and slides in the
 // new one (odometer-style), sliding upward when the price increases and
-// downward when it decreases. Purely a rendered mirror of resPriceDisplay
-// (the plain hidden input writeResults() writes to); never itself read by
-// any calculation.
-let _priceHeroPrev = null;
-function setPriceHeroValue(text) {
-    const el = document.getElementById('priceHeroValue');
+// downward when it decreases. Purely a rendered mirror of resPriceDisplay /
+// imResPriceDisplay (the plain hidden inputs writeResults() writes to);
+// never itself read by any calculation.
+//
+// Page 1 and Input Mode each have their own copy of this hero card
+// (priceHeroValue/sbphPriceSection vs imPriceHeroValue/imSbphPriceSection),
+// so this tracks the previous value PER element id rather than in one
+// shared variable — otherwise updating one tab's price would "eat" the
+// diff the other tab's animation needed to compare against.
+const _priceHeroPrevByEl = {};
+function setPriceHeroValue(text, elId, sectionId) {
+    elId = elId || 'priceHeroValue';
+    sectionId = sectionId || 'sbphPriceSection';
+    const el = document.getElementById(elId);
     if (!el) return;
-    const prev = _priceHeroPrev;
-    _priceHeroPrev = text;
+    const prev = Object.prototype.hasOwnProperty.call(_priceHeroPrevByEl, elId) ? _priceHeroPrevByEl[elId] : null;
+    _priceHeroPrevByEl[elId] = text;
     if (prev === text) return;
     if (prev === null) { el.textContent = text; return; } // first render — no animation to play
 
@@ -807,20 +908,30 @@ function setPriceHeroValue(text) {
     const prevPadded = String(prev).padStart(len, ' ');
     const nextPadded = String(text).padStart(len, ' ');
 
+    // Cascade the roll from the smallest digit (rightmost) to the biggest
+    // (leftmost), like a mechanical odometer — each slot's transition-delay
+    // is proportional to its distance from the ones place, so the ones
+    // digit flips first and the wave sweeps left through tens, hundreds, etc.
+    const STAGGER_MS = 45;
+
     el.innerHTML = '';
     for (let i = 0; i < len; i++) {
         const oldCh = prevPadded[i];
         const newCh = nextPadded[i];
+        const distFromRight = len - 1 - i;
+        const delayMs = distFromRight * STAGGER_MS;
         const slot = document.createElement('span');
         slot.className = 'phv-slot';
 
         const faceNew = document.createElement('span');
         faceNew.className = 'phv-face';
+        faceNew.style.transitionDelay = delayMs + 'ms';
         faceNew.textContent = newCh === ' ' ? ' ' : newCh;
 
         if (oldCh !== newCh && oldCh !== ' ') {
             const faceOld = document.createElement('span');
             faceOld.className = 'phv-face';
+            faceOld.style.transitionDelay = delayMs + 'ms';
             faceOld.textContent = oldCh === ' ' ? ' ' : oldCh;
             faceNew.style.transform = goingUp ? 'translateY(100%)' : 'translateY(-100%)';
             faceNew.style.opacity = '0';
@@ -835,7 +946,7 @@ function setPriceHeroValue(text) {
                     faceNew.style.opacity = '1';
                 });
             });
-            setTimeout(() => { if (faceOld.parentNode) faceOld.remove(); }, 500);
+            setTimeout(() => { if (faceOld.parentNode) faceOld.remove(); }, delayMs + 500);
         } else {
             slot.appendChild(faceNew);
         }
@@ -843,7 +954,7 @@ function setPriceHeroValue(text) {
     }
 
     // Brief pulse on the whole price section to reinforce the change.
-    const section = document.getElementById('sbphPriceSection');
+    const section = document.getElementById(sectionId);
     if (section) {
         section.classList.remove('sbph-pulse');
         void section.offsetWidth; // restart the animation
@@ -855,28 +966,42 @@ function setPriceHeroValue(text) {
 // type is currently active in the sidebar (more than one type of line can
 // be drawn at once — grandPrice already sums all of them; this is just a
 // readable per-unit reminder, not a separate calculation).
-function updatePriceHeroSub() {
-    const el = document.getElementById('priceHeroSub');
+//
+// Page 1 and Input Mode each track their own active fence-type card (both
+// use the same .sb-fence-card markup, so the lookup must be scoped to the
+// right tab's cards) and read their own set of price field ids.
+const PRICE_HERO_SUB_FIELD_IDS = {
+    page1:  { cowboyPost: 'cowboyPostPrice', cowboyBeam: 'cowboyBeamPrice', concretePost: 'concretePostPrice', concretePanel: 'concretePanelPrice', barbedPerM: 'barbedPricePerM', brickPiece: 'brickPricePerPiece' },
+    input:  { cowboyPost: 'imCowboyPostPrice', cowboyBeam: 'imCowboyBeamPrice', concretePost: 'imConcretePostPrice', concretePanel: 'imConcretePanelPrice', barbedPerM: 'imBarbedPricePerM', brickPiece: 'imBrickPrice' },
+};
+function updatePriceHeroSub(elId) {
+    elId = elId || 'priceHeroSub';
+    const isInputMode = elId !== 'priceHeroSub';
+    const el = document.getElementById(elId);
     if (!el) return;
-    const activeCard = document.querySelector('.sb-fence-card.active');
+    const cardScope = isInputMode ? '#imFenceCards' : '#sbPage1';
+    const activeCard = document.querySelector(cardScope + ' .sb-fence-card.active');
     const type = activeCard ? activeCard.getAttribute('data-type') : 'cowboy';
-    const val = (id) => { const e = document.getElementById(id); return e ? parseFloat(e.value) : NaN; };
+    const ids = PRICE_HERO_SUB_FIELD_IDS[isInputMode ? 'input' : 'page1'];
+    const val = (key) => { const e = document.getElementById(ids[key]); return e ? parseFloat(e.value) : NaN; };
     const fmt = (n) => isNaN(n) ? null : n.toLocaleString('th-TH', { maximumFractionDigits: 2 });
 
     const parts = [];
     if (type === 'cowboy') {
-        const post = fmt(val('cowboyPostPrice'));
-        const beam = fmt(val('cowboyBeamPrice'));
+        const post = fmt(val('cowboyPost'));
+        const beam = fmt(val('cowboyBeam'));
         if (post) parts.push(`${post} บาท/ต้น`);
         if (beam) parts.push(`${beam} บาท/คาน`);
     } else if (type === 'concrete') {
-        const perM = fmt(val('concretePricePerM'));
-        if (perM) parts.push(`${perM} บาท/ม.`);
+        const post = fmt(val('concretePost'));
+        const panel = fmt(val('concretePanel'));
+        if (post) parts.push(`${post} บาท/ต้น`);
+        if (panel) parts.push(`${panel} บาท/แผ่น`);
     } else if (type === 'barbed') {
-        const perM = fmt(val('barbedPricePerM'));
+        const perM = fmt(val('barbedPerM'));
         if (perM) parts.push(`${perM} บาท/ม.`);
     } else if (type === 'brick') {
-        const piece = fmt(val('brickPricePerPiece'));
+        const piece = fmt(val('brickPiece'));
         if (piece) parts.push(`${piece} บาท/ก้อน`);
     }
     el.textContent = parts.length ? parts.join(' · ') : '—';
@@ -886,23 +1011,27 @@ function updatePriceHeroSub() {
 // ต้องใช้": normal segment posts (black) + N-Brace solo (red) + dual (blue)
 // + angle (red) = total. Reads window._barbedCalcResult, set by calcBarbed
 // (barb.js) on every recalculation — purely a UI readout, not used by any
-// calculation itself.
+// calculation itself. Updates both Page 1's and Input Mode's copies of the
+// breakdown row, since this is computed once per runFenceCalc() rather than
+// once per tab like writeResults().
 function updateBarbedPostBreakdown(hasBarbed) {
-    const el = document.getElementById('resPostsBreakdown');
-    if (!el) return;
     const r = window._barbedCalcResult;
-    if (!hasBarbed || !r) {
-        el.style.display = 'none';
-        el.innerHTML = '';
-        return;
-    }
-    el.innerHTML =
-        `<span style="color:#1f2937;">${r.normalPosts}</span>` +
-        ` + <span style="color:#dc2626;">${r.soloPosts}</span>` +
-        ` + <span style="color:#1d4ed8;">${r.dualPosts}</span>` +
-        ` + <span style="color:#dc2626;">${r.anglePosts}</span>` +
-        ` = <strong style="color:#1f2937;">${r.totalPosts}</strong>`;
-    el.style.display = 'block';
+    ['resPostsBreakdown', 'imResPostsBreakdown'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (!hasBarbed || !r) {
+            el.style.display = 'none';
+            el.innerHTML = '';
+            return;
+        }
+        el.innerHTML =
+            `<span style="color:#1f2937;">${r.normalPosts}</span>` +
+            ` + <span style="color:#dc2626;">${r.soloPosts}</span>` +
+            ` + <span style="color:#1d4ed8;">${r.dualPosts}</span>` +
+            ` + <span style="color:#dc2626;">${r.anglePosts}</span>` +
+            ` = <strong style="color:#1f2937;">${r.totalPosts}</strong>`;
+        el.style.display = 'block';
+    });
 }
 
 // Shared UI Helpers
@@ -976,8 +1105,21 @@ document.addEventListener('click', function(e) {
 document.getElementById('clearFenceBtn')?.addEventListener('click', function() {
     fenceLayerGroup.clearLayers();
     swappedCorners.clear();
-    ['resTotal','resPosts','resBeams','resPrice','imResTotal','imResPosts','imResBeams','imResPriceDisplay'].forEach(id => {
+    ['resTotal','resPosts','resBeams','resPriceDisplay','imResTotal','imResPosts','imResBeams','imResPriceDisplay'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
+    });
+    // The animated hero price is a separate display, not driven by the
+    // hidden inputs above — reset it directly (and drop its tracked
+    // "previous value" so the next real calc doesn't try to diff against
+    // stale state).
+    ['priceHeroValue', 'imPriceHeroValue'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '0';
+        delete _priceHeroPrevByEl[id];
+    });
+    ['priceHeroSub', 'imPriceHeroSub'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '—';
     });
     const fw1 = document.getElementById('fenceWarnings');
     const fw2 = document.getElementById('imFenceWarnings');
