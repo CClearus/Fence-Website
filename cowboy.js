@@ -103,7 +103,13 @@ function cornerShortenAmount(cornerPt, n, armBearing) {
         if (typeof armBearing === 'number') {
             const angTo = (b) => { let d = Math.abs(((b - armBearing) % 360 + 360) % 360); if (d > 180) d = 360 - d; return d; };
             const isBlueArm = angTo(a2) < angTo(a1);
-            return isBlueArm ? n + n / 2 : n / 2;
+            // Blue's post is rendered offset n+n/2 out (for visual clearance —
+            // see drawDoubleCornerPost in fence.js), but the PANEL length
+            // available for splitting only loses a full post-width n at that
+            // end, matching the Ai − Bi·n spec (Bi=1 here). Using n+n/2 here
+            // over-shortened the panel space and threw off the split-panel
+            // size (e.g. 16.65m side computing a 1.425m tail instead of 1.5m).
+            return isBlueArm ? n : n / 2;
         }
         return n / 2; // fallback if the caller couldn't identify the arm
     }
@@ -364,9 +370,22 @@ function drawPlanCowboyLine(lineData, idx) {
         for (let j = 0; j < poleDists.length - 1; j++) {
             const isStandardPanel = j < stdCount;
             if (isStandardPanel && j > 0) continue;
-            const sPt = interp(pts, dAcc + poleDists[j]);
-            const ePt = interp(pts, dAcc + poleDists[j + 1]);
-            drawDimLine(sPt, ePt, 0.25, hav(sPt, ePt).toFixed(2) + 'm', '#000');
+            const trueSPt = interp(pts, dAcc + poleDists[j]);
+            const trueEPt = interp(pts, dAcc + poleDists[j + 1]);
+            const label = hav(trueSPt, trueEPt).toFixed(2) + 'm';
+            // Anchor the tick to where the corner pillar is actually DRAWN
+            // (see planCornerAnchorPt in fence.js), not the true physical
+            // offset — the label keeps the real measured length either way.
+            let sPt = trueSPt, ePt = trueEPt;
+            if (j === 0 && isCornerPoint(p0)) {
+                const anchor = planCornerAnchorPt(p0, b, n, 'cowboy');
+                if (anchor) sPt = anchor;
+            }
+            if (j === poleDists.length - 2 && isCornerPoint(p1)) {
+                const anchor = planCornerAnchorPt(p1, bearing(p1, p0), n, 'cowboy');
+                if (anchor) ePt = anchor;
+            }
+            drawDimLine(sPt, ePt, 0.25, label, '#000');
         }
        drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
 

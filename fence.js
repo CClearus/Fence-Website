@@ -398,6 +398,61 @@ function cornerOffsetX(n, thetaDeg) {
     return n / (2 * Math.tan(half)) + n / 2;
 }
 
+// Plan Mode's panel dimension lines (drawPlanCowboyLine / drawPlanConcreteLine)
+// used to anchor the first/last panel's tick at the TRUE physical post
+// offset (getDualCornerOffset(n, theta), a few centimetres from the vertex),
+// while the pillar itself is drawn much further out on screen at an
+// inflated visual offset (getDualCornerOffset(visualN, theta) — visualN is
+// ~3x the real post size, purely for legibility). That mismatch made the
+// dimension line appear to start well before the actual drawn pillar
+// instead of right at it. This returns where the pillar is ACTUALLY
+// rendered for a given corner + outward arm bearing, mirroring
+// drawPlanCowboyCorners/drawPlanConcreteCorners exactly, so callers can
+// anchor the visual tick there while still labeling the true measured
+// length (computed separately from the real, un-inflated geometry).
+function planCornerAnchorPt(cornerPt, armBearing, n, type) {
+    type = (type === 'concrete') ? 'concrete' : 'cowboy';
+    if (typeof cornerMap === 'undefined') return null;
+    const entry = cornerMap.get(ptKey(cornerPt));
+    if (!entry || entry.arms.length < 2) return null;
+
+    const nonSquareActive = _isNonSquareActive(type);
+    const [armRed, armBlue] = getCornerArms(entry);
+    const theta = cornerAngle(armRed, armBlue);
+    const scale = window._poleScale || 1.0;
+    const visualN = Math.max(n, 0.15) * scale * 3;
+
+    const dualIds = type === 'concrete'
+        ? ['concreteDoubleCornerPost', 'imConcreteDoubleCorner']
+        : ['doubleCornerPost', 'imDoubleCornerPost'];
+    const mode2Ids = type === 'concrete'
+        ? ['cornerMode2Concrete', 'imConcreteCornerModeDouble']
+        : ['cornerMode2', 'imCornerModeDouble'];
+
+    const dualPillarCheckbox = _activeCornerCheckbox(dualIds[0], dualIds[1]);
+    const mode2Radio = _activeCornerCheckbox(mode2Ids[0], mode2Ids[1]);
+    const useDualPillar = nonSquareActive
+        ? (mode2Radio ? mode2Radio.checked : false)
+        : (dualPillarCheckbox ? dualPillarCheckbox.checked : false);
+
+    if (!useDualPillar) return cornerPt; // single post sits right at the vertex
+
+    if (nonSquareActive) {
+        const mode = getCornerMode(cornerPt, theta, type);
+        if (mode === 'single') return cornerPt; // bisector post sits at the vertex
+        const renderOffset = getDualCornerOffset(visualN, theta);
+        return offPt(cornerPt, armBearing, renderOffset);
+    }
+
+    // Plain "duel" (square-corner) mode: red sits at the vertex, blue is
+    // offset a rendered post-width out along ITS OWN arm — matches
+    // drawPlanCowboyCorners'/drawPlanConcreteCorners' plain-duel branch.
+    const angTo = (b) => { let d = Math.abs(((b - armBearing) % 360 + 360) % 360); if (d > 180) d = 360 - d; return d; };
+    const isBlueArm = angTo(armBlue) < angTo(armRed);
+    if (!isBlueArm) return cornerPt;
+    return offPt(cornerPt, armBearing, visualN);
+}
+
 // Single source of truth for how far the "blue" dual-corner post sits from
 // the corner point. Both the post drawing (drawDoubleCornerPost) and the
 // fence-line/panel shortening (cornerShortenAmount in cowboy.js) MUST use

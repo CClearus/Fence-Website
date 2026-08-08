@@ -175,7 +175,11 @@ function drawConcreteFence(linePoints, m, n, splitAtStart, doubleCorner, lineCol
                 if (typeof armBearing === 'number') {
                     const angTo = (b) => { let d = Math.abs(((b - armBearing) % 360 + 360) % 360); if (d > 180) d = 360 - d; return d; };
                     const isBlueArm = angTo(a2) < angTo(a1);
-                    return isBlueArm ? n + n / 2 : n / 2;
+                    // Blue's post renders offset n+n/2 out for visual
+                    // clearance (see drawConcreteDoubleCornerPost), but the
+                    // PANEL length available for splitting only loses a full
+                    // post-width n at that end (Ai − Bi·n spec, Bi=1 here).
+                    return isBlueArm ? n : n / 2;
                 }
                 return n / 2; // fallback if the caller couldn't identify the arm
             }
@@ -500,7 +504,9 @@ function drawPlanConcreteIcon(pt, iconUrl, rot) {
                     if (typeof armBearing === 'number') {
                         const angTo = (bb) => { let d = Math.abs(((bb - armBearing) % 360 + 360) % 360); if (d > 180) d = 360 - d; return d; };
                         const isBlueArm = angTo(a2) < angTo(a1);
-                        return isBlueArm ? n + n / 2 : n / 2;
+                        // Matches the fix above — panel space only loses n at
+                        // the blue-arm end, not the rendered n+n/2 clearance.
+                        return isBlueArm ? n : n / 2;
                     }
                     return n / 2;
                 }
@@ -571,9 +577,22 @@ postDists.forEach((dist, pIdx) => {
         for (let j = 0; j < tickDists.length - 1; j++) {
             const isStandardPanel = j < stdCount;
             if (isStandardPanel && j > 0) continue;
-            const sPt = interp(pts, dAcc + tickDists[j]);
-            const ePt = interp(pts, dAcc + tickDists[j + 1]);
-            drawDimLine(sPt, ePt, 0.25, hav(sPt, ePt).toFixed(2) + 'm', '#000');
+            const trueSPt = interp(pts, dAcc + tickDists[j]);
+            const trueEPt = interp(pts, dAcc + tickDists[j + 1]);
+            const label = hav(trueSPt, trueEPt).toFixed(2) + 'm';
+            // Anchor the tick to where the corner pillar is actually DRAWN
+            // (see planCornerAnchorPt in fence.js), not the true physical
+            // offset — the label keeps the real measured length either way.
+            let sPt = trueSPt, ePt = trueEPt;
+            if (j === 0 && isCornerPoint(p0)) {
+                const anchor = planCornerAnchorPt(p0, b, n, 'concrete');
+                if (anchor) sPt = anchor;
+            }
+            if (j === tickDists.length - 2 && isCornerPoint(p1)) {
+                const anchor = planCornerAnchorPt(p1, bearing(p1, p0), n, 'concrete');
+                if (anchor) ePt = anchor;
+            }
+            drawDimLine(sPt, ePt, 0.25, label, '#000');
         }
 drawDimLine(p0, p1, outwardOffset(pts, p0, p1, 0.55), segLen.toFixed(2) + 'm', '#000');
 
