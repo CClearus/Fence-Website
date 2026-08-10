@@ -1042,10 +1042,18 @@ if (typeof drawPlanConcreteCorners === 'function') drawPlanConcreteCorners();
 // Remaining fence types (barbed, brick, ...) don't use the shared
 // cornerMap-based corner-post system, so draw order relative to it
 // doesn't matter for them.
+// _barbedDualCarry threads N-Brace Dual's running "every 50m" distance
+// across all visible barbed lines in draw order, so a second barbed line
+// picks up counting where the previous one left off instead of restarting
+// — see drawPlanLine/drawPlanBarbedLine. Lines of other types in between
+// don't touch it (drawPlanLine hands the value straight back for them).
+let _barbedDualCarry = 50;
 allLines.forEach((ld, idx) => {
     const cb = document.getElementById(`plan_cb_${idx}`);
     const type = ld.fenceType || 'cowboy';
-    if (cb && cb.checked && type !== 'cowboy' && type !== 'concrete') drawPlanLine(ld, idx);
+    if (cb && cb.checked && type !== 'cowboy' && type !== 'concrete') {
+        _barbedDualCarry = drawPlanLine(ld, idx, _barbedDualCarry);
+    }
 });
 
     _drawPlanLegend();
@@ -1124,13 +1132,17 @@ function renderPlanSummaryTable() {
 // ============================================
 // PLAN MODE DISPATCHER
 // ============================================
-function drawPlanLine(lineData, idx) {
+// dualCarryIn/return value: only meaningful for barbed lines — threads the
+// running N-Brace Dual "distance since last brace" across separate barbed
+// lines/sides so the every-50m pattern doesn't restart at each one (see
+// drawPlanBarbedLine in barb.js). Non-barbed callers can ignore both.
+function drawPlanLine(lineData, idx, dualCarryIn) {
     const pts = lineData.points;
-    if (!pts || pts.length < 2) return;
+    if (!pts || pts.length < 2) return dualCarryIn;
     const fenceType = lineData.fenceType || 'cowboy';
 
     if (fenceType === 'barbed') {
-        drawPlanBarbedLine(lineData, idx);
+        return drawPlanBarbedLine(lineData, idx, dualCarryIn);
     } else if (fenceType === 'brick') {
         drawPlanBrickLine(lineData, idx);
     } else if (fenceType === 'concrete') {
@@ -1139,6 +1151,7 @@ function drawPlanLine(lineData, idx) {
         // cowboy (default)
         drawPlanCowboyLine(lineData, idx);
     }
+    return dualCarryIn;
 }
 
 // ============================================

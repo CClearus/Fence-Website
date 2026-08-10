@@ -35,6 +35,7 @@ const ANGLE_RULES = {
     let imFenceType  = 'cowboy';
     let imFreeAngle  = false; // true = cowboy angle dial unlocked from 90° steps
     let imFreeAngleConcrete = false; // true = concrete angle dial unlocked from 90° steps
+    let imLockAngleBrick = false; // true = brick angle dial LOCKED to 90° steps (brick is free by default; this is opt-in, mirrors draw mode's #brickForce90/#imBrickForce90)
     let imLayerGroup = null; // L.layerGroup for preview lines
     let imActive     = false;
     let imOrigin     = null;
@@ -148,6 +149,7 @@ function buildPoints() {
     function angleStepFor(fenceType) {
         if (fenceType === 'cowboy' && imFreeAngle) return DEFAULT_ANGLE_STEP;
         if (fenceType === 'concrete' && imFreeAngleConcrete) return DEFAULT_ANGLE_STEP;
+        if (fenceType === 'brick' && imLockAngleBrick) return 90;
         return (ANGLE_RULES[fenceType] || { step: DEFAULT_ANGLE_STEP }).step;
     }
 
@@ -446,7 +448,7 @@ if (imFenceType === 'cowboy' || imFenceType === 'brick' || imFenceType === 'conc
         // Forbidden arc shading
         let forbiddenArc = '';
         if (prevBearing !== null) {
-if (imFenceType === 'cowboy' || imFenceType === 'concrete') {
+if (imFenceType === 'cowboy' || imFenceType === 'concrete' || (imFenceType === 'brick' && imLockAngleBrick)) {
     // Shade just the reverse bearing wedge (±45° since step=90)
     const reverse = (prevBearing + 180) % 360;
     const arcSpan = 45;
@@ -1275,7 +1277,6 @@ function setIMFenceType(type) {
                     onchange="imSetSpacingBarbed(this.value)">
                     <option value="2.0" data-name="ระยะห่าง 2.0 ม.">2.0 ม.</option>
                     <option value="2.5" selected data-name="ระยะห่าง 2.5 ม.">2.5 ม.</option>
-                    <option value="3.0" data-name="ระยะห่าง 3.0 ม.">3.0 ม.</option>
                     <option value="custom" data-name="กำหนดเอง…">กำหนดเอง…</option>
                 </select>
                 <div class="sb-select-icon">▼</div>
@@ -1325,21 +1326,23 @@ function setIMFenceType(type) {
             <span class="sb-toggle-switch"></span>
         </label>
 
-        <div class="sb-field-card" style="margin-top:10px;">
+        <div class="sb-picker-card sb-picker-postbeam" style="margin-top:10px;">
             <div class="sbpk-head">
                 <div class="sbpk-icon" style="background:#f3f4f6;color:#6b7280;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                        <rect x="8" y="8" width="8" height="8" rx="1.3" stroke="currentColor" stroke-width="1.6"/>
-                        <path d="M2 12 H7 M17 12 H22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                        <path d="M2 12 L4.6 9.6 M2 12 L4.6 14.4 M22 12 L19.4 9.6 M22 12 L19.4 14.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <rect x="3" y="4" width="3.4" height="16" rx="1" fill="currentColor"/>
+                        <rect x="17.6" y="4" width="3.4" height="16" rx="1" fill="currentColor"/>
                     </svg>
                 </div>
-                <div class="sbpk-label">ขนาดเสา (กว้าง, เมตร)</div>
+                <div class="sbpk-label">เลือกเสา (7.5×7.5 ซม.)</div>
             </div>
-            <div class="sbpc-input-wrap">
-                <input type="number" id="imPostSizeBarbed" value="0.10"
-                    min="0.05" max="0.50" step="0.01" placeholder="ความกว้างเสา (ม.)">
-                <span class="sbpc-unit">ม.</span>
+            <div class="sb-select-wrap" style="position:relative;">
+                <select class="sb-select sbpk-select" id="imBarbedPostSelect"
+                    onchange="syncBarbedPostPrice(); updateBarbedPriceMeas();">
+                    <option value="2.0" data-name="เสาสูง 2.00 ม." data-price="91 บาท">เสาสูง 2.00 ม. — 91 บาท</option>
+                    <option value="2.5" selected data-name="เสาสูง 2.50 ม." data-price="113 บาท">เสาสูง 2.50 ม. — 113 บาท</option>
+                </select>
+                <div class="sb-select-icon">▼</div>
             </div>
         </div>
 
@@ -1354,18 +1357,43 @@ function setIMFenceType(type) {
                         </svg>
                     </div>
                     <div class="sbpc-titles">
-                        <div class="sbpc-name">ราคาลวดหนาม</div>
-                        <div class="sbpc-meas">โดยประมาณต่อความยาว 1 เมตร</div>
+                        <div class="sbpc-name">ลวดหนามเบอร์ 14</div>
+                        <div class="sbpc-meas">ยาวไม่เกิน 100 ม./ม้วน — ต่อความยาว 1 เมตร/เส้น</div>
                     </div>
                 </div>
                 <div class="sbpc-input-row">
                     <div class="sbpc-input-wrap">
-                        <input type="number" id="imBarbedPricePerM" value="850"
-                            min="0" step="10" placeholder="บาท/เมตร">
+                        <input type="number" id="imBarbedPricePerM" value="5.93"
+                            min="0" step="0.01" placeholder="บาท/เมตร"
+                            onchange="if(typeof runFenceCalc==='function')runFenceCalc();">
                         <span class="sbpc-unit">บาท/ม.</span>
                     </div>
                     <button type="button" class="sbpc-reset" onclick="resetFencePrice('barbed')"
                         title="รีเซ็ตราคาเริ่มต้น">↺</button>
+                </div>
+            </div>
+            <div class="sb-price-card sb-price-post">
+                <div class="sbpc-head">
+                    <div class="sbpc-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <rect x="9" y="2" width="6" height="20" rx="1.4" fill="currentColor"/>
+                            <rect x="6.5" y="2" width="11" height="3.2" rx="1.2" fill="currentColor" opacity="0.55"/>
+                        </svg>
+                    </div>
+                    <div class="sbpc-titles">
+                        <div class="sbpc-name">ราคาเสาต้นละ</div>
+                        <div class="sbpc-meas" id="imBarbedPostMeas">0.075 × 0.075 × 2.50 ม.</div>
+                    </div>
+                </div>
+                <div class="sbpc-input-row">
+                    <div class="sbpc-input-wrap">
+                        <input type="number" id="imBarbedPostPrice" value="113"
+                            min="0" step="1" placeholder="ราคาเสาต้นละ"
+                            onchange="if(typeof runFenceCalc==='function')runFenceCalc();">
+                        <span class="sbpc-unit">บาท</span>
+                    </div>
+                    <button type="button" class="sbpc-reset" onclick="resetFencePrice('barbedPost')"
+                        title="รีเซ็ตราคาเริ่มต้นตามความสูงที่เลือก">↺</button>
                 </div>
             </div>
         </div>
@@ -1665,9 +1693,7 @@ function setIMFenceType(type) {
         <div class="sb-select-wrap" style="position:relative;">
             <select class="sb-select sbpk-select" id="imSpacingSelectBrick"
                 onchange="imSetSpacingBrick(this.value)">
-                <option value="2.0" data-name="ระยะห่าง 2.0 ม.">2.0 ม.</option>
                 <option value="2.5" selected data-name="ระยะห่าง 2.5 ม.">2.5 ม.</option>
-                <option value="3.0" data-name="ระยะห่าง 3.0 ม.">3.0 ม.</option>
                 <option value="custom" data-name="กำหนดเอง…">กำหนดเอง…</option>
             </select>
             <div class="sb-select-icon">▼</div>
@@ -1678,6 +1704,21 @@ function setIMFenceType(type) {
             oninput="if(typeof showSpacingHint==='function') showSpacingHint('imPostSpacingBrickHint', parseFloat(this.value))">
         <div id="imPostSpacingBrickHint" class="spacing-hint" style="display:none;"></div>
     </div>
+
+    <label class="sb-toggle-row" style="--sbtg-accent:#c2410c;margin-top:10px;">
+        <input type="checkbox" id="imBrickForce90" class="sb-toggle-input"
+            onchange="imOnBrickForce90Toggle()">
+        <span class="sb-toggle-left">
+            <span class="sb-toggle-icon" style="background:#fff7ed;color:#c2410c;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <path d="M4 4 L4 20 L20 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    <rect x="4" y="14" width="6" height="6" stroke="currentColor" stroke-width="1.4" fill="none"/>
+                </svg>
+            </span>
+            <span class="sb-toggle-text">ล็อคมุม 90° (บังคับมุมฉาก)</span>
+        </span>
+        <span class="sb-toggle-switch"></span>
+    </label>
 
     <!-- Pillar Size (cm preset) -->
     <div class="sb-picker-card sb-picker-pillar">
@@ -1731,7 +1772,7 @@ function setIMFenceType(type) {
 
     <!-- Brick Type -->
     <div class="sb-section-label" style="margin-top:10px;">ประเภทอิฐ</div>
-    <input type="hidden" id="imBrickType" value="mong2">
+    <input type="hidden" id="imBrickType" value="mong9">
     <button type="button" class="brick-picker-trigger" id="brickPickerTrigger" onclick="openBrickPicker()">
         <div class="bpt-left">
             <div class="bpt-swatch" id="bptSwatch">
@@ -1747,8 +1788,8 @@ function setIMFenceType(type) {
                 </svg>
             </div>
             <div class="bpt-info">
-                <div class="bpt-name" id="bptName">อิฐมอญ 2 ช่อง</div>
-                <div class="bpt-meta" id="bptMeta">3×6×15 ซม.<br><span style="color:#6b7280;">฿1.05/ก้อน · 135 ก้อน/ม²</span></div>
+                <div class="bpt-name" id="bptName">อิฐมอญ 9 รู</div>
+                <div class="bpt-meta" id="bptMeta">5×15×6 ซม.<br><span style="color:#6b7280;">฿1.30/ก้อน · 100 ก้อน/ม²</span></div>
             </div>
         </div>
         <span class="bpt-chevron" id="bptChevron">▼</span>
@@ -1769,8 +1810,8 @@ function setIMFenceType(type) {
                     </svg>
                 </div>
                 <div class="sbpc-titles">
-                    <div class="sbpc-name" id="bptNameCard">อิฐมอญ 2 ช่อง</div>
-                    <div class="sbpc-meas" id="bptMeasCard">3×6×15 ซม.</div>
+                    <div class="sbpc-name" id="bptNameCard">อิฐมอญ 9 รู</div>
+                    <div class="sbpc-meas" id="bptMeasCard">5×15×6 ซม.</div>
                 </div>
                 <button type="button" class="sbpc-reset" onclick="resetFencePrice('brick')"
                     title="รีเซ็ตราคาเริ่มต้นตามชนิดอิฐ">↺</button>
@@ -1779,7 +1820,7 @@ function setIMFenceType(type) {
                 <div class="sbpc-field">
                     <label for="imBrickPrice">ราคา/ก้อน</label>
                     <div class="sbpc-input-wrap">
-                        <input type="number" id="imBrickPrice" value="1.05"
+                        <input type="number" id="imBrickPrice" value="1.30"
                             min="0" step="0.05" placeholder="ราคา/ก้อน">
                         <span class="sbpc-unit">฿</span>
                     </div>
@@ -1787,7 +1828,7 @@ function setIMFenceType(type) {
                 <div class="sbpc-field">
                     <label for="imBrickPpm2">ก้อน/ม²</label>
                     <div class="sbpc-input-wrap">
-                        <input type="number" id="imBrickPpm2" value="135"
+                        <input type="number" id="imBrickPpm2" value="100"
                             min="1" step="0.1" placeholder="ก้อน/ม²">
                         <span class="sbpc-unit">ก้อน</span>
                     </div>
@@ -2437,26 +2478,19 @@ window.BRICK_CATALOGUE = [
     {
         group: 'อิฐมอญ',
         bricks: [
-            { value: 'mong2',    name: 'อิฐมอญ 2 ช่อง',      size: '3×6×15 ซม.',     price: 1.05,  ppm2: 135,  bg: '#e8aa60', fg: '#d97706' },
-            { value: 'mong3',    name: 'อิฐมอญ 3 ช่อง',      size: '6×10×20 ซม.',    price: 2.50,  ppm2: 42,   bg: '#e8aa60', fg: '#d97706' },
-            { value: 'mong4',    name: 'อิฐมอญ 4 ช่อง',      size: '5×16×15 ซม.',    price: 1.20,  ppm2: 95,   bg: '#e8aa60', fg: '#d97706' },
-            { value: 'monghand', name: 'อิฐมอญตันทำมือ',     size: '3×6×14 ซม.',     price: 1.20,  ppm2: 145,  bg: '#e8aa60', fg: '#d97706' },
-            { value: 'mongstd',  name: 'อิฐมอญ มอก.77-2565', size: '4×6.5×14 ซม.',   price: 1.50,  ppm2: 125,  bg: '#e8aa60', fg: '#d97706' },
+            { value: 'mong9',  name: 'อิฐมอญ 9 รู',         size: '5×15×6 ซม.',   price: 1.30, ppm2: 100,  bg: '#e8aa60', fg: '#d97706' },
         ]
     },
     {
         group: 'อิฐมวลเบา (AAC)',
         bricks: [
-            { value: 'aac75',  name: 'อิฐมวลเบา 7.5 ซม.', size: '20×60×7.5 ซม.', price: 23,   ppm2: 8.3, bg: '#d1fae5', fg: '#059669' },
-            { value: 'aac100', name: 'อิฐมวลเบา 10 ซม.',  size: '20×60×10 ซม.',  price: 31,   ppm2: 8.3, bg: '#d1fae5', fg: '#059669' },
+            { value: 'aac75',  name: 'อิฐมวลเบา 7.5 ซม.',   size: '7.5×60×20 ซม.', price: 22,   ppm2: 8.33, bg: '#d1fae5', fg: '#059669' },
         ]
     },
     {
         group: 'อิฐบล็อก (มอก.)',
         bricks: [
-            { value: 'block7',  name: 'อิฐบล็อก มอก. 7 ซม.',  size: 'มาตรฐาน มอก.', price: 9.50,  ppm2: 12.5, bg: '#eff6ff', fg: '#2563eb' },
-            { value: 'block9',  name: 'อิฐบล็อก มอก. 9 ซม.',  size: 'มาตรฐาน มอก.', price: 12,    ppm2: 12.5, bg: '#eff6ff', fg: '#2563eb' },
-            { value: 'block14', name: 'อิฐบล็อก มอก. 14 ซม.', size: 'มาตรฐาน มอก.', price: 20.50, ppm2: 12.5, bg: '#eff6ff', fg: '#2563eb' },
+            { value: 'block7', name: 'อิฐบล็อก มอก. 7 ซม.', size: '7×39×19 ซม.',  price: 6,    ppm2: 13,   bg: '#eff6ff', fg: '#2563eb' },
         ]
     }
 ];
@@ -2502,7 +2536,7 @@ window.openBrickPickerFor = function (page) {
 
     const cfg = _BP_CFG[page] || _BP_CFG.p2;
     const trigger     = document.getElementById(cfg.trigger);
-    const currentValue = document.getElementById(cfg.hidden)?.value || 'mong2';
+    const currentValue = document.getElementById(cfg.hidden)?.value || 'mong9';
 
     // Store which page opened this popup (for selectBrick)
     window._brickPickerPage = page;
@@ -2623,7 +2657,7 @@ if (metaEl)   metaEl.innerHTML     = brick.size + '<br><span style="color:#6b728
 
 // Keep old name working
 window.imUpdateBrickDefaults = function () {
-    const val   = document.getElementById('imBrickType')?.value || 'mong2';
+    const val   = document.getElementById('imBrickType')?.value || 'mong9';
     const brick = _getBrick(val);
     const p = document.getElementById('imBrickPrice');
     const m = document.getElementById('imBrickPpm2');
@@ -2794,6 +2828,22 @@ function imOnCornerModeChange() {
         redrawPreview();
     }
     window.imOnFreeAngleToggleConcrete = imOnFreeAngleToggleConcrete;
+
+    // Brick counterpart — inverse of the cowboy/concrete toggles: brick is
+    // FREE (1° steps) by default, and ticking this LOCKS its angle dial to
+    // 90° steps instead. Mirrors draw mode's #brickForce90 (fence.js/
+    // measure.js's forces90deg()), but reads its own #imBrickForce90
+    // checkbox since Input Mode's angle dial is a separate mechanism from
+    // map-click drawing.
+    function imOnBrickForce90Toggle() {
+        const cb = document.getElementById('imBrickForce90');
+        imLockAngleBrick = !!(cb && cb.checked);
+
+        // Re-render so angle inputs/dial pick up the new step (1° vs 90°)
+        renderSideList();
+        redrawPreview();
+    }
+    window.imOnBrickForce90Toggle = imOnBrickForce90Toggle;
 
 
 })();

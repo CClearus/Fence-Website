@@ -57,11 +57,21 @@ function isBarbedForce90On() {
     return !!(cb && cb.checked);
 }
 
+// Brick is free-angle by default (any corner, full 360°) — same simple
+// opt-in toggle pattern as barbed wire's isBarbedForce90On(), checked
+// across whichever page's checkbox is present (Page 1 draw mode's
+// #brickForce90, or Page 2 input mode's #imBrickForce90).
+function isBrickForce90On() {
+    const cb = document.getElementById('brickForce90') || document.getElementById('imBrickForce90');
+    return !!(cb && cb.checked);
+}
+
 // Fence types that must snap to 90° increments while drawing on the map.
 // When Mode 1 is active the user is explicitly working with non-90° angles,
 // so we lift the 90° restriction and allow 120° snapping instead.
 function forces90deg() {
     if (selectedFenceType === 'barbed') return isBarbedForce90On();
+    if (selectedFenceType === 'brick') return isBrickForce90On();
     if (isNonSquareModeOn()) return false;
     return selectedFenceType === 'cowboy' || selectedFenceType === 'concrete';
 }

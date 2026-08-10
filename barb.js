@@ -2,6 +2,12 @@
 // BARBED WIRE FENCE — Calculation and Drawing
 // ============================================
 
+// Post cross-section is fixed (7.5×7.5 ซม.) — no longer a user-editable
+// field (only the height/price selector is, via #barbedPostSelect). Used
+// for the drawn post footprint in both map mode (calcBarbed) and plan mode
+// (drawPlanBarbedLine) below.
+const BARBED_POST_WIDTH = 0.075;
+
 function _showSharpAngleToast(count, extraPosts, spacing) {
     const old = document.getElementById('sharpAngleToast');
     if (old) old.remove();
@@ -54,9 +60,17 @@ let totalSharpAngles = 0, totalExtraSections = 0, totalExtraLength = 0;
 // post count so the UI can show "normal + solo + dual + angle = total".
 let totalNormalPosts = 0, totalSoloPosts = 0, totalDualPosts = 0, totalAnglePosts = 0;
 
+// N-Brace Dual's "every 50 m" mark is a running count across ALL barbed
+// lines together, not reset back to 50 for each separate line/side — a
+// second line that starts right where a 42m-long first line left off
+// should get its next brace 8m in, not 50m in. Carried across the
+// forEach below; drawPlanBarbedLine (plan mode) mirrors this via its own
+// dualCarryIn/return-value threading in plan_mode.js.
+let dualCarry = 50;
+
 barbedLines.forEach(ld => {
      const linePoints = ld.points;
-     const n = n_barbed || (parseFloat(document.getElementById('postSizeWidthBarbed')?.value) || 6) * 0.0254;
+     const n = n_barbed || BARBED_POST_WIDTH;
      const m = m_barbed || Math.min(3, Math.max(1, parseFloat(document.getElementById('postSpacingBarbed')?.value) || 2.5));
      const total = totalLen(linePoints);
      function interiorAngleAt(i) {
@@ -207,8 +221,9 @@ barbedLines.forEach(ld => {
          // every 50 m intervals only — never endpoints. Snapped to the
          // nearest real post (postDists, built above) instead of the raw
          // 50m mark so the brace sits ON that post rather than immediately
-         // beside it.
-         let crossD = 50;
+         // beside it. Starts from dualCarry (running total from previous
+         // lines) instead of a fresh 50 — see comment above its declaration.
+         let crossD = dualCarry;
          while (crossD < total - 1) {
              let nearestDist = crossD, bestDiff = Infinity;
              for (const d of postDists) {
@@ -219,6 +234,7 @@ barbedLines.forEach(ld => {
              dualPostCount += 2;
              crossD += 50;
          }
+         dualCarry = crossD - total;
      }
      if (nBraceSolo) {
          // endpoints only — always drawn last so red wins
@@ -263,12 +279,19 @@ barbedLines.forEach(ld => {
 // ============================================
 // BARBED WIRE FENCE — Plan Mode Drawing
 // ============================================
-function drawPlanBarbedLine(lineData, idx) {
+// dualCarryIn: running "distance since last N-Brace Dual" carried in from
+// whichever barbed line was drawn immediately before this one (see the
+// matching dualCarry comment in calcBarbed above) — defaults to a fresh
+// 50 for the first barbed line in the plan. Returns the carry to hand to
+// the NEXT barbed line so the pattern threads across lines/sides instead
+// of restarting at each one; the caller (plan_mode.js) is responsible for
+// passing it along.
+function drawPlanBarbedLine(lineData, idx, dualCarryIn) {
 const pts = lineData.points;
-if (!pts || pts.length < 2) return;
+if (!pts || pts.length < 2) return dualCarryIn;
 const m = Math.min(3, Math.max(1, parseFloat(_activeCornerCheckbox('postSpacingBarbed', 'imPostSpacingBarbed')?.value) || 2.5));
 const total = totalLen(pts);
-const n = parseFloat(_activeCornerCheckbox('postSizeBarbed', 'imPostSizeBarbed')?.value) || 0.10;
+const n = BARBED_POST_WIDTH;
 function interiorAngleAt(i) {
      if (i <= 0 || i >= pts.length - 1) return 180;
      const bIn = bearing(pts[i - 1], pts[i]);
@@ -554,11 +577,16 @@ drawNBraceAnglePlan(interp(pts, dist), bearingAt(pts, dist));
          zIndexOffset: 1700
      }).addTo(planLayerGroup);
  }
+ // Running distance-since-last-brace, carried in from the previous barbed
+ // line (see dualCarryIn doc comment above); default to a fresh 50 if this
+ // is the first barbed line in the plan (no carry passed in yet).
+ let dualCarry = (typeof dualCarryIn === 'number') ? dualCarryIn : 50;
  if (nbDual) {
      // every 50 m intervals only — never endpoints. Snapped to the nearest
      // real post in postPositions (same fix as calcBarbed's map-mode pass)
      // so the brace sits ON that post instead of immediately beside it.
-     for (let dist = 50; dist < total - 1; dist += 50) {
+     let dist = dualCarry;
+     for (; dist < total - 1; dist += 50) {
          let nearest = postPositions[0], bestDiff = Infinity;
          for (const p of postPositions) {
              const diff = Math.abs(p.dist - dist);
@@ -566,10 +594,12 @@ drawNBraceAnglePlan(interp(pts, dist), bearingAt(pts, dist));
          }
          drawNBraceDualPlan(nearest.pt, nearest.b);
      }
+     dualCarry = dist - total;
  }
  if (nbSolo) {
      // endpoints only — always drawn last so red wins
      drawNBraceSoloPlan(pts[0], bearingAt(pts, 0), 'start');
      drawNBraceSoloPlan(pts[pts.length - 1], bearingAt(pts, total), 'end');
  }
+ return dualCarry;
 }

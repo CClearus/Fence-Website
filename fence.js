@@ -9,8 +9,23 @@ const PRICE_PER_M = 850;
 // ── Default prices per fence type (baht/meter, except brick which is baht/piece) ──
 const FENCE_PRICE_DEFAULTS = {
     cowboy: 850,
-    barbed: 850
+    // ลวดหนามเบอร์ 14 (ยาวไม่เกิน 100 ม./ม้วน) — price per running metre of a
+    // SINGLE strand, not the whole fence. Multiplied by BARBED_WIRE_STRANDS
+    // in the total-price calc below.
+    barbed: 5.93
 };
+
+// ── Barbed wire fence: per-strand wire price × post price (mirrors cowboy's
+// post/beam split) ──
+// Number of wire strands run along the fence — must match barb.js's
+// strandOffsets array length (drawn strands), since that's what the wire
+// quantity is actually based on.
+const BARBED_WIRE_STRANDS = 3;
+// Post price depends on which height (2.00 / 2.50 ม.) is selected. Post
+// cross-section is fixed at 0.075 × 0.075 ม. (see BARBED_POST_WIDTH in
+// barb.js) — no longer user-editable, so there's no per-size price table
+// the way cowboy/concrete have.
+const BARBED_POST_PRICE_DEFAULTS = { '2.0': 91, '2.5': 113 };
 
 // ── Concrete fence: granular per-post / per-corner-post / per-beam pricing
 // (mirrors cowboy's post / corner-post / beam three-tier pricing exactly) ──
@@ -122,6 +137,19 @@ window.syncCowboyBeamPrice = function () {
     if (!sel || !priceEl) return;
     const def = COWBOY_BEAM_PRICE_BY_SPACING[sel.value];
     priceEl.value = (def !== undefined) ? def : '';
+    if (typeof runFenceCalc === 'function') runFenceCalc();
+};
+
+// ── Barbed wire fence: post price sync ──────────────────────────────────────
+// Syncs the "ราคาเสาต้นละ" input to the default price for whichever post
+// height (2.00 / 2.50 ม.) is currently selected — same pattern as
+// syncCowboyPostPrice()/syncConcretePostPrice().
+window.syncBarbedPostPrice = function () {
+    const sel = _activeCornerCheckbox('barbedPostSelect', 'imBarbedPostSelect');
+    const priceEl = _activeCornerCheckbox('barbedPostPrice', 'imBarbedPostPrice');
+    if (!sel || !priceEl) return;
+    const def = BARBED_POST_PRICE_DEFAULTS[sel.value];
+    if (def !== undefined) priceEl.value = def;
     if (typeof runFenceCalc === 'function') runFenceCalc();
 };
 
@@ -244,6 +272,10 @@ window.resetFencePrice = function (type) {
     } else if (type === 'barbed') {
         setVal('barbedPricePerM', FENCE_PRICE_DEFAULTS.barbed);
         setVal('imBarbedPricePerM', FENCE_PRICE_DEFAULTS.barbed);
+    } else if (type === 'barbedPost') {
+        // Reset "ราคาเสาต้นละ" back to the default for whichever height
+        // (2.00/2.50 ม.) is currently selected.
+        if (typeof syncBarbedPostPrice === 'function') syncBarbedPostPrice();
     } else if (type === 'concretePost') {
         // Reset "ราคาเสาต้นละ" back to the default for whichever H-post
         // height (layers 5/7/9) is currently selected.
@@ -842,9 +874,15 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         const nBraceAngle = _activeCornerCheckbox('nBraceAngle', 'imNBraceAngle')?.checked ?? false;
         const res = calcBarbed(barbedLines, m_barbed, 0, nBraceSolo, nBraceDual, nBraceAngle);
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
-        const priceEl = _activeCornerCheckbox('barbedPricePerM', 'imBarbedPricePerM');
-        const barbedPrice = parseFloat(priceEl?.value) || FENCE_PRICE_DEFAULTS.barbed;
-        grandPrice += res.grandTotal * barbedPrice;
+        // Price = wire (fence length × strand count × price/metre/strand) +
+        // posts (post count, incl. N-Brace fitting posts, × price/post) —
+        // same post/beam-style split as cowboy/concrete, replacing the old
+        // flat "grandTotal × one all-inclusive บาท/เมตร" number.
+        const wirePriceEl = _activeCornerCheckbox('barbedPricePerM', 'imBarbedPricePerM');
+        const barbedWirePrice = parseFloat(wirePriceEl?.value) || FENCE_PRICE_DEFAULTS.barbed;
+        const postPriceEl = _activeCornerCheckbox('barbedPostPrice', 'imBarbedPostPrice');
+        const barbedPostPrice = parseFloat(postPriceEl?.value) || 0;
+        grandPrice += res.grandTotal * BARBED_WIRE_STRANDS * barbedWirePrice + res.grandPosts * barbedPostPrice;
         res.warnings.forEach(w => segmentWarnings.push(w));
     }
     updateBarbedPostBreakdown(barbedLines.length > 0);
@@ -889,7 +927,7 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
             let totalPrice = grandPrice;
             if (hasBrick && window._brickCalcResult) {
                 const br = window._brickCalcResult;
-                const brickPrice = parseFloat(_activeCornerCheckbox('brickPricePerPiece', 'imBrickPrice')?.value) || 1.05;
+                const brickPrice = parseFloat(_activeCornerCheckbox('brickPricePerPiece', 'imBrickPrice')?.value) || 1.30;
                 const brickCount = Math.ceil(br.brickCount * 1.05);
                 totalPrice += brickCount * brickPrice;
             }
@@ -1026,8 +1064,8 @@ function setPriceHeroValue(text, elId, sectionId) {
 // use the same .sb-fence-card markup, so the lookup must be scoped to the
 // right tab's cards) and read their own set of price field ids.
 const PRICE_HERO_SUB_FIELD_IDS = {
-    page1:  { cowboyPost: 'cowboyPostPrice', cowboyBeam: 'cowboyBeamPrice', concretePost: 'concretePostPrice', concretePanel: 'concretePanelPrice', barbedPerM: 'barbedPricePerM', brickPiece: 'brickPricePerPiece' },
-    input:  { cowboyPost: 'imCowboyPostPrice', cowboyBeam: 'imCowboyBeamPrice', concretePost: 'imConcretePostPrice', concretePanel: 'imConcretePanelPrice', barbedPerM: 'imBarbedPricePerM', brickPiece: 'imBrickPrice' },
+    page1:  { cowboyPost: 'cowboyPostPrice', cowboyBeam: 'cowboyBeamPrice', concretePost: 'concretePostPrice', concretePanel: 'concretePanelPrice', barbedPerM: 'barbedPricePerM', barbedPost: 'barbedPostPrice', brickPiece: 'brickPricePerPiece' },
+    input:  { cowboyPost: 'imCowboyPostPrice', cowboyBeam: 'imCowboyBeamPrice', concretePost: 'imConcretePostPrice', concretePanel: 'imConcretePanelPrice', barbedPerM: 'imBarbedPricePerM', barbedPost: 'imBarbedPostPrice', brickPiece: 'imBrickPrice' },
 };
 function updatePriceHeroSub(elId) {
     elId = elId || 'priceHeroSub';
@@ -1054,7 +1092,9 @@ function updatePriceHeroSub(elId) {
         if (panel) parts.push(`${panel} บาท/แผ่น`);
     } else if (type === 'barbed') {
         const perM = fmt(val('barbedPerM'));
-        if (perM) parts.push(`${perM} บาท/ม.`);
+        const post = fmt(val('barbedPost'));
+        if (perM) parts.push(`${perM} บาท/ม./เส้น`);
+        if (post) parts.push(`${post} บาท/ต้น`);
     } else if (type === 'brick') {
         const piece = fmt(val('brickPiece'));
         if (piece) parts.push(`${piece} บาท/ก้อน`);
