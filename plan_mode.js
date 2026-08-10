@@ -71,6 +71,137 @@ function applyLockedRatio(ratio) {
     updatePlanScale();
 }
 
+// ============================================
+// PDF EXPORT — MATERIALS/PRICE/OPTIONS INFO SHEET
+// Final sheet(s) of the exported PDF: the same "what did the user actually
+// configure and what does it cost" info the sidebar and Plan Mode's own
+// summary card show (see window._fenceTypeBreakdown, fence.js), laid out
+// as plain text/table rows since jsPDF has no HTML layout engine. Paginates
+// itself (ensureRoom() below) — a fence with dozens of lines just spills
+// onto additional sheets instead of being cut off.
+// ============================================
+function drawInfoPage(pdf, { PW, PH, MARGIN, FOOTER_H, pageNum, pageCount }) {
+    const money = (n) => (typeof n === 'number' ? n : parseFloat(n) || 0)
+        .toLocaleString('th-TH', { maximumFractionDigits: 2 });
+
+    let y = MARGIN + 14;
+    let curPageNum = pageNum;
+
+    function newSheet(title) {
+        pdf.setFillColor(255, 255, 255); pdf.rect(0, 0, PW, PH, 'F');
+        pdf.setFillColor(30, 41, 59); pdf.rect(0, 0, PW, MARGIN + 2, 'F');
+        pdf.setTextColor(255, 255, 255); pdf.setFontSize(10); pdf.setFont('Sarabun', 'bold');
+        pdf.text(title, PW / 2, 8, { align: 'center' });
+        pdf.setFontSize(6); pdf.setFont('Sarabun', 'normal');
+        pdf.text(`หน้า ${curPageNum}/${pageCount}`, PW - MARGIN, 12.5, { align: 'right' });
+        y = MARGIN + 14;
+    }
+    newSheet('FENCE PLAN — สรุปวัสดุและราคา / MATERIALS & PRICE SUMMARY');
+
+    function ensureRoom(h) {
+        if (y + h > PH - FOOTER_H) {
+            pdf.addPage('a3', 'l');
+            curPageNum++;
+            newSheet('FENCE PLAN — สรุปวัสดุและราคา (ต่อ) / MATERIALS & PRICE SUMMARY (cont.)');
+        }
+    }
+    function sectionTitle(text) {
+        ensureRoom(11);
+        pdf.setFontSize(7); pdf.setFont('Sarabun', 'bold'); pdf.setTextColor(30, 41, 59);
+        pdf.text(text, MARGIN, y); y += 2;
+        pdf.setDrawColor(203, 213, 225); pdf.setLineWidth(0.3);
+        pdf.line(MARGIN, y, PW - MARGIN, y);
+        y += 5;
+    }
+    function textRow(label, value, opts) {
+        ensureRoom(5);
+        pdf.setFontSize(6); pdf.setFont('Sarabun', 'normal'); pdf.setTextColor(80, 80, 80);
+        pdf.text(label, MARGIN, y);
+        pdf.setFont('Sarabun', 'bold'); pdf.setTextColor(15, 23, 42);
+        pdf.text(String(value), PW - MARGIN, y, { align: 'right' });
+        y += (opts && opts.tight) ? 4.5 : 5.5;
+    }
+
+    // ── Grand total (mirrors Plan Mode's combined summary card) ──
+    const total = document.getElementById('resTotal')?.value || '0';
+    const posts = document.getElementById('resPosts')?.value || '0';
+    const price = document.getElementById('resPriceDisplay')?.value || '0';
+    sectionTitle('สรุปรวมทั้งหมด / GRAND TOTAL');
+    textRow('ความยาวรั้วรวม (Total length)', `${total} ม.`);
+    textRow('จำนวนเสาที่ต้องใช้ (Total posts)', `${posts} ต้น`);
+    textRow('ราคารวมทั้งหมด (Grand total price)', `${price} บาท`);
+    y += 3;
+
+    // ── Per fence-type breakdown — quantities, unit prices, options ──
+    const bd = window._fenceTypeBreakdown || {};
+    const TYPE_NAMES = {
+        cowboy: 'รั้วคาวบอย / Cowboy fence',
+        concrete: 'รั้วคอนกรีตสำเร็จรูป / Precast concrete fence',
+        barbed: 'รั้วลวดหนาม / Barbed wire fence',
+        brick: 'รั้วอิฐ / Brick fence',
+    };
+    ['cowboy', 'concrete', 'barbed', 'brick'].forEach((type) => {
+        const b = bd[type];
+        if (!b) return;
+        sectionTitle(`${TYPE_NAMES[type]}  (${b.lines} เส้น)`);
+        if (type === 'cowboy' || type === 'concrete') {
+            if (b.options.beamChoice) textRow('วัสดุที่เลือก (Material)', b.options.beamChoice, { tight: true });
+            textRow('ขนาดเสา (Post size)', `${b.options.postSize} × ${b.options.postSize} ม.`, { tight: true });
+            textRow('เสาปกติ (Normal posts)', `${b.normalPosts} × ${money(b.postPrice)} บาท`);
+            textRow('เสามุม (Corner posts)', `${b.cornerPosts} × ${money(b.cornerPostPrice)} บาท`);
+            textRow(type === 'concrete' ? 'แผ่น (Panels)' : 'คาน (Beams)',
+                `${b.beams} × ${money(type === 'concrete' ? b.panelPrice : b.beamPrice)} บาท`);
+            if (type === 'concrete' && b.options.lintel) textRow('ทับหลัง (Lintel)', `${money(b.options.lintelPrice)} บาท`);
+            const opts = [
+                `เสาห่าง ${b.options.spacing} ม.`,
+                b.options.doubleCorner ? 'เสามุมคู่ (ใช้เสา 2 ต้นที่มุมต่อ)' : 'เสามุมเดี่ยว',
+                `${b.options.layers} ชั้น`,
+                b.options.nonSquareMode ? 'โหมดมุมไม่ตั้งฉาก: เปิด' : 'โหมดมุมไม่ตั้งฉาก: ปิด (บังคับ 90°)',
+            ];
+            textRow('ตัวเลือกมุม/ระยะ (Options)', opts.join(' · '));
+        } else if (type === 'barbed') {
+            if (b.options.wireSpec) textRow('วัสดุลวด (Wire material)', b.options.wireSpec, { tight: true });
+            if (b.options.postChoice) textRow('วัสดุเสา (Post material)', b.options.postChoice, { tight: true });
+            textRow('เสา (Posts)', `${b.posts} × ${money(b.postPrice)} บาท`);
+            textRow(`ลวด ×${b.strands} เส้น (Wire)`, `${b.total.toFixed(1)} ม. × ${money(b.wirePrice)} บาท/ม.`);
+            const opts = [`เสาห่าง ${b.options.spacing} ม.`, b.options.force90 ? 'บังคับมุม 90° ขณะวาด: เปิด' : 'บังคับมุม 90° ขณะวาด: ปิด'];
+            if (b.options.nBraceSolo) opts.push('N-Brace เดี่ยว');
+            if (b.options.nBraceDual) opts.push('N-Brace คู่');
+            if (b.options.nBraceAngle) opts.push('N-Brace มุม');
+            textRow('ตัวเลือก N-Brace/ระยะ (Options)', opts.join(' · '));
+        } else if (type === 'brick') {
+            if (b.options.brickName) textRow('วัสดุอิฐ (Brick material)', `${b.options.brickName}${b.options.brickSize ? ' (' + b.options.brickSize + ')' : ''}`, { tight: true });
+            if (b.options.pillarChoice) textRow('ขนาดเสา (Pillar size)', b.options.pillarChoice, { tight: true });
+            textRow('อิฐ รวม +5% (Bricks incl. waste)', `${(b.brickCount || 0).toLocaleString('th-TH')} × ${money(b.brickPrice)} บาท`);
+            const opts = [];
+            if (b.options.spacing) opts.push(`เสาห่าง ${b.options.spacing} ม.`);
+            if (b.options.height) opts.push(`สูง ${b.options.height} ม.`);
+            opts.push(b.options.beamModeLabel);
+            opts.push(b.options.lockAngle90 ? 'ล็อคมุม 90°: เปิด' : 'ล็อคมุม 90°: ปิด (มุมอิสระ)');
+            textRow('ตัวเลือกคาน/ระยะ (Options)', opts.join(' · '));
+        }
+        textRow('รวมประเภทนี้ (Subtotal)', `${money(b.price)} บาท`);
+        y += 3;
+    });
+
+    // ── Every individual line, with its own options label & length ──
+    sectionTitle('รายการเส้นรั้วทั้งหมด / ALL LINES');
+    const typeNames2 = { cowboy: 'คาวบอย', concrete: 'คอนกรีต', barbed: 'ลวดหนาม', brick: 'อิฐ' };
+    (typeof allLines !== 'undefined' ? allLines : []).forEach((ld, idx) => {
+        const len = (typeof calculateTotalDistance === 'function' && ld.points) ? calculateTotalDistance(ld.points) : 0;
+        const type = ld.fenceType || 'cowboy';
+        const optLabel = (typeof getFenceSummaryLabel === 'function') ? getFenceSummaryLabel(ld) : (typeNames2[type] || type);
+        ensureRoom(5);
+        pdf.setFontSize(5.5); pdf.setFont('Sarabun', 'bold'); pdf.setTextColor(15, 23, 42);
+        pdf.text(`เส้น ${idx + 1}`, MARGIN, y);
+        pdf.setFont('Sarabun', 'normal'); pdf.setTextColor(80, 80, 80);
+        pdf.text(optLabel, MARGIN + 18, y);
+        pdf.setFont('Sarabun', 'bold'); pdf.setTextColor(15, 23, 42);
+        pdf.text(`${len.toFixed(1)} ม.`, PW - MARGIN, y, { align: 'right' });
+        y += 4.5;
+    });
+}
+
 async function downloadPlanPDF() {
     const btn = document.getElementById('btnDownloadPDF');
     if (!btn) return;
@@ -92,6 +223,12 @@ async function downloadPlanPDF() {
         });
         if (!isFinite(minLat)) throw new Error('ไม่พบพิกัดจากเส้นรั้ว');
 
+        // Fresh materials/price/options breakdown (window._fenceTypeBreakdown)
+        // for the info page built below — Plan Mode keeps this updated on
+        // every change, but recalculate once more here so the exported PDF
+        // can never show stale numbers from before the last edit.
+        if (typeof runFenceCalc === 'function') runFenceCalc();
+
         const { jsPDF } = jspdf;
         const PW = 420, PH = 297;
         const MARGIN = 14, FOOTER_H = 10;
@@ -107,25 +244,157 @@ async function downloadPlanPDF() {
         const geoW  = geoX1 - geoX0 || 1;
         const geoH  = geoY1 - geoY0 || 1;
 
-        const scaleX = drawW / geoW, scaleY = drawH / geoH;
-        const S = Math.min(scaleX, scaleY);
-        const offX = MARGIN + (drawW - geoW * S) / 2;
-        const offY = MARGIN + 8 + (drawH - geoH * S) / 2;
-
+        // ── Multi-page tiling ────────────────────────────────────────────
+        // A big fence squeezed onto one A3 sheet becomes illegible (posts,
+        // dimension labels, angle labels all collapse into an unreadable
+        // smudge). The system here: draw ONE overview sheet at the old
+        // fit-everything scale (with a tile-grid overlay showing where each
+        // detail sheet sits), then one or more DETAIL sheets at a fixed,
+        // legible scale, each covering one tile of the overview grid. Every
+        // sheet reuses the exact same drawing code (see renderPageBody
+        // below) — only the projection (curS/curOffX/curOffY/curGeoX0/
+        // curGeoY1) changes between sheets, so content outside the current
+        // sheet's tile simply falls outside the page bounds and isn't drawn
+        // twice or overlapping.
+        let curS = 1, curOffX = 0, curOffY = 0, curGeoX0 = geoX0, curGeoY1 = geoY1;
         function project([lat, lng]) {
-            const x = offX + (lngToX(lng) - geoX0) * S;
-            const y = offY + (geoY1 - latToY(lat)) * S;
+            const x = curOffX + (lngToX(lng) - curGeoX0) * curS;
+            const y = curOffY + (curGeoY1 - latToY(lat)) * curS;
             return [x, y];
+        }
+
+        // Overview scale — the old "fit everything on one sheet" math,
+        // still used for the overview sheet itself.
+        const overviewS = Math.min(drawW / geoW, drawH / geoH);
+
+        // Detail scale — from the scale-bar's locked ratio if the user set
+        // one (psbPicker's 1:N presets), otherwise auto-pick the finest of
+        // those same presets that keeps the detail sheet count reasonable.
+        const SCALE_PRESETS = [500, 1000, 2000, 2500, 5000, 10000, 25000, 50000];
+        const MAX_DETAIL_SHEETS = 12;
+        const mmPerMForRatio = (ratio) => 1000 / ratio;
+        let detailRatio = (typeof lockedRatio === 'number' && lockedRatio) ? lockedRatio : null;
+        if (!detailRatio) {
+            detailRatio = SCALE_PRESETS[SCALE_PRESETS.length - 1];
+            for (const ratio of SCALE_PRESETS) {
+                const s = mmPerMForRatio(ratio);
+                const tw = drawW / s, th = drawH / s;
+                const c = Math.max(1, Math.ceil(geoW / tw));
+                const r = Math.max(1, Math.ceil(geoH / th));
+                if (c * r <= MAX_DETAIL_SHEETS) { detailRatio = ratio; break; }
+            }
+        }
+        const detailS = mmPerMForRatio(detailRatio);
+        const tileGeoW = drawW / detailS;
+        const tileGeoH = drawH / detailS;
+        const cols = Math.max(1, Math.ceil(geoW / tileGeoW));
+        const rows = Math.max(1, Math.ceil(geoH / tileGeoH));
+        // Detail sheets are only worth printing separately when the overview
+        // is already so zoomed-out that the detail scale is meaningfully
+        // closer-in AND more than one tile is actually needed to cover the
+        // fence — a small fence that already fits fine on the overview
+        // sheet at a similar or finer scale doesn't need duplicate sheets.
+        const needsDetailSheets = (cols * rows) > 1 && detailS > overviewS * 1.15;
+        const tiles = [];
+        if (needsDetailSheets) {
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    tiles.push({
+                        row: r, col: c, cols, rows,
+                        id: String.fromCharCode(65 + (r % 26)) + (c + 1),
+                        tGeoX0: geoX0 + c * tileGeoW,
+                        tGeoY1: geoY1 - r * tileGeoH,
+                    });
+                }
+            }
+        }
+        function tileIdAt(r, c) {
+            if (r < 0 || c < 0 || r >= rows || c >= cols) return null;
+            return String.fromCharCode(65 + (r % 26)) + (c + 1);
+        }
+
+        function beginOverviewProjection() {
+            curS = overviewS;
+            curOffX = MARGIN + (drawW - geoW * curS) / 2;
+            curOffY = MARGIN + 8 + (drawH - geoH * curS) / 2;
+            curGeoX0 = geoX0;
+            curGeoY1 = geoY1;
+        }
+        function beginTileProjection(tile) {
+            curS = detailS;
+            curOffX = MARGIN;      // fill edge-to-edge (no centering) so
+            curOffY = MARGIN + 8;  // adjacent tiles line up seamlessly
+            curGeoX0 = tile.tGeoX0;
+            curGeoY1 = tile.tGeoY1;
+        }
+
+        // Converts a point already in mercator-metre space (same units as
+        // geoX0/geoY1, NOT lat/lng) to page mm, using whichever curS/curOffX/
+        // curOffY/curGeoX0/curGeoY1 projection is active — used by the tile
+        // grid overlay/match-lines below, which work off tile rectangles
+        // rather than actual fence coordinates.
+        function projectGeoXY(gx, gy) {
+            return [curOffX + (gx - curGeoX0) * curS, curOffY + (curGeoY1 - gy) * curS];
+        }
+
+        // Drawn once, on the overview sheet only: a light dashed grid
+        // showing exactly which rectangle of the property each detail
+        // sheet (below) covers, labelled with that sheet's ID — the "key
+        // plan" a reader checks before flipping to a detail sheet.
+        function drawTileGridOverlay() {
+            tiles.forEach(tile => {
+                const [x0, y0] = projectGeoXY(tile.tGeoX0, tile.tGeoY1);
+                const [x1, y1] = projectGeoXY(tile.tGeoX0 + tileGeoW, tile.tGeoY1 - tileGeoH);
+                pdf.setDrawColor(37, 99, 235);
+                pdf.setLineWidth(0.3);
+                pdf.setLineDashPattern([2, 1.2], 0);
+                pdf.rect(x0, y0, x1 - x0, y1 - y0, 'S');
+                pdf.setLineDashPattern([], 0);
+                const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+                pdf.setFontSize(7); pdf.setFont('Sarabun', 'bold');
+                const tw = pdf.getTextWidth(tile.id);
+                pdf.setFillColor(37, 99, 235);
+                pdf.setDrawColor(255, 255, 255);
+                pdf.setLineWidth(0.3);
+                pdf.circle(cx, cy, Math.max(3, tw / 2 + 1.2), 'FD');
+                pdf.setTextColor(255, 255, 255);
+                pdf.text(tile.id, cx, cy + 1, { align: 'center' });
+            });
+        }
+
+        // Drawn on each detail sheet: small labels at the edge(s) that
+        // border another sheet, naming which sheet continues there — the
+        // same idea as a surveyor's/architect's "match line" annotation.
+        function drawMatchLines(tile) {
+            const top = MARGIN + 8, bottom = MARGIN + 8 + drawH, left = MARGIN, right = MARGIN + drawW;
+            const upId    = tileIdAt(tile.row - 1, tile.col);
+            const downId  = tileIdAt(tile.row + 1, tile.col);
+            const leftId  = tileIdAt(tile.row, tile.col - 1);
+            const rightId = tileIdAt(tile.row, tile.col + 1);
+            pdf.setFontSize(5.5); pdf.setFont('Sarabun', 'bold'); pdf.setTextColor(37, 99, 235);
+            if (upId)    pdf.text(`▲ ต่อแผ่น ${upId}`,   (left + right) / 2, top + 4,    { align: 'center' });
+            if (downId)  pdf.text(`▼ ต่อแผ่น ${downId}`, (left + right) / 2, bottom - 2, { align: 'center' });
+            if (leftId)  pdf.text(`◀ ${leftId}`,          left + 2,           (top + bottom) / 2, { align: 'left' });
+            if (rightId) pdf.text(`${rightId} ▶`,         right - 2,          (top + bottom) / 2, { align: 'right' });
         }
 
         const pdf = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a3', compress: true });
 
+        // Draws one full sheet's worth of content (background, border, every
+        // fence line/post/corner/label, header, footer, north arrow, legend)
+        // using whatever curS/curOffX/curOffY/curGeoX0/curGeoY1 projection is
+        // currently set — called once for the overview sheet and once per
+        // detail tile below. pageMeta: { kind:'overview'|'detail', tile,
+        // pageNum, pageCount }.
+        function renderPageBody(pageMeta) {
         pdf.setFillColor(255, 255, 255);
         pdf.rect(0, 0, PW, PH, 'F');
 
         pdf.setDrawColor(200, 200, 200);
         pdf.setLineWidth(0.2);
         pdf.rect(MARGIN, MARGIN + 6, drawW, drawH + 2, 'S');
+
+        if (pageMeta.kind === 'overview' && needsDetailSheets) drawTileGridOverlay();
 
         function hexRgb(h) {
             const n = parseInt(h.replace('#',''), 16);
@@ -159,10 +428,10 @@ async function downloadPlanPDF() {
             const [cx, cy] = project(pt);
             const rad = bearingDeg * Math.PI / 180;
             const corners = [
-                [-halfW * S, -halfH * S],
-                [ halfW * S, -halfH * S],
-                [ halfW * S,  halfH * S],
-                [-halfW * S,  halfH * S],
+                [-halfW * curS, -halfH * curS],
+                [ halfW * curS, -halfH * curS],
+                [ halfW * curS,  halfH * curS],
+                [-halfW * curS,  halfH * curS],
             ].map(([dx, dy]) => {
                 const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
                 const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
@@ -647,16 +916,23 @@ geoDrawCowboyCorners();
         pdf.setTextColor(255,255,255);
         pdf.setFontSize(10);
         pdf.setFont('Sarabun', 'bold');
-        pdf.text('FENCE PLAN — แบบแปลนรั้ว', PW/2, 8, { align: 'center' });
+        const sheetTitle = pageMeta.kind === 'overview'
+            ? 'FENCE PLAN — แบบแปลนรั้ว (ภาพรวม / OVERVIEW)'
+            : `FENCE PLAN — แผ่นรายละเอียด ${pageMeta.tile.id} / DETAIL SHEET (${pageMeta.tile.row + 1},${pageMeta.tile.col + 1} of ${pageMeta.tile.rows}×${pageMeta.tile.cols})`;
+        pdf.text(sheetTitle, PW/2, 8, { align: 'center' });
 
         const dateStr = new Date().toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' });
         pdf.setFontSize(6);
         pdf.setFont('Sarabun', 'normal');
-        pdf.text(`วันที่: ${dateStr}`, MARGIN, 12.5);
+        pdf.text(`วันที่: ${dateStr}  |  หน้า ${pageMeta.pageNum}/${pageMeta.pageCount}`, MARGIN, 12.5);
 
-        const scaleEl = document.querySelector('#psbTitle');
-        const scaleText = scaleEl ? scaleEl.textContent.replace('🔒','').trim() : '';
-        if (scaleText) pdf.text(scaleText, PW - MARGIN, 12.5, { align: 'right' });
+        // Each sheet has its own scale now (overview = fit-everything,
+        // detail = the fixed legible scale computed above) — no longer a
+        // single scale-bar reading shared across every page.
+        const scaleText = pageMeta.kind === 'overview'
+            ? `มาตราส่วนภาพรวม ~1:${Math.round(1000 / curS).toLocaleString()}`
+            : `มาตราส่วน 1:${detailRatio.toLocaleString()}`;
+        pdf.text(scaleText, PW - MARGIN, 12.5, { align: 'right' });
 
         const FY = PH - FOOTER_H;
         pdf.setFillColor(241, 245, 249);
@@ -667,11 +943,25 @@ geoDrawCowboyCorners();
         pdf.setTextColor(100, 116, 139);
         pdf.setFontSize(5.5);
         pdf.setFont('Sarabun', 'normal');
-        pdf.text('Maybe i should put some text here', PW/2, FY + 6.5, { align: 'center' });
+        pdf.text(
+            pageMeta.kind === 'overview'
+                ? (needsDetailSheets ? 'ภาพรวมทั้งหมด — ดูรายละเอียดที่แผ่นย่อยตามกริดสีน้ำเงินด้านบน' : 'ภาพรวมทั้งหมด')
+                : `แผ่นรายละเอียด ${pageMeta.tile.id}`,
+            PW/2, FY + 6.5, { align: 'center' }
+        );
 
         let grandTotal = 0;
         allLines.forEach(ld => { grandTotal += _geoTotalLen(ld.points || []); });
-        pdf.text(`ความยาวรั้วรวม: ${grandTotal.toFixed(1)} ม.  |  จำนวนด้าน: ${allLines.length}`, MARGIN, FY + 6.5);
+        // Price/post count read from the DOM — runFenceCalc() (called once,
+        // right before any sheet is drawn — see top of this function) has
+        // already written the current totals there, same values the
+        // sidebar's own price-hero card shows.
+        const footerPosts = document.getElementById('resPosts')?.value || '—';
+        const footerPrice = document.getElementById('resPriceDisplay')?.value || '—';
+        pdf.text(
+            `ความยาวรั้วรวม: ${grandTotal.toFixed(1)} ม.  |  จำนวนด้าน: ${allLines.length}  |  จำนวนเสา: ${footerPosts} ต้น  |  ราคารวม: ${footerPrice} บาท`,
+            MARGIN, FY + 6.5
+        );
 
         const naX = MARGIN + drawW - 8, naY = MARGIN + 14;
         pdf.setDrawColor(30,41,59); pdf.setLineWidth(0.5); pdf.setLineDashPattern([],0);
@@ -684,6 +974,8 @@ pdf.setFontSize(6); pdf.setFont('Sarabun','bold');
         pdf.setTextColor(30,41,59);
         pdf.text('N', naX, naY - 1.5, { align:'center' });
 
+        if (pageMeta.kind === 'detail') drawMatchLines(pageMeta.tile);
+
         // ── LEGEND BOX ────────────────────────────────────────────────
         const presentTypes = new Set(allLines.map(ld => ld.fenceType || 'cowboy'));
         const legendEntries = [];
@@ -691,6 +983,14 @@ pdf.setFontSize(6); pdf.setFont('Sarabun','bold');
         legendEntries.push({ kind:'post-corner', label:'Corner / End post / เสามุม' });
         if (presentTypes.has('cowboy') || presentTypes.has('concrete'))
             legendEntries.push({ kind:'line-cowboy', label:'Cowboy / Concrete fence' });
+        // Only shown when at least one cowboy/concrete line actually has
+        // "ใช้เสา 2 ต้นที่มุมต่อ" (dual corner post) switched on — otherwise
+        // every corner is the plain single red post already covered by
+        // 'post-corner' above, and this symbol never appears on the sheet.
+        const bdLegend = window._fenceTypeBreakdown || {};
+        if (bdLegend.cowboy?.options?.doubleCorner || bdLegend.concrete?.options?.doubleCorner) {
+            legendEntries.push({ kind:'corner-dual', label:'Dual corner post (red/blue) / เสามุมคู่' });
+        }
         if (presentTypes.has('barbed')) {
             legendEntries.push({ kind:'line-barbed', label:'Barbed wire fence' });
             legendEntries.push({ kind:'brace-solo',  label:'Single N-brace / ค้ำยันเดี่ยว' });
@@ -701,7 +1001,9 @@ pdf.setFontSize(6); pdf.setFont('Sarabun','bold');
             legendEntries.push({ kind:'beam-top',    label:'Top beam (orange) / คานบน' });
             legendEntries.push({ kind:'beam-center', label:'Centre beam (blue) / คานกลาง' });
         }
-        legendEntries.push({ kind:'dim', label:'Dimension line / เส้นมิติ' });
+        legendEntries.push({ kind:'dim', label:'Dimension line / เส้นมิติ (ความยาวช่วง)' });
+        legendEntries.push({ kind:'angle', label:'Angle label / มุมที่หัวเลี้ยว' });
+        legendEntries.push({ kind:'line-id', label:'Line ID + type + length / ป้ายชื่อเส้น' });
 
         const LX = MARGIN;                    // left edge of legend box
         const LY = PH - FOOTER_H - 4;        // just above footer
@@ -741,6 +1043,11 @@ pdf.setFontSize(6); pdf.setFont('Sarabun','bold');
                 case 'post-corner':
                     pdf.setFillColor(220,38,38); pdf.setDrawColor(26,26,26);
                     pdf.rect(symCx - 2.2, symCy - 2.2, 4.4, 4.4, 'FD'); break;
+                case 'corner-dual':
+                    pdf.setFillColor(255,255,255); pdf.setDrawColor(220,38,38); pdf.setLineWidth(0.3);
+                    pdf.rect(symCx - 3.4, symCy - 1.6, 3.2, 3.2, 'FD');
+                    pdf.setDrawColor(37,99,235);
+                    pdf.rect(symCx + 0.2, symCy - 1.6, 3.2, 3.2, 'FD'); break;
                 case 'line-cowboy':
                     pdf.setDrawColor(26,26,26); pdf.setLineWidth(0.7);
                     pdf.line(LX+2, symCy, LX+2+SYM, symCy);
@@ -807,6 +1114,24 @@ pdf.setFontSize(6); pdf.setFont('Sarabun','bold');
                     pdf.setFontSize(3); pdf.setFont('Sarabun','normal');
                     pdf.setTextColor(0,0,0);
                     pdf.text('2.50m', symCx, symCy+0.8, {align:'center'}); break;
+                case 'angle': {
+                    const angTxt = '∠ 90°';
+                    pdf.setFontSize(3.6); pdf.setFont('Sarabun','bold');
+                    pdf.setTextColor(29,78,216);
+                    const atw = pdf.getTextWidth(angTxt);
+                    pdf.setFillColor(255,255,255); pdf.setDrawColor(29,78,216); pdf.setLineWidth(0.15);
+                    pdf.rect(symCx - atw/2 - 0.5, symCy - 2, atw + 1, 2.8, 'FD');
+                    pdf.text(angTxt, symCx, symCy + 0.2, { align:'center' }); break;
+                }
+                case 'line-id': {
+                    const idTxt = 'Line 1';
+                    pdf.setFontSize(3.6); pdf.setFont('Sarabun','bold');
+                    pdf.setTextColor(0,0,0);
+                    const itw = pdf.getTextWidth(idTxt);
+                    pdf.setFillColor(255,255,255); pdf.setDrawColor(0,0,0); pdf.setLineWidth(0.15);
+                    pdf.rect(symCx - itw/2 - 0.5, symCy - 2, itw + 1, 2.8, 'FD');
+                    pdf.text(idTxt, symCx, symCy + 0.2, { align:'center' }); break;
+                }
             }
 
             // Row label
@@ -815,6 +1140,78 @@ pdf.setFontSize(6); pdf.setFont('Sarabun','bold');
             pdf.text(entry.label, LX + 2 + SYM + 2, symCy + 1.2);
         });
         // ── END LEGEND BOX ────────────────────────────────────────────
+
+        // ── PRICE SUMMARY BOX (overview sheet only — every sheet's footer
+        // already carries the grand total, but the overview also gets this
+        // bigger, itemized box next to the legend so the price is visible
+        // at a glance without flipping to the info sheet at the back). ──
+        if (pageMeta.kind === 'overview') {
+            const bd2 = window._fenceTypeBreakdown || {};
+            const TYPE_META2 = {
+                cowboy:   { name: 'คาวบอย',   color: [37, 99, 235] },
+                concrete: { name: 'คอนกรีต',  color: [100, 116, 139] },
+                barbed:   { name: 'ลวดหนาม',  color: [217, 119, 6] },
+                brick:    { name: 'อิฐ',       color: [194, 65, 12] },
+            };
+            const typeRows = ['cowboy', 'concrete', 'barbed', 'brick'].filter(t => bd2[t]);
+
+            const PX = LX + BW + 6;                 // left edge, right of legend box
+            const PROW = 4.8;
+            const PW2 = 68;                          // box width
+            const PH2 = 6 + 8 + typeRows.length * PROW + 3; // header + grand total + per-type rows
+            const priceTop = LY - PH2;
+
+            pdf.setFillColor(255, 255, 255);
+            pdf.setDrawColor(5, 150, 105);
+            pdf.setLineWidth(0.4);
+            pdf.setLineDashPattern([], 0);
+            pdf.rect(PX, priceTop, PW2, PH2, 'FD');
+
+            pdf.setFontSize(5); pdf.setFont('Sarabun', 'bold');
+            pdf.setTextColor(5, 150, 105);
+            pdf.text('ราคาโดยประมาณ / PRICE SUMMARY', PX + PW2 / 2, priceTop + 4, { align: 'center' });
+            pdf.setLineWidth(0.25);
+            pdf.setDrawColor(5, 150, 105);
+            pdf.line(PX + 2, priceTop + 5.2, PX + PW2 - 2, priceTop + 5.2);
+
+            pdf.setFontSize(8); pdf.setFont('Sarabun', 'bold');
+            pdf.setTextColor(15, 23, 42);
+            pdf.text(`${footerPrice} บาท`, PX + PW2 / 2, priceTop + 11.5, { align: 'center' });
+
+            typeRows.forEach((type, ti) => {
+                const b = bd2[type];
+                const meta = TYPE_META2[type];
+                const ry = priceTop + 15.5 + ti * PROW;
+                pdf.setFillColor(...meta.color);
+                pdf.circle(PX + 4, ry - 1, 1, 'F');
+                pdf.setFontSize(4.2); pdf.setFont('Sarabun', 'normal');
+                pdf.setTextColor(60, 60, 60);
+                pdf.text(meta.name, PX + 7, ry);
+                pdf.setFont('Sarabun', 'bold'); pdf.setTextColor(15, 23, 42);
+                pdf.text(`${(b.price || 0).toLocaleString('th-TH', { maximumFractionDigits: 0 })} บ.`, PX + PW2 - 2, ry, { align: 'right' });
+            });
+        }
+        } // ── end renderPageBody ──────────────────────────────────────
+
+        // ── Drive the actual sheet sequence: 1 overview + N detail tiles
+        // + 1 materials/price/options info sheet (which paginates on its
+        // own if the fence has enough lines to overflow one sheet). ──
+        const pageCount = 1 + tiles.length + 1;
+        let pageNum = 1;
+
+        beginOverviewProjection();
+        renderPageBody({ kind: 'overview', pageNum, pageCount });
+
+        tiles.forEach(tile => {
+            pageNum++;
+            pdf.addPage('a3', 'l');
+            beginTileProjection(tile);
+            renderPageBody({ kind: 'detail', tile, pageNum, pageCount });
+        });
+
+        pageNum++;
+        pdf.addPage('a3', 'l');
+        drawInfoPage(pdf, { PW, PH, MARGIN, FOOTER_H, pageNum, pageCount });
 
         pdf.save(`fence-plan-${Date.now()}.pdf`);
 

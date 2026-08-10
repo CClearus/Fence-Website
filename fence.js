@@ -209,6 +209,18 @@ function _activeCornerCheckbox(pageId, imId) {
     return document.getElementById(pageId) || document.getElementById(imId);
 }
 
+// Human-readable label for whichever <option> is currently selected in a
+// <select> — prefers its data-name attribute (the friendly "เสาคาน 2 ชั้น —
+// 414 บาท" text these selects already carry for their own UI) over the
+// raw visible text, falling back to that text if data-name is absent.
+// Used to capture the actual MATERIAL CHOICE (not just numeric spacing/
+// height) into window._fenceTypeBreakdown for the Plan Mode PDF export.
+function _selectedOptionLabel(el) {
+    if (!el || !el.options || el.selectedIndex < 0) return '';
+    const opt = el.options[el.selectedIndex];
+    return (opt && (opt.getAttribute('data-name') || opt.textContent)) || '';
+}
+
 // Is the Input Mode tab (Page 2 — "ระบบกรอกข้อมูล") currently the visible
 // one? Shared by _activeCornerCheckbox and _isNonSquareActive.
 function isInputModeActive() {
@@ -834,6 +846,11 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         const cowboyBeamPrice = parseFloat(beamPriceEl?.value) || 0;
         const cowboySubtotal = res.normalPosts * cowboyPostPrice + res.cornerPosts * cowboyCornerPostPrice + res.grandBeams * cowboyBeamPrice;
         grandPrice += cowboySubtotal;
+        // Material CHOICE, not just the numbers it implies — which post/
+        // beam preset and post-size the user actually picked in the
+        // sidebar, for the Plan Mode PDF's info sheet.
+        const cowboyBeamChoice = _selectedOptionLabel(_activeCornerCheckbox('beamSelect', 'imBeamSelect'));
+        const cowboyPostSize = parseFloat(_activeCornerCheckbox('postSizeCowboy', 'imPostSizeCowboy')?.value) || 0.15;
         typeBreakdown.cowboy = {
             lines: cowboyLines.length,
             total: res.grandTotal,
@@ -844,7 +861,7 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
             cornerPostPrice: cowboyCornerPostPrice,
             beamPrice: cowboyBeamPrice,
             price: cowboySubtotal,
-            options: { spacing: m_cowboy, doubleCorner: cowboyDoubleCorner, layers }
+            options: { spacing: m_cowboy, doubleCorner: cowboyDoubleCorner, layers, beamChoice: cowboyBeamChoice, postSize: cowboyPostSize, nonSquareMode: _isNonSquareActive('cowboy') }
         };
         // Separate tier-3 (segment too short) from other warnings
         res.warnings.forEach(w => segmentWarnings.push(w));
@@ -882,6 +899,8 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
             concreteLintelPrice = parseFloat(lintelPriceEl?.value) || 0;
             grandPrice += concreteLintelPrice;
         }
+        const concreteLayerChoice = _selectedOptionLabel(_activeCornerCheckbox('concreteLayerSelect', 'imConcreteLayerSelect'));
+        const concretePostSize = parseFloat(_activeCornerCheckbox('postSizeConcrete', 'imPostSizeConcrete')?.value) || 0.15;
         typeBreakdown.concrete = {
             lines: concreteLines.length,
             total: res.grandTotal,
@@ -892,7 +911,7 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
             cornerPostPrice: concreteCornerPostPrice,
             panelPrice: concretePanelPrice,
             price: concretePostSubtotal + concreteLintelPrice,
-            options: { spacing: m_concrete, doubleCorner: concreteDoubleCorner, layers: concreteLayers, lintel: concreteLintelOn, lintelPrice: concreteLintelPrice }
+            options: { spacing: m_concrete, doubleCorner: concreteDoubleCorner, layers: concreteLayers, lintel: concreteLintelOn, lintelPrice: concreteLintelPrice, layerChoice: concreteLayerChoice, postSize: concretePostSize, nonSquareMode: _isNonSquareActive('concrete') }
         };
         res.warnings.forEach(w => segmentWarnings.push(w));
     }
@@ -907,6 +926,11 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         // are already computed for the UI, so this just reuses those instead
         // of recomputing them a second time.
         const beamLabels = { top: 'คานบน', center: 'คานกลาง', 'center+top': 'คานบน+กลาง', none: 'ไม่มีคาน' };
+        // Material CHOICE: which brick from the catalogue, and which
+        // pillar-size preset — not just the numeric spacing/height.
+        const brickTypeEl = _activeCornerCheckbox('brickType', 'imBrickType');
+        const brickCatalogEntry = (typeof _getBrick === 'function' && brickTypeEl?.value) ? _getBrick(brickTypeEl.value) : null;
+        const brickPillarChoice = _selectedOptionLabel(_activeCornerCheckbox('brickPillarSize', 'imBrickPillarSize'));
         typeBreakdown.brick = {
             lines: brickLines.length,
             total: res.grandTotal,
@@ -915,7 +939,11 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
                 spacing: _activeCornerCheckbox('postSpacingBrick', 'imPostSpacingBrick')?.value,
                 height: _activeCornerCheckbox('brickFenceHeight', 'imBrickFenceHeight')?.value,
                 beamMode: window._brickCalcResult?.beamMode,
-                beamModeLabel: beamLabels[window._brickCalcResult?.beamMode] || 'ไม่มีคาน'
+                beamModeLabel: beamLabels[window._brickCalcResult?.beamMode] || 'ไม่มีคาน',
+                brickName: brickCatalogEntry?.name,
+                brickSize: brickCatalogEntry?.size,
+                pillarChoice: brickPillarChoice,
+                lockAngle90: typeof isBrickForce90On === 'function' ? isBrickForce90On() : false
             }
         };
     }
@@ -940,6 +968,7 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         const barbedPostPrice = parseFloat(postPriceEl?.value) || 0;
         const barbedSubtotal = res.grandTotal * BARBED_WIRE_STRANDS * barbedWirePrice + res.grandPosts * barbedPostPrice;
         grandPrice += barbedSubtotal;
+        const barbedPostChoice = _selectedOptionLabel(_activeCornerCheckbox('barbedPostSelect', 'imBarbedPostSelect'));
         typeBreakdown.barbed = {
             lines: barbedLines.length,
             total: res.grandTotal,
@@ -948,7 +977,12 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
             wirePrice: barbedWirePrice,
             postPrice: barbedPostPrice,
             price: barbedSubtotal,
-            options: { spacing: m_barbed, nBraceSolo, nBraceDual, nBraceAngle }
+            options: {
+                spacing: m_barbed, nBraceSolo, nBraceDual, nBraceAngle,
+                postChoice: barbedPostChoice,
+                wireSpec: 'ลวดหนามเบอร์ 14 (ยาวไม่เกิน 100 ม./ม้วน)',
+                force90: typeof isBarbedForce90On === 'function' ? isBarbedForce90On() : false
+            }
         };
         res.warnings.forEach(w => segmentWarnings.push(w));
     }
