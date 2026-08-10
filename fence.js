@@ -802,6 +802,17 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
     let grandTotal = 0, grandPosts = 0, grandBeams = 0, grandPrice = 0;
     let hasBrick = false;
 
+    // Per-type quantities/prices/options — a side channel purely for Plan
+    // Mode's "สรุปวัสดุ & ราคา" breakdown (renderPlanSummaryTable in
+    // plan_mode.js), which needs to show each fence TYPE's own materials,
+    // unit prices, and selected options (N-Brace, spacing, height, etc.)
+    // rather than just the combined grand total this function already
+    // writes to resTotal/resPosts/resPriceDisplay. Only keys for types that
+    // actually have lines get populated. Exposed on window at the end of
+    // this function, same pattern as window._brickCalcResult /
+    // window._barbedCalcResult.
+    const typeBreakdown = {};
+
     if (cowboyLines.length > 0) {
         const m_raw = rawSpacing('postSpacing', 'imPostSpacing');
         const vResult = validatePostSpacing(isNaN(m_raw) ? 0 : m_raw);
@@ -821,7 +832,20 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         const cowboyPostPrice = parseFloat(postPriceEl?.value) || 0;
         const cowboyCornerPostPrice = parseFloat(cornerPostPriceEl?.value) || 0;
         const cowboyBeamPrice = parseFloat(beamPriceEl?.value) || 0;
-        grandPrice += res.normalPosts * cowboyPostPrice + res.cornerPosts * cowboyCornerPostPrice + res.grandBeams * cowboyBeamPrice;
+        const cowboySubtotal = res.normalPosts * cowboyPostPrice + res.cornerPosts * cowboyCornerPostPrice + res.grandBeams * cowboyBeamPrice;
+        grandPrice += cowboySubtotal;
+        typeBreakdown.cowboy = {
+            lines: cowboyLines.length,
+            total: res.grandTotal,
+            normalPosts: res.normalPosts,
+            cornerPosts: res.cornerPosts,
+            beams: res.grandBeams,
+            postPrice: cowboyPostPrice,
+            cornerPostPrice: cowboyCornerPostPrice,
+            beamPrice: cowboyBeamPrice,
+            price: cowboySubtotal,
+            options: { spacing: m_cowboy, doubleCorner: cowboyDoubleCorner, layers }
+        };
         // Separate tier-3 (segment too short) from other warnings
         res.warnings.forEach(w => segmentWarnings.push(w));
     }
@@ -845,15 +869,31 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         const concretePostPrice = parseFloat(postPriceEl?.value) || 0;
         const concreteCornerPostPrice = parseFloat(cornerPostPriceEl?.value) || 0;
         const concretePanelPrice = parseFloat(panelPriceEl?.value) || 0;
-        grandPrice += res.normalPosts * concretePostPrice + res.cornerPosts * concreteCornerPostPrice + res.grandBeams * concretePanelPrice;
+        const concretePostSubtotal = res.normalPosts * concretePostPrice + res.cornerPosts * concreteCornerPostPrice + res.grandBeams * concretePanelPrice;
+        grandPrice += concretePostSubtotal;
         // ทับหลัง (lintel/capping) — optional flat one-time add-on, only
         // counted while its checkbox is ticked; NOT multiplied by post,
         // panel, or length count (per the reference price sheet).
         const lintelCbEl = _activeCornerCheckbox('concreteLintel', 'imConcreteLintel');
-        if (lintelCbEl?.checked) {
+        const concreteLintelOn = !!lintelCbEl?.checked;
+        let concreteLintelPrice = 0;
+        if (concreteLintelOn) {
             const lintelPriceEl = _activeCornerCheckbox('concreteLintelPrice', 'imConcreteLintelPrice');
-            grandPrice += parseFloat(lintelPriceEl?.value) || 0;
+            concreteLintelPrice = parseFloat(lintelPriceEl?.value) || 0;
+            grandPrice += concreteLintelPrice;
         }
+        typeBreakdown.concrete = {
+            lines: concreteLines.length,
+            total: res.grandTotal,
+            normalPosts: res.normalPosts,
+            cornerPosts: res.cornerPosts,
+            beams: res.grandBeams,
+            postPrice: concretePostPrice,
+            cornerPostPrice: concreteCornerPostPrice,
+            panelPrice: concretePanelPrice,
+            price: concretePostSubtotal + concreteLintelPrice,
+            options: { spacing: m_concrete, doubleCorner: concreteDoubleCorner, layers: concreteLayers, lintel: concreteLintelOn, lintelPrice: concreteLintelPrice }
+        };
         res.warnings.forEach(w => segmentWarnings.push(w));
     }
 
@@ -862,6 +902,22 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         grandTotal += res.grandTotal; grandPosts += res.grandPosts; grandBeams += res.grandBeams;
         allWarnings.push(...res.warnings);
         hasBrick = res.hasBrick;
+        // brickCount/brickPrice/price are filled in below by writeResults()
+        // (first pass only) — that's where the actual +5% waste and price
+        // are already computed for the UI, so this just reuses those instead
+        // of recomputing them a second time.
+        const beamLabels = { top: 'คานบน', center: 'คานกลาง', 'center+top': 'คานบน+กลาง', none: 'ไม่มีคาน' };
+        typeBreakdown.brick = {
+            lines: brickLines.length,
+            total: res.grandTotal,
+            posts: res.grandPosts,
+            options: {
+                spacing: _activeCornerCheckbox('postSpacingBrick', 'imPostSpacingBrick')?.value,
+                height: _activeCornerCheckbox('brickFenceHeight', 'imBrickFenceHeight')?.value,
+                beamMode: window._brickCalcResult?.beamMode,
+                beamModeLabel: beamLabels[window._brickCalcResult?.beamMode] || 'ไม่มีคาน'
+            }
+        };
     }
 
     if (barbedLines.length > 0) {
@@ -882,7 +938,18 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
         const barbedWirePrice = parseFloat(wirePriceEl?.value) || FENCE_PRICE_DEFAULTS.barbed;
         const postPriceEl = _activeCornerCheckbox('barbedPostPrice', 'imBarbedPostPrice');
         const barbedPostPrice = parseFloat(postPriceEl?.value) || 0;
-        grandPrice += res.grandTotal * BARBED_WIRE_STRANDS * barbedWirePrice + res.grandPosts * barbedPostPrice;
+        const barbedSubtotal = res.grandTotal * BARBED_WIRE_STRANDS * barbedWirePrice + res.grandPosts * barbedPostPrice;
+        grandPrice += barbedSubtotal;
+        typeBreakdown.barbed = {
+            lines: barbedLines.length,
+            total: res.grandTotal,
+            posts: res.grandPosts,
+            strands: BARBED_WIRE_STRANDS,
+            wirePrice: barbedWirePrice,
+            postPrice: barbedPostPrice,
+            price: barbedSubtotal,
+            options: { spacing: m_barbed, nBraceSolo, nBraceDual, nBraceAngle }
+        };
         res.warnings.forEach(w => segmentWarnings.push(w));
     }
     updateBarbedPostBreakdown(barbedLines.length > 0);
@@ -930,6 +997,14 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
                 const brickPrice = parseFloat(_activeCornerCheckbox('brickPricePerPiece', 'imBrickPrice')?.value) || 1.30;
                 const brickCount = Math.ceil(br.brickCount * 1.05);
                 totalPrice += brickCount * brickPrice;
+                // Fill in the price fields typeBreakdown.brick was left
+                // without above — first pass only, both passes would compute
+                // the identical number anyway (see typeBreakdown doc comment).
+                if (ids.price === 'resPriceDisplay' && typeBreakdown.brick) {
+                    typeBreakdown.brick.brickCount = brickCount;
+                    typeBreakdown.brick.brickPrice = brickPrice;
+                    typeBreakdown.brick.price = brickCount * brickPrice;
+                }
             }
             priceInput.value = totalPrice.toLocaleString('th-TH', { maximumFractionDigits: 0 });
             // Both Page 1 and Input Mode have their own big green "hero"
@@ -966,6 +1041,10 @@ const concreteDoubleCorner = _isNonSquareActive('concrete')
 
     writeResults({ total: 'resTotal', posts: 'resPosts', beams: 'resBeams', price: 'resPriceDisplay', warnings: 'fenceWarnings' });
     writeResults({ total: 'imResTotal', posts: 'imResPosts', beams: 'imResBeams', price: 'imResPriceDisplay', warnings: 'imFenceWarnings' });
+
+    // Exposed for Plan Mode's per-type materials/price/options breakdown —
+    // see renderPlanSummaryTable() in plan_mode.js.
+    window._fenceTypeBreakdown = typeBreakdown;
 }
 
 // ── Animated price "hero" display ────────────────────────────────────────

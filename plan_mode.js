@@ -1061,6 +1061,98 @@ allLines.forEach((ld, idx) => {
 }
 
 // ============================================
+// PLAN VIEW — PER-TYPE MATERIALS/PRICE/OPTIONS BREAKDOWN
+// One compact card per fence type actually present in the plan (cowboy /
+// concrete / barbed / brick), showing that type's own quantities, unit
+// prices, and the options the user picked for it (N-Brace toggles,
+// spacing, post height, corner mode, beam mode, ทับหลัง, ...) — everything
+// the sidebar's price cards show, just re-skinned for Plan Mode. Reads
+// window._fenceTypeBreakdown, populated as a side effect of runFenceCalc()
+// (fence.js) — same pattern as window._brickCalcResult/_barbedCalcResult.
+// ============================================
+function _buildPlanTypeBreakdownHTML() {
+    const bd = window._fenceTypeBreakdown;
+    if (!bd) return '';
+
+    const money = (n) => (typeof n === 'number' ? n : parseFloat(n) || 0)
+        .toLocaleString('th-TH', { maximumFractionDigits: 2 });
+    const chip = (text) => `<span class="pm-type-chip">${text}</span>`;
+    const row = (label, val) => `<div class="pm-type-row"><span>${label}</span><b>${val}</b></div>`;
+
+    const card = (color, name, lines, bodyRows, chips, price) => `
+        <div class="pm-type-card">
+            <div class="pm-type-head">
+                <span class="pm-type-dot" style="background:${color};"></span>
+                <span class="pm-type-name">${name}</span>
+                <span class="pm-type-lines">${lines} เส้น</span>
+                <span class="pm-type-price">${money(price)} บ.</span>
+            </div>
+            <div class="pm-type-body">
+                ${bodyRows.join('')}
+                ${chips.length ? `<div class="pm-type-chips">${chips.join('')}</div>` : ''}
+            </div>
+        </div>`;
+
+    const cards = [];
+
+    if (bd.cowboy) {
+        const b = bd.cowboy;
+        cards.push(card('#2563eb', 'รั้วคาวบอย', b.lines, [
+            row('เสาปกติ × ราคา/ต้น', `${b.normalPosts} × ${money(b.postPrice)}`),
+            row('เสามุม × ราคา/ต้น', `${b.cornerPosts} × ${money(b.cornerPostPrice)}`),
+            row('คาน × ราคา/คาน', `${b.beams} × ${money(b.beamPrice)}`),
+        ], [
+            chip(`เสาห่าง ${b.options.spacing} ม.`),
+            chip(b.options.doubleCorner ? 'เสามุมคู่' : 'เสามุมเดี่ยว'),
+            chip(`${b.options.layers} ชั้น`),
+        ], b.price));
+    }
+
+    if (bd.concrete) {
+        const b = bd.concrete;
+        const rows = [
+            row('เสาปกติ × ราคา/ต้น', `${b.normalPosts} × ${money(b.postPrice)}`),
+            row('เสามุม × ราคา/ต้น', `${b.cornerPosts} × ${money(b.cornerPostPrice)}`),
+            row('แผ่น × ราคา/แผ่น', `${b.beams} × ${money(b.panelPrice)}`),
+        ];
+        if (b.options.lintel) rows.push(row('ทับหลัง', money(b.options.lintelPrice)));
+        cards.push(card('#64748b', 'รั้วคอนกรีตสำเร็จรูป', b.lines, rows, [
+            chip(`เสาห่าง ${b.options.spacing} ม.`),
+            chip(b.options.doubleCorner ? 'เสามุมคู่' : 'เสามุมเดี่ยว'),
+            chip(`เสา H ชั้น ${b.options.layers}`),
+            ...(b.options.lintel ? [chip('มีทับหลัง')] : []),
+        ], b.price));
+    }
+
+    if (bd.barbed) {
+        const b = bd.barbed;
+        cards.push(card('#d97706', 'รั้วลวดหนาม', b.lines, [
+            row('เสา × ราคา/ต้น', `${b.posts} × ${money(b.postPrice)}`),
+            row(`ลวด (×${b.strands} เส้น) × ราคา/ม.`, `${b.total.toFixed(1)} ม. × ${money(b.wirePrice)}`),
+        ], [
+            chip(`เสาห่าง ${b.options.spacing} ม.`),
+            ...(b.options.nBraceSolo  ? [chip('N-Brace เดี่ยว')] : []),
+            ...(b.options.nBraceDual  ? [chip('N-Brace คู่')]    : []),
+            ...(b.options.nBraceAngle ? [chip('N-Brace มุม')]    : []),
+        ], b.price));
+    }
+
+    if (bd.brick) {
+        const b = bd.brick;
+        cards.push(card('#c2410c', 'รั้วอิฐ', b.lines, [
+            row('อิฐ (รวม +5%) × ราคา/ก้อน', `${(b.brickCount ?? 0).toLocaleString('th-TH')} × ${money(b.brickPrice)}`),
+        ], [
+            ...(b.options.spacing ? [chip(`เสาห่าง ${b.options.spacing} ม.`)] : []),
+            ...(b.options.height  ? [chip(`สูง ${b.options.height} ม.`)]     : []),
+            chip(b.options.beamModeLabel),
+        ], b.price ?? 0));
+    }
+
+    if (!cards.length) return '';
+    return `<div class="pm-type-breakdown">${cards.join('')}</div>`;
+}
+
+// ============================================
 // PLAN VIEW — MATERIALS & PRICE SUMMARY TABLE
 // (per instruction note #3: the plan must show a table with the
 // quantity of materials used — beams, posts, etc. — and the total
@@ -1104,6 +1196,7 @@ function renderPlanSummaryTable() {
         </div>`;
 
     box.innerHTML = `
+        ${_buildPlanTypeBreakdownHTML()}
         <div class="pm-summary-card">
             <div class="pm-summary-title">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>

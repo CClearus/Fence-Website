@@ -1438,6 +1438,39 @@ FORM SPACING & INPUT FIXES
   background: #fafafa;
 }
 
+/* ── Per-type materials/price/options breakdown — one compact card per
+   fence type present in the plan (cowboy/concrete/barbed/brick), shown
+   above the combined grand-total card below. Mirrors the sidebar's own
+   price-card look (icon + name, rows of quantities, chip list of the
+   user's selected options like N-Brace/spacing/height) so Plan Mode shows
+   exactly what was actually configured, not just a bare total. ── */
+.pm-type-breakdown { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.pm-type-card {
+  background: #fff;
+  border: 1.5px solid #e9ecef;
+  border-radius: 12px;
+  overflow: hidden;
+  animation: sbPriceCardIn 0.35s cubic-bezier(.22,1,.36,1) both;
+}
+.pm-type-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #f1f3f5;
+}
+.pm-type-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.pm-type-name { font-size: 12.5px; font-weight: 700; color: #1f2937; flex: 1; min-width: 0; }
+.pm-type-lines { font-size: 10.5px; color: #9ca3af; font-weight: 500; }
+.pm-type-price { font-size: 12.5px; font-weight: 700; color: #059669; white-space: nowrap; }
+.pm-type-body { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 5px; }
+.pm-type-row { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: #6b7280; }
+.pm-type-row b { color: #1f2937; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pm-type-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+.pm-type-chip {
+  font-size: 10px; font-weight: 600; color: #4b5563;
+  background: #f3f4f6; border-radius: 999px; padding: 3px 8px;
+  white-space: nowrap;
+}
+
 /* ── Materials & price summary — same card + hero-price treatment as
    .sb-price-hero-card on Page 1, so Plan Mode reads as the same product. ── */
 .pm-summary-card {
