@@ -44,12 +44,6 @@ async function setLocationFromIP() {
 setInitialUserLocation();
 
 // Define different map layers
-// NEW - use CartoDB as fallback (no referer restriction)
-const osmLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '© OpenStreetMap contributors © CartoDB',
-    maxZoom: 19,
-    minZoom: 3
-});
 
 const satelliteEsri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: '© Esri, Maxar, Earthstar Geographics',
@@ -78,20 +72,19 @@ const labelsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_la
 });
 
 // Add default layer
-osmLayer.addTo(map);
+hybridGoogle.addTo(map);
 
 const hybridEsri = L.layerGroup([hybridEsriSat, labelsLayer]);
 
 // Store all layers
 const layers = {
-    'road': osmLayer,
     'satellite-google': satelliteGoogle,
     'satellite-esri': satelliteEsri,
     'hybrid-google': hybridGoogle,
     'hybrid-esri': hybridEsri
 };
 
-let currentLayer = 'road';
+let currentLayer = 'hybrid-google';
 let searchMarker = null;
 
 // Add scale control
